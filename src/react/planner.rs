@@ -37,11 +37,10 @@ pub fn parse_llm_output(output: &str) -> Result<PlannerOutput, AgentError> {
             .map(|end| rest[..end].trim())
             .unwrap_or(rest.trim())
     } else if let Some(start) = trimmed.find('{') {
-        if let Some(end) = trimmed.rfind('}') {
-            &trimmed[start..=end]
-        } else {
-            trimmed
-        }
+        // 找到第一个 { 和对应的 }，支持嵌套
+        extract_first_json_object(&trimmed[start..])
+            .map(|s| &trimmed[start..start + s.len()])
+            .unwrap_or(trimmed)
     } else {
         return Ok(PlannerOutput::Response(trimmed.to_string()));
     };
@@ -54,6 +53,33 @@ pub fn parse_llm_output(output: &str) -> Result<PlannerOutput, AgentError> {
     } else {
         Ok(PlannerOutput::ToolCall(parsed))
     }
+}
+
+/// 提取第一个完整的 JSON 对象（支持嵌套）
+fn extract_first_json_object(s: &str) -> Option<&str> {
+    let mut depth = 0;
+    let mut start = None;
+    
+    for (i, ch) in s.char_indices() {
+        match ch {
+            '{' => {
+                if depth == 0 {
+                    start = Some(i);
+                }
+                depth += 1;
+            }
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    if let Some(start_idx) = start {
+                        return Some(&s[start_idx..=i]);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Planner：持有 LLM 与 system prompt，负责 plan / plan_with_system（拼 system + messages 后调用 LLM）
