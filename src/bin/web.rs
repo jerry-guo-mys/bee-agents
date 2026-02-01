@@ -104,9 +104,12 @@ struct SessionListItem {
     title: String,
     message_count: usize,
     updated_at: String,
+    /// 日期 YYYY-MM-DD，用于前端分组（今天/昨天/上周/更早）
+    date: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct RenameSessionRequest {
     session_id: String,
     title: String,
@@ -335,24 +338,28 @@ async fn api_sessions_list(
             .unwrap_or_else(|| "新对话".to_string());
         
         // 获取文件修改时间
-        let updated_at = entry.metadata()
+        let (updated_at, date) = entry.metadata()
             .and_then(|m| m.modified())
             .map(|t| {
                 let dt: chrono::DateTime<chrono::Local> = t.into();
-                dt.format("%m-%d %H:%M").to_string()
+                (
+                    dt.format("%m-%d %H:%M").to_string(),
+                    dt.format("%Y-%m-%d").to_string(),
+                )
             })
-            .unwrap_or_default();
+            .unwrap_or_else(|_| (String::new(), String::new()));
         
         items.push(SessionListItem {
             id,
             title,
             message_count: snap.messages.len(),
             updated_at,
+            date,
         });
     }
     
     // 按更新时间倒序（最新在前）
-    items.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    items.sort_by(|a, b| b.date.cmp(&a.date).then(b.updated_at.cmp(&a.updated_at)));
     
     Ok(Json(items))
 }

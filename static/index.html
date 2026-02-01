@@ -77,6 +77,46 @@
       font-weight: 700;
     }
     .sidebar-header .logo span { color: var(--accent); }
+    .sidebar-toolbar {
+      padding: 8px 12px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .sidebar-toolbar button {
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 8px;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .sidebar-toolbar button:hover { background: var(--border); color: var(--text-primary); }
+    .sidebar-search {
+      padding: 8px 12px;
+    }
+    .sidebar-search input {
+      width: 100%;
+      padding: 10px 14px 10px 36px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      outline: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23718096' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: 12px 50%;
+      transition: border-color 0.2s;
+    }
+    .sidebar-search input::placeholder { color: var(--text-muted); }
+    .sidebar-search input:focus { border-color: var(--accent); }
     .new-chat-btn {
       width: 100%;
       padding: 12px 16px;
@@ -106,12 +146,29 @@
       padding: 10px 12px;
       border-radius: 8px;
       cursor: pointer;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
       transition: background 0.2s;
       display: flex;
-      flex-direction: column;
-      gap: 2px;
+      align-items: flex-start;
+      gap: 10px;
     }
+    .session-item-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .session-item.active .session-item-icon {
+      background: var(--accent);
+      color: #fff;
+    }
+    .session-item-content { flex: 1; min-width: 0; }
     .session-item:hover { background: var(--bg-tertiary); }
     .session-item.active { background: var(--bg-tertiary); border-left: 3px solid var(--accent); }
     .session-item .title {
@@ -120,6 +177,7 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      line-height: 1.3;
     }
     .session-item .meta {
       font-size: 0.7rem;
@@ -131,15 +189,48 @@
       opacity: 0;
       background: none;
       border: none;
-      color: var(--accent);
+      color: var(--text-muted);
       cursor: pointer;
-      font-size: 0.8rem;
+      font-size: 0.85rem;
       padding: 2px 6px;
       border-radius: 4px;
+      flex-shrink: 0;
       transition: opacity 0.2s, background 0.2s;
     }
     .session-item:hover .delete-btn { opacity: 1; }
+    .session-item .delete-btn:hover { color: var(--accent); background: rgba(233,69,96,0.1); }
     .session-item .delete-btn:hover { background: rgba(233,69,96,0.2); }
+    .session-group-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 12px 12px 6px;
+    }
+    .sidebar-user {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sidebar-user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent) 0%, #764ba2 100%);
+      color: #fff;
+      font-size: 0.8rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sidebar-user-name {
+      font-size: 0.85rem;
+      color: var(--text-primary);
+    }
     .sidebar-footer {
       padding: 12px 16px;
       border-top: 1px solid var(--border);
@@ -195,14 +286,21 @@
       transition: background 0.2s;
     }
     .toggle-sidebar:hover { background: var(--bg-tertiary); }
+    .header-brand {
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--text-primary);
+    }
+    .header-brand span { color: var(--accent); }
     .header-title {
-      font-weight: 500;
-      font-size: 0.95rem;
-      color: var(--text-secondary);
-      max-width: 400px;
+      font-weight: 400;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      max-width: 360px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      margin-left: 8px;
     }
     .header-actions {
       display: flex;
@@ -271,6 +369,7 @@
     .msg {
       max-width: 85%;
       padding: 14px 18px;
+      padding-right: 44px;
       border-radius: 16px;
       line-height: 1.75;
       font-size: 0.95rem;
@@ -317,41 +416,49 @@
       border-left: 3px solid var(--border);
       color: var(--text-secondary);
     }
+    .msg { position: relative; }
+    .msg-copy-icon {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 6px;
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      cursor: pointer;
+      opacity: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.2s, background 0.2s;
+    }
+    .msg:hover .msg-copy-icon { opacity: 1; }
+    .msg-copy-icon:hover { background: var(--border); color: var(--text-primary); }
+    .msg-copy-icon.copied { color: var(--success); }
     .copy-btn {
       position: absolute;
       top: 8px;
       right: 8px;
-      padding: 4px 10px;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 6px;
       background: var(--bg-tertiary);
-      border: 1px solid var(--border);
-      border-radius: 4px;
       color: var(--text-muted);
-      font-size: 0.75rem;
+      font-size: 0.9rem;
       cursor: pointer;
       opacity: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       transition: opacity 0.2s;
     }
     .msg.assistant .content pre:hover .copy-btn { opacity: 1; }
     .copy-btn:hover { background: var(--border); color: var(--text-primary); }
     .copy-btn.copied { color: var(--success); }
-    .markdown-toggle-row {
-      margin-top: 10px;
-      padding-top: 8px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      gap: 8px;
-    }
-    .markdown-toggle-btn {
-      padding: 4px 12px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg-tertiary);
-      color: var(--text-muted);
-      font-size: 0.75rem;
-      cursor: pointer;
-      transition: background 0.2s, color 0.2s;
-    }
-    .markdown-toggle-btn:hover { background: var(--border); color: var(--text-primary); }
 
     /* Input area */
     .input-wrapper {
@@ -367,8 +474,19 @@
     }
     .input-container {
       display: flex;
-      gap: 12px;
       align-items: flex-end;
+      position: relative;
+    }
+    .input-loading {
+      position: absolute;
+      right: 12px;
+      bottom: 14px;
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
     }
     .input-container textarea {
       flex: 1;
@@ -385,24 +503,44 @@
     }
     .input-container textarea:focus { outline: none; border-color: var(--accent); }
     .input-container textarea::placeholder { color: var(--text-muted); }
-    .send-btn {
-      width: 48px;
-      height: 48px;
+    .input-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+      padding: 0 4px;
+    }
+    .input-hint {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+    .input-icons { display: flex; gap: 4px; }
+    .input-icon {
+      width: 28px;
+      height: 28px;
       border: none;
-      border-radius: 12px;
-      background: var(--accent);
-      color: #fff;
-      font-size: 1.2rem;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.9rem;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.2s, transform 0.1s;
+      transition: background 0.2s;
     }
-    .send-btn:hover { background: var(--accent-hover); transform: scale(1.05); }
-    .send-btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; }
-    .send-btn.stop { background: var(--warning); }
-    .send-btn.stop:hover { background: #fbbf24; }
+    .input-icon:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .input-stop {
+      padding: 4px 12px;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--accent);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .input-stop:hover { background: rgba(233,69,96,0.2); }
     .spinner {
       width: 20px;
       height: 20px;
@@ -544,14 +682,22 @@
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <div class="logo"><span>Bee</span> AI</div>
+      <div class="logo"><span>Bee</span> Chat</div>
+    </div>
+    <div class="sidebar-toolbar">
+      <button id="newChatIcon" title="新对话">📄</button>
+      <button id="themeToggle" title="切换主题">🌙</button>
+    </div>
+    <div class="sidebar-search">
+      <input type="text" id="sessionSearch" placeholder="搜索对话" autocomplete="off" />
     </div>
     <button class="new-chat-btn" id="newChatBtn">
       <span>+</span> 新对话
     </button>
     <div class="session-list" id="sessionList"></div>
-    <div class="sidebar-footer">
-      <button id="themeToggle">🌙 主题</button>
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar" id="userAvatar">👤</div>
+      <span class="sidebar-user-name">用户</span>
     </div>
   </aside>
 
@@ -559,7 +705,8 @@
   <div class="main">
     <header class="header">
       <div class="header-left">
-        <button class="toggle-sidebar" id="toggleSidebar">☰</button>
+        <button class="toggle-sidebar" id="toggleSidebar" title="切换侧边栏">☰</button>
+        <span class="header-brand"><span>Bee</span> Chat ></span>
         <span class="header-title" id="headerTitle">新对话</span>
       </div>
       <div class="header-actions">
@@ -588,8 +735,16 @@
     <div class="input-wrapper">
       <div class="input-area">
         <div class="input-container">
-          <textarea id="input" placeholder="输入消息，Enter 发送，Shift+Enter 换行..." rows="1"></textarea>
-          <button class="send-btn" id="sendBtn">➤</button>
+          <textarea id="input" placeholder="在这里输入消息，按下 Enter 发送" rows="1"></textarea>
+          <div id="inputLoading" class="input-loading" style="display:none"></div>
+        </div>
+        <div class="input-toolbar">
+          <span class="input-hint" id="inputHint">Shift+Enter 换行</span>
+          <button type="button" class="input-stop" id="stopBtn" style="display:none">停止</button>
+          <div class="input-icons">
+            <button type="button" class="input-icon" title="附加">📎</button>
+            <button type="button" class="input-icon" title="工具">🔧</button>
+          </div>
         </div>
         <div id="error" class="error" style="display:none"></div>
       </div>
@@ -600,16 +755,20 @@
     // Elements
     const sidebar = document.getElementById('sidebar');
     const sessionListEl = document.getElementById('sessionList');
+    const sessionSearchEl = document.getElementById('sessionSearch');
     const messagesEl = document.getElementById('messages');
     const messagesWrapper = messagesEl.parentElement;
     const welcomeEl = document.getElementById('welcome');
     const inputEl = document.getElementById('input');
-    const sendBtn = document.getElementById('sendBtn');
+    const inputLoadingEl = document.getElementById('inputLoading');
+    const inputHintEl = document.getElementById('inputHint');
+    const stopBtn = document.getElementById('stopBtn');
     const errorEl = document.getElementById('error');
     const tokenCurrentEl = document.getElementById('tokenCurrent');
     const tokenTotalEl = document.getElementById('tokenTotal');
     const headerTitleEl = document.getElementById('headerTitle');
     const newChatBtn = document.getElementById('newChatBtn');
+    const newChatIcon = document.getElementById('newChatIcon');
     const toggleSidebarBtn = document.getElementById('toggleSidebar');
     const themeToggleBtn = document.getElementById('themeToggle');
 
@@ -625,7 +784,7 @@
 
     // Initialize theme
     document.documentElement.setAttribute('data-theme', currentTheme);
-    themeToggleBtn.textContent = currentTheme === 'dark' ? '☀️ 浅色' : '🌙 深色';
+    themeToggleBtn.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
 
     // Configure marked
     if (typeof marked !== 'undefined') {
@@ -670,33 +829,70 @@
       loadSessionList();
     }
 
-    // Session list
+    // Session groups: 今天、昨天、上周、更早
+    function getSessionGroup(dateStr) {
+      if (!dateStr) return 'earlier';
+      const today = new Date().toISOString().slice(0, 10);
+      const d = new Date(dateStr);
+      const dStr = d.toISOString().slice(0, 10);
+      const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+      const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+      if (dStr === today) return 'today';
+      if (dStr === yesterday) return 'yesterday';
+      if (dStr >= weekAgo) return 'this_week';
+      return 'earlier';
+    }
+    const GROUP_LABELS = { today: '今天', yesterday: '昨天', this_week: '上周', earlier: '更早' };
+
     async function loadSessionList() {
       try {
         const res = await fetch('/api/sessions');
         if (!res.ok) return;
         const sessions = await res.json();
+        const q = (sessionSearchEl?.value || '').trim().toLowerCase();
+        const filtered = q ? sessions.filter(s => 
+          (s.title || '').toLowerCase().includes(q)
+        ) : sessions;
+
+        // Group by date
+        const groups = { today: [], yesterday: [], this_week: [], earlier: [] };
+        filtered.forEach(s => {
+          const g = getSessionGroup(s.date);
+          if (groups[g]) groups[g].push(s);
+        });
+
         sessionListEl.innerHTML = '';
-        sessions.forEach(s => {
-          const div = document.createElement('div');
-          div.className = 'session-item' + (s.id === sessionId ? ' active' : '');
-          div.innerHTML = `
-            <div class="title">${escapeHtml(s.title)}</div>
-            <div class="meta">
-              <span>${s.message_count} 条消息</span>
-              <span>${s.updated_at}</span>
-            </div>
-            <button class="delete-btn" data-id="${s.id}">删除</button>
-          `;
-          div.onclick = (e) => {
-            if (e.target.classList.contains('delete-btn')) {
-              e.stopPropagation();
-              deleteSession(e.target.dataset.id);
-            } else {
-              switchSession(s.id);
-            }
-          };
-          sessionListEl.appendChild(div);
+        ['today', 'yesterday', 'this_week', 'earlier'].forEach(key => {
+          const list = groups[key] || [];
+          if (list.length === 0) return;
+          const title = document.createElement('div');
+          title.className = 'session-group-title';
+          title.textContent = GROUP_LABELS[key];
+          sessionListEl.appendChild(title);
+          list.forEach(s => {
+            const div = document.createElement('div');
+            div.className = 'session-item' + (s.id === sessionId ? ' active' : '');
+            div.innerHTML = `
+              <div class="session-item-icon">💬</div>
+              <div class="session-item-content">
+                <div class="title">${escapeHtml(s.title)}</div>
+                <div class="meta">
+                  <span>${s.message_count} 条</span>
+                  <span>${s.updated_at}</span>
+                </div>
+              </div>
+              <button class="delete-btn" data-id="${s.id}" title="删除">✕</button>
+            `;
+            div.onclick = (e) => {
+              if (e.target.classList.contains('delete-btn')) {
+                e.stopPropagation();
+                deleteSession(e.target.dataset.id);
+              } else {
+                switchSession(s.id);
+              }
+            };
+            sessionListEl.appendChild(div);
+          });
         });
       } catch (e) { console.warn('Load sessions failed:', e); }
     }
@@ -760,7 +956,6 @@
             contentDiv.innerHTML = marked.parse(content);
             addCopyButtons(contentDiv);
             msg.appendChild(contentDiv);
-            addMsgActions(msg, content);
           } else {
             const plain = document.createElement('div');
             plain.className = 'content plain';
@@ -776,7 +971,7 @@
       } else {
         msg.appendChild(document.createTextNode(content));
       }
-      
+      addMsgCopyIcon(msg, content);
       row.appendChild(msg);
       messagesEl.appendChild(row);
       messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
@@ -788,12 +983,13 @@
         const pre = block.parentElement;
         const btn = document.createElement('button');
         btn.className = 'copy-btn';
-        btn.textContent = '复制';
+        btn.innerHTML = '📋';
+        btn.title = '复制';
         btn.onclick = () => {
           navigator.clipboard.writeText(block.textContent).then(() => {
-            btn.textContent = '已复制';
+            btn.innerHTML = '✓';
             btn.classList.add('copied');
-            setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('copied'); }, 2000);
+            setTimeout(() => { btn.innerHTML = '📋'; btn.classList.remove('copied'); }, 1500);
           });
         };
         pre.style.position = 'relative';
@@ -801,20 +997,19 @@
       });
     }
 
-    function addMsgActions(div, rawText) {
-      const row = document.createElement('div');
-      row.className = 'markdown-toggle-row';
-      const copyBtn = document.createElement('button');
-      copyBtn.className = 'markdown-toggle-btn';
-      copyBtn.textContent = '复制';
-      copyBtn.onclick = () => {
+    function addMsgCopyIcon(msg, rawText) {
+      const icon = document.createElement('button');
+      icon.className = 'msg-copy-icon';
+      icon.innerHTML = '📋';
+      icon.title = '复制';
+      icon.onclick = () => {
         navigator.clipboard.writeText(rawText).then(() => {
-          copyBtn.textContent = '已复制';
-          setTimeout(() => { copyBtn.textContent = '复制'; }, 2000);
+          icon.innerHTML = '✓';
+          icon.classList.add('copied');
+          setTimeout(() => { icon.innerHTML = '📋'; icon.classList.remove('copied'); }, 1500);
         });
       };
-      row.appendChild(copyBtn);
-      div.appendChild(row);
+      msg.insertBefore(icon, msg.firstChild);
     }
 
     // Thinking box
@@ -920,9 +1115,9 @@
       appendMessage('user', text, false);
       headerTitleEl.textContent = text.length > 30 ? text.slice(0, 30) + '...' : text;
       
-      sendBtn.disabled = true;
-      sendBtn.innerHTML = '<div class="spinner"></div>';
-      sendBtn.classList.add('stop');
+      inputEl.disabled = true;
+      inputLoadingEl.style.display = 'block';
+      stopBtn.style.display = 'inline-block';
       loading = true;
       abortController = new AbortController();
 
@@ -997,7 +1192,7 @@
 
         // Finalize message with markdown
         if (assistantBubble && contentEl) {
-          const rawText = contentEl.textContent;
+          const rawText = contentEl.textContent || '';
           if (rawText && typeof marked !== 'undefined') {
             try {
               const contentDiv = document.createElement('div');
@@ -1005,9 +1200,9 @@
               contentDiv.innerHTML = marked.parse(rawText);
               addCopyButtons(contentDiv);
               contentEl.replaceWith(contentDiv);
-              addMsgActions(assistantBubble, rawText);
             } catch (e) { console.warn('Markdown parse error:', e); }
           }
+          addMsgCopyIcon(assistantBubble, rawText);
         }
         removeThinkingBox();
         loadSessionList();
@@ -1019,9 +1214,9 @@
         }
         removeThinkingBox();
       } finally {
-        sendBtn.disabled = false;
-        sendBtn.innerHTML = '➤';
-        sendBtn.classList.remove('stop');
+        inputEl.disabled = false;
+        inputLoadingEl.style.display = 'none';
+        stopBtn.style.display = 'none';
         loading = false;
         abortController = null;
       }
@@ -1060,7 +1255,7 @@
       currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', currentTheme);
       localStorage.setItem(THEME_KEY, currentTheme);
-      themeToggleBtn.textContent = currentTheme === 'dark' ? '☀️ 浅色' : '🌙 深色';
+      themeToggleBtn.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
     }
 
     function toggleSidebar() {
@@ -1071,10 +1266,12 @@
     }
 
     // Event listeners
-    sendBtn.onclick = () => loading ? stopGeneration() : send();
+    stopBtn.onclick = () => { if (loading) stopGeneration(); };
     newChatBtn.onclick = newChat;
+    newChatIcon.onclick = newChat;
     toggleSidebarBtn.onclick = toggleSidebar;
     themeToggleBtn.onclick = toggleTheme;
+    sessionSearchEl.oninput = loadSessionList;
     inputEl.onkeydown = (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
