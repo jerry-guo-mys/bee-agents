@@ -16,8 +16,8 @@
       --text-primary: #e8e8e8;
       --text-secondary: #a0aec0;
       --text-muted: #6b7280;
-      --accent: #e94560;
-      --accent-hover: #ff6b6b;
+      --accent: #0d9488;
+      --accent-hover: #14b8a6;
       --success: #4ade80;
       --warning: #f59e0b;
       --border: rgba(255,255,255,0.06);
@@ -31,8 +31,8 @@
       --text-primary: #1a1a2e;
       --text-secondary: #4a5568;
       --text-muted: #9ca3af;
-      --accent: #e94560;
-      --accent-hover: #d63a54;
+      --accent: #0f766e;
+      --accent-hover: #0d9488;
       --success: #22c55e;
       --warning: #f59e0b;
       --border: rgba(0,0,0,0.06);
@@ -194,8 +194,7 @@
       transition: opacity 0.2s, background 0.2s;
     }
     .session-item:hover .delete-btn { opacity: 1; }
-    .session-item .delete-btn:hover { color: var(--accent); background: rgba(233,69,96,0.1); }
-    .session-item .delete-btn:hover { background: rgba(233,69,96,0.2); }
+    .session-item .delete-btn:hover { color: var(--accent); background: rgba(13,148,136,0.2); }
     .session-group-title {
       font-size: 0.7rem;
       font-weight: 600;
@@ -330,23 +329,24 @@
       background: var(--bg-primary);
     }
     .messages {
-      padding: 20px 32px;
+      padding: 24px 40px;
       display: flex;
       flex-direction: column;
       gap: 24px;
-      width: 100%;
-      max-width: 800px;
+      width: 960px;
+      max-width: 100%;
     }
     /* Message row with avatar */
     .msg-row {
       display: flex;
-      gap: 16px;
+      gap: 20px;
       align-items: flex-start;
     }
     .msg-row.user { flex-direction: row-reverse; }
+    .msg-row.user .msg { align-self: flex-end; }
     .msg-avatar {
-      width: 36px;
-      height: 36px;
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -363,7 +363,8 @@
       color: #fff;
     }
     .msg {
-      max-width: 85%;
+      width: 86%;
+      min-width: 0;
       padding: 12px 18px;
       padding-right: 44px;
       border-radius: 12px;
@@ -462,9 +463,9 @@
       justify-content: center;
     }
     .input-area {
-      padding: 16px 32px 24px;
-      width: 100%;
-      max-width: 800px;
+      padding: 20px 40px 28px;
+      width: 960px;
+      max-width: 100%;
     }
     .input-container {
       display: flex;
@@ -534,7 +535,7 @@
       cursor: pointer;
       transition: background 0.2s;
     }
-    .input-stop:hover { background: rgba(233,69,96,0.2); }
+    .input-stop:hover { background: rgba(13,148,136,0.2); }
     .spinner {
       width: 20px;
       height: 20px;
@@ -549,7 +550,7 @@
       padding: 8px 12px;
       margin-top: 8px;
       border-radius: 8px;
-      background: rgba(233, 69, 96, 0.1);
+      background: rgba(13, 148, 136, 0.1);
       font-size: 0.85rem;
     }
 
@@ -557,7 +558,7 @@
     .thinking {
       max-width: 100%;
       padding: 12px 16px;
-      margin-left: 52px;
+      margin-left: 60px;
       border-radius: 10px;
       background: var(--bg-secondary);
       font-size: 0.85rem;
@@ -613,8 +614,8 @@
       .sidebar { transform: translateX(calc(-1 * var(--sidebar-width))); }
       .sidebar.open { transform: translateX(0); }
       .main { margin-left: 0; }
-      .messages { padding: 12px; }
-      .msg { max-width: 95%; }
+      .messages { padding: 16px; width: 100%; }
+      .msg { max-width: calc(100% - 60px); }
     }
 
     /* Welcome screen */
@@ -635,7 +636,7 @@
       font-weight: 600;
     }
     .welcome h1 span { 
-      background: linear-gradient(135deg, #e94560 0%, #764ba2 100%);
+      background: linear-gradient(135deg, var(--accent) 0%, #764ba2 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -667,7 +668,7 @@
       background: var(--bg-tertiary); 
       border-color: var(--accent);
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(233, 69, 96, 0.15);
+      box-shadow: 0 4px 12px rgba(13, 148, 136, 0.15);
     }
   </style>
 </head>
@@ -1113,11 +1114,58 @@
       stopBtn.style.display = 'inline-block';
       loading = true;
       abortController = new AbortController();
+      var abortedByTimeout = false;
+
+      // 请求超时（2 分钟），避免一直加载
+      const REQUEST_TIMEOUT_MS = 120000;
+      const timeoutId = setTimeout(function() {
+        if (loading && abortController) {
+          abortedByTimeout = true;
+          abortController.abort();
+        }
+      }, REQUEST_TIMEOUT_MS);
 
       let assistantBubble = null;
       let contentEl = null;
       let pendingBuffer = '';
       let streamDone = false;
+      let typingId = null;
+      const TYPING_MS = 20;
+      const CHARS_PER_TICK = 2;
+
+      function startTypingLoop() {
+        if (typingId) return;
+        function tick() {
+          if (!contentEl) return;
+          if (pendingBuffer.length > 0) {
+            const take = Math.min(CHARS_PER_TICK, pendingBuffer.length);
+            contentEl.textContent += pendingBuffer.slice(0, take);
+            pendingBuffer = pendingBuffer.slice(take);
+            messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
+          }
+          if (pendingBuffer.length > 0 || !streamDone) {
+            typingId = setTimeout(tick, TYPING_MS);
+          } else {
+            typingId = null;
+            if (assistantBubble && contentEl) {
+              const rawText = contentEl.textContent || '';
+              if (rawText && typeof marked !== 'undefined') {
+                try {
+                  const contentDiv = document.createElement('div');
+                  contentDiv.className = 'content';
+                  contentDiv.innerHTML = marked.parse(rawText);
+                  addCopyButtons(contentDiv);
+                  contentEl.replaceWith(contentDiv);
+                } catch (e) { console.warn('Markdown parse error:', e); }
+              }
+              if (rawText) addMsgCopyIcon(assistantBubble, rawText);
+            }
+            removeThinkingBox();
+            loadSessionList();
+          }
+        }
+        typingId = setTimeout(tick, TYPING_MS);
+      }
 
       removeThinkingBox();
 
@@ -1156,35 +1204,37 @@
               if (ev.type === 'recovery') { addThinkingStep('recovery', ev.detail); continue; }
               if (ev.type === 'message_chunk') {
                 if (!assistantBubble) {
-                  // Create row with avatar
                   const row = document.createElement('div');
                   row.className = 'msg-row assistant';
                   const avatar = document.createElement('div');
                   avatar.className = 'msg-avatar';
                   avatar.textContent = '🐝';
                   row.appendChild(avatar);
-                  
                   assistantBubble = document.createElement('div');
                   assistantBubble.className = 'msg assistant';
                   contentEl = document.createElement('span');
                   assistantBubble.appendChild(contentEl);
                   row.appendChild(assistantBubble);
                   messagesEl.appendChild(row);
+                  startTypingLoop();
                 }
                 pendingBuffer += ev.text || '';
-                contentEl.textContent += ev.text || '';
-                messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
                 continue;
               }
-              if (ev.type === 'message_done') { streamDone = true; removeThinkingBox(); continue; }
+              if (ev.type === 'message_done') { streamDone = true; continue; }
               if (ev.type === 'token_usage') { updateTokenStats(ev.total_tokens || 0, ev.cumulative_total || 0); continue; }
               if (ev.type === 'error') { showError(ev.text || '错误'); }
             } catch (err) { console.warn('Parse error:', err); }
           }
         }
 
-        // Finalize message with markdown
-        if (assistantBubble && contentEl) {
+        // 若没有收到 message_chunk（无回复），或打字未启动，则直接 finalize
+        if (assistantBubble && contentEl && !typingId) {
+          streamDone = true;
+          if (pendingBuffer) {
+            contentEl.textContent = pendingBuffer;
+            pendingBuffer = '';
+          }
           const rawText = contentEl.textContent || '';
           if (rawText && typeof marked !== 'undefined') {
             try {
@@ -1197,16 +1247,22 @@
           }
           addMsgCopyIcon(assistantBubble, rawText);
         }
-        removeThinkingBox();
-        loadSessionList();
+        if (!typingId) {
+          removeThinkingBox();
+          loadSessionList();
+        }
       } catch (e) {
+        if (typingId) { clearTimeout(typingId); typingId = null; }
         if (e.name === 'AbortError') {
-          showError('已停止生成');
+          showError(abortedByTimeout ? '请求超时，请重试' : '已停止生成');
+        } else if (e.name === 'TimeoutError' || (e.message && e.message.includes('timeout'))) {
+          showError('请求超时，请重试');
         } else {
-          showError('请求失败: ' + e.message);
+          showError('请求失败: ' + (e.message || '未知错误'));
         }
         removeThinkingBox();
       } finally {
+        clearTimeout(timeoutId);
         inputEl.disabled = false;
         inputLoadingEl.style.display = 'none';
         stopBtn.style.display = 'none';

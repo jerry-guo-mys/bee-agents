@@ -178,6 +178,7 @@ fn default_allowed_domains() -> Vec<String> {
         "medium.com".into(),
         // 学术 / 新闻
         "arxiv.org".into(),
+        "news.google.com".into(),      // Google 新闻
         "news.ycombinator.com".into(), // Hacker News
         "www.reddit.com".into(),
         // 工具类
