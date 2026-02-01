@@ -407,7 +407,9 @@
         });
         div.appendChild(contentDiv);
       } else {
-        div.appendChild(document.createTextNode(escapeHtml(content)));
+        // 用户消息直接用 textContent，自动转义
+        const contentNode = document.createTextNode(content);
+        div.appendChild(contentNode);
       }
       
       messagesEl.appendChild(div);
@@ -597,6 +599,7 @@
       removeThinkingBox();
 
       try {
+        console.log('Sending message:', text);
         const res = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -606,8 +609,10 @@
           }),
           signal: abortController.signal
         });
+        console.log('Response status:', res.status);
         if (!res.ok) {
           const raw = await res.text();
+          console.error('Request failed:', raw);
           throw new Error(raw || res.statusText);
         }
         const reader = res.body.getReader();
@@ -623,6 +628,7 @@
             if (!line.trim()) continue;
             try {
               const ev = JSON.parse(line);
+              console.log('Event:', ev.type, ev);
               if (ev.type === 'session_id') {
                 saveSessionId(ev.session_id);
                 continue;
@@ -695,7 +701,7 @@
                 showError(ev.text || '错误');
               }
             } catch (err) {
-              console.warn('Parse stream line:', err);
+              console.warn('Parse stream line:', err, 'Line:', line);
             }
           }
         }
