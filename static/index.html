@@ -9,33 +9,33 @@
   <script src="/js/highlight.min.js"></script>
   <style>
     :root {
-      --bg-primary: #1a1a2e;
-      --bg-secondary: #16213e;
-      --bg-tertiary: #0f3460;
-      --bg-code: #0d1117;
+      --bg-primary: #1c1e2e;
+      --bg-secondary: #17192a;
+      --bg-tertiary: #222438;
+      --bg-code: #15182a;
       --text-primary: #e8e8e8;
       --text-secondary: #a0aec0;
-      --text-muted: #718096;
+      --text-muted: #6b7280;
       --accent: #e94560;
       --accent-hover: #ff6b6b;
       --success: #4ade80;
       --warning: #f59e0b;
-      --border: #0f3460;
-      --sidebar-width: 280px;
+      --border: rgba(255,255,255,0.06);
+      --sidebar-width: 260px;
     }
     [data-theme="light"] {
-      --bg-primary: #ffffff;
-      --bg-secondary: #f7f7f8;
-      --bg-tertiary: #e5e5e5;
-      --bg-code: #f6f8fa;
+      --bg-primary: #f8f9fa;
+      --bg-secondary: #f0f2f5;
+      --bg-tertiary: #e8eaed;
+      --bg-code: #f5f5f5;
       --text-primary: #1a1a2e;
       --text-secondary: #4a5568;
-      --text-muted: #718096;
+      --text-muted: #9ca3af;
       --accent: #e94560;
       --accent-hover: #d63a54;
       --success: #22c55e;
       --warning: #f59e0b;
-      --border: #e2e8f0;
+      --border: rgba(0,0,0,0.06);
     }
     * { box-sizing: border-box; }
     body {
@@ -52,7 +52,6 @@
     .sidebar {
       width: var(--sidebar-width);
       background: var(--bg-secondary);
-      border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       height: 100vh;
@@ -66,8 +65,7 @@
       transform: translateX(calc(-1 * var(--sidebar-width)));
     }
     .sidebar-header {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -84,10 +82,10 @@
       align-items: center;
     }
     .sidebar-toolbar button {
-      width: 36px;
-      height: 36px;
+      width: 32px;
+      height: 32px;
       border: none;
-      border-radius: 8px;
+      border-radius: 6px;
       background: var(--bg-tertiary);
       color: var(--text-secondary);
       font-size: 1rem;
@@ -97,16 +95,16 @@
       justify-content: center;
       transition: background 0.2s;
     }
-    .sidebar-toolbar button:hover { background: var(--border); color: var(--text-primary); }
+    .sidebar-toolbar button:hover { background: var(--bg-secondary); color: var(--text-primary); }
     .sidebar-search {
       padding: 8px 12px;
     }
     .sidebar-search input {
       width: 100%;
       padding: 10px 14px 10px 36px;
-      border: 1px solid var(--border);
+      border: none;
       border-radius: 8px;
-      background: var(--bg-primary);
+      background: var(--bg-tertiary);
       color: var(--text-primary);
       font-size: 0.85rem;
       outline: none;
@@ -116,26 +114,24 @@
       transition: border-color 0.2s;
     }
     .sidebar-search input::placeholder { color: var(--text-muted); }
-    .sidebar-search input:focus { border-color: var(--accent); }
+    .sidebar-search input:focus { outline: none; }
     .new-chat-btn {
-      width: 100%;
-      padding: 12px 16px;
-      margin: 12px 16px;
       width: calc(100% - 32px);
-      border: 1px dashed var(--border);
+      margin: 8px 16px;
+      padding: 10px 14px;
+      border: none;
       border-radius: 8px;
-      background: transparent;
+      background: var(--bg-tertiary);
       color: var(--text-primary);
       font-size: 0.9rem;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 8px;
-      transition: background 0.2s, border-color 0.2s;
+      transition: background 0.2s;
     }
     .new-chat-btn:hover {
-      background: var(--bg-tertiary);
-      border-color: var(--accent);
+      background: var(--bg-secondary);
     }
     .session-list {
       flex: 1;
@@ -170,7 +166,7 @@
     }
     .session-item-content { flex: 1; min-width: 0; }
     .session-item:hover { background: var(--bg-tertiary); }
-    .session-item.active { background: var(--bg-tertiary); border-left: 3px solid var(--accent); }
+    .session-item.active { background: var(--bg-tertiary); }
     .session-item .title {
       font-size: 0.85rem;
       color: var(--text-primary);
@@ -210,7 +206,7 @@
     }
     .sidebar-user {
       padding: 12px 16px;
-      border-top: 1px solid var(--border);
+      margin-top: auto;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -233,14 +229,13 @@
     }
     .sidebar-footer {
       padding: 12px 16px;
-      border-top: 1px solid var(--border);
       display: flex;
       gap: 8px;
     }
     .sidebar-footer button {
       flex: 1;
       padding: 8px;
-      border: 1px solid var(--border);
+      border: none;
       border-radius: 6px;
       background: var(--bg-tertiary);
       color: var(--text-secondary);
@@ -248,7 +243,7 @@
       cursor: pointer;
       transition: background 0.2s;
     }
-    .sidebar-footer button:hover { background: var(--border); color: var(--text-primary); }
+    .sidebar-footer button:hover { background: var(--bg-secondary); color: var(--text-primary); }
 
     /* Main content */
     .main {
@@ -257,14 +252,14 @@
       display: flex;
       flex-direction: column;
       height: 100vh;
+      background: var(--bg-primary);
       transition: margin-left 0.3s;
     }
     .sidebar.collapsed + .main { margin-left: 0; }
     
     .header {
-      padding: 12px 20px;
-      background: var(--bg-secondary);
-      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      background: var(--bg-primary);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -309,7 +304,7 @@
     }
     .header-actions button {
       padding: 6px 12px;
-      border: 1px solid var(--border);
+      border: none;
       border-radius: 6px;
       background: var(--bg-tertiary);
       color: var(--text-secondary);
@@ -317,7 +312,7 @@
       cursor: pointer;
       transition: background 0.2s;
     }
-    .header-actions button:hover { background: var(--border); color: var(--text-primary); }
+    .header-actions button:hover { background: var(--bg-secondary); color: var(--text-primary); }
     .token-stats {
       font-size: 0.75rem;
       color: var(--text-muted);
@@ -332,9 +327,10 @@
       overflow-y: auto;
       display: flex;
       justify-content: center;
+      background: var(--bg-primary);
     }
     .messages {
-      padding: 24px 32px;
+      padding: 20px 32px;
       display: flex;
       flex-direction: column;
       gap: 24px;
@@ -368,23 +364,22 @@
     }
     .msg {
       max-width: 85%;
-      padding: 14px 18px;
+      padding: 12px 18px;
       padding-right: 44px;
-      border-radius: 16px;
+      border-radius: 12px;
       line-height: 1.75;
       font-size: 0.95rem;
     }
     .msg.user {
       background: var(--accent);
       color: #fff;
-      border-radius: 16px 16px 4px 16px;
+      border-radius: 12px 12px 4px 12px;
       white-space: pre-wrap;
       word-break: break-word;
     }
     .msg.assistant {
       background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 16px 16px 16px 4px;
+      border-radius: 12px 12px 12px 4px;
     }
     .msg.assistant .content { color: var(--text-primary); font-size: 0.95rem; }
     .msg.assistant .content.plain { white-space: pre-wrap; word-break: break-word; }
@@ -413,7 +408,7 @@
     .msg.assistant .content blockquote {
       margin: 0.5em 0;
       padding-left: 1em;
-      border-left: 3px solid var(--border);
+      border-left: 3px solid var(--text-muted);
       color: var(--text-secondary);
     }
     .msg { position: relative; }
@@ -436,7 +431,7 @@
       transition: opacity 0.2s, background 0.2s;
     }
     .msg:hover .msg-copy-icon { opacity: 1; }
-    .msg-copy-icon:hover { background: var(--border); color: var(--text-primary); }
+    .msg-copy-icon:hover { background: var(--bg-tertiary); color: var(--text-primary); }
     .msg-copy-icon.copied { color: var(--success); }
     .copy-btn {
       position: absolute;
@@ -457,13 +452,12 @@
       transition: opacity 0.2s;
     }
     .msg.assistant .content pre:hover .copy-btn { opacity: 1; }
-    .copy-btn:hover { background: var(--border); color: var(--text-primary); }
+    .copy-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
     .copy-btn.copied { color: var(--success); }
 
     /* Input area */
     .input-wrapper {
-      background: var(--bg-secondary);
-      border-top: 1px solid var(--border);
+      background: var(--bg-primary);
       display: flex;
       justify-content: center;
     }
@@ -493,15 +487,15 @@
       min-height: 50px;
       max-height: 200px;
       padding: 12px 16px;
-      border: 1px solid var(--border);
+      border: none;
       border-radius: 12px;
-      background: var(--bg-primary);
+      background: var(--bg-secondary);
       color: var(--text-primary);
       font: inherit;
       resize: none;
       transition: border-color 0.2s;
     }
-    .input-container textarea:focus { outline: none; border-color: var(--accent); }
+    .input-container textarea:focus { outline: none; box-shadow: 0 0 0 2px var(--accent); }
     .input-container textarea::placeholder { color: var(--text-muted); }
     .input-toolbar {
       display: flex;
@@ -532,7 +526,7 @@
     .input-icon:hover { background: var(--bg-tertiary); color: var(--text-primary); }
     .input-stop {
       padding: 4px 12px;
-      border: 1px solid var(--accent);
+      border: none;
       border-radius: 6px;
       background: transparent;
       color: var(--accent);
@@ -562,11 +556,10 @@
     /* Thinking box */
     .thinking {
       max-width: 100%;
-      padding: 14px 18px;
+      padding: 12px 16px;
       margin-left: 52px;
-      border-radius: 12px;
-      background: var(--bg-code);
-      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-secondary);
       font-size: 0.85rem;
       color: var(--text-secondary);
     }
@@ -588,7 +581,7 @@
     .thinking.collapsed .toggle { transform: rotate(-90deg); }
     .thinking .steps { transition: max-height 0.3s ease-out, opacity 0.3s; overflow: hidden; }
     .thinking.collapsed .steps { max-height: 0 !important; opacity: 0; }
-    .thinking .step { margin: 6px 0; padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .thinking .step { margin: 6px 0; padding: 6px 0; }
     .thinking .step:last-child { border-bottom: none; }
     .thinking .step .tool { color: #63b3ed; }
     .thinking .step .preview { color: var(--text-muted); font-size: 0.8rem; }
