@@ -97,6 +97,21 @@ struct ClearSessionRequest {
     session_id: Option<String>,
 }
 
+/// 会话列表项
+#[derive(Debug, Serialize)]
+struct SessionListItem {
+    id: String,
+    title: String,
+    message_count: usize,
+    updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RenameSessionRequest {
+    session_id: String,
+    title: String,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
@@ -140,7 +155,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/chat", post(api_chat))
         .route("/api/chat/stream", post(api_chat_stream))
         .route("/api/history", get(api_history))
+        .route("/api/sessions", get(api_sessions_list))
         .route("/api/session/clear", post(api_session_clear))
+        .route("/api/session/rename", post(api_session_rename))
         .route("/api/memory/consolidate", post(api_memory_consolidate))
         .route("/api/health", get(|| async { "OK" }))
         .with_state(Arc::clone(&state));
@@ -270,6 +287,82 @@ async fn api_session_clear(
     }
     let path = session_path(&state.sessions_dir, &session_id);
     let _ = std::fs::remove_file(&path);
+    Ok(StatusCode::OK)
+}
+
+/// GET /api/sessions：列出所有会话（从磁盘读取），按更新时间倒序
+async fn api_sessions_list(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<SessionListItem>>, (StatusCode, String)> {
+    let mut items = Vec::new();
+    let entries = std::fs::read_dir(&state.sessions_dir)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().map_or(true, |e| e != "json") {
+            continue;
+        }
+        let id = path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        if id.is_empty() {
+            continue;
+        }
+        
+        // 读取会话快照获取消息
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let snap: SessionSnapshot = match serde_json::from_str(&content) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        
+        // 提取标题：第一条用户消息的前 50 字符
+        let title = snap.messages.iter()
+            .find(|m| matches!(m.role, Role::User) && !m.content.trim().starts_with("Observation from "))
+            .map(|m| {
+                let t = m.content.trim();
+                if t.chars().count() > 50 {
+                    format!("{}...", t.chars().take(50).collect::<String>())
+                } else {
+                    t.to_string()
+                }
+            })
+            .unwrap_or_else(|| "新对话".to_string());
+        
+        // 获取文件修改时间
+        let updated_at = entry.metadata()
+            .and_then(|m| m.modified())
+            .map(|t| {
+                let dt: chrono::DateTime<chrono::Local> = t.into();
+                dt.format("%m-%d %H:%M").to_string()
+            })
+            .unwrap_or_default();
+        
+        items.push(SessionListItem {
+            id,
+            title,
+            message_count: snap.messages.len(),
+            updated_at,
+        });
+    }
+    
+    // 按更新时间倒序（最新在前）
+    items.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    
+    Ok(Json(items))
+}
+
+/// POST /api/session/rename：重命名会话（更新标题，存储在元数据中）
+async fn api_session_rename(
+    State(_state): State<Arc<AppState>>,
+    Json(_req): Json<RenameSessionRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    // TODO: 实现会话元数据存储以支持自定义标题
     Ok(StatusCode::OK)
 }
 
