@@ -1,0 +1,35 @@
+[app]
+name = "Bee"
+workspace_root = "./workspace"
+max_context_turns = 20
+
+[llm]
+# 优先级: DEEPSEEK_API_KEY > OPENAI_API_KEY
+# DeepSeek: https://api.deepseek.com, 模型 deepseek-chat / deepseek-reasoner
+# OpenAI:   https://api.openai.com/v1, 模型 gpt-4o-mini 等
+provider = "deepseek"
+model = "deepseek-chat"
+base_url = "https://api.deepseek.com"
+
+[llm.deepseek]
+model = "deepseek-chat"
+# 思考模式 (deepseek-reasoner) 适合复杂推理
+
+[llm.openai]
+model = "gpt-4o-mini"
+
+[llm.timeouts]
+request = 60
+stream = 120
+
+[tools]
+filesystem_root = "./workspace"
+tool_timeout_secs = 30
+
+[tools.shell]
+allowed_commands = ["ls", "grep", "cat", "head", "tail", "wc", "find", "cargo", "rustc"]
+
+[tools.search]
+timeout_secs = 15
+max_result_chars = 8000
+allowed_domains = ["en.wikipedia.org", "zh.wikipedia.org", "docs.rs", "github.com", "stackoverflow.com"]

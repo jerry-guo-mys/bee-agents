@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bee - 个人智能体</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #1a1a2e;
+      color: #e8e8e8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      padding: 12px 20px;
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+      font-weight: 600;
+      font-size: 1.1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header .brand span { color: #e94560; }
+    .header .token-stats {
+      font-size: 0.75rem;
+      font-weight: 400;
+      color: #888;
+      display: flex;
+      gap: 12px;
+    }
+    .header .token-stats .label { color: #aaa; }
+    .header .token-stats .value { color: #4ade80; font-weight: 500; }
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .msg {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: #0f3460;
+      color: #e8e8e8;
+    }
+    .msg.assistant {
+      align-self: flex-start;
+      background: #16213e;
+      border: 1px solid #0f3460;
+    }
+    .msg .role {
+      font-size: 0.75rem;
+      opacity: 0.8;
+      margin-bottom: 4px;
+    }
+    .input-area {
+      padding: 12px 16px;
+      background: #16213e;
+      border-top: 1px solid #0f3460;
+    }
+    .input-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .input-row textarea {
+      width: 100%;
+      min-height: 60px;
+      max-height: 150px;
+      padding: 10px 14px;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      background: #1a1a2e;
+      color: #e8e8e8;
+      font: inherit;
+      resize: vertical;
+    }
+    .input-row textarea:focus {
+      outline: none;
+      border-color: #e94560;
+    }
+    .input-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .input-actions .hint {
+      font-size: 0.75rem;
+      color: #888;
+      margin: 0;
+    }
+    .input-actions button {
+      padding: 8px 24px;
+      border: none;
+      border-radius: 8px;
+      background: #e94560;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .input-actions button:hover { background: #ff6b6b; }
+    .input-actions button:disabled {
+      background: #555;
+      cursor: not-allowed;
+    }
+    .error {
+      color: #e94560;
+      padding: 8px;
+      margin-top: 4px;
+      border-radius: 6px;
+      background: rgba(233, 69, 96, 0.15);
+    }
+    .thinking {
+      max-width: 85%;
+      align-self: flex-start;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      border-radius: 12px;
+      background: #0d1b2a;
+      border: 1px solid #1b263b;
+      font-size: 0.85rem;
+      color: #a0aec0;
+    }
+    .thinking .title {
+      font-weight: 600;
+      color: #e94560;
+      margin-bottom: 6px;
+    }
+    .thinking .step {
+      margin: 4px 0;
+      padding: 4px 0;
+      border-bottom: 1px solid #1b263b;
+    }
+    .thinking .step:last-child { border-bottom: none; }
+    .thinking .step .tool { color: #63b3ed; }
+    .thinking .step .preview { color: #718096; font-size: 0.8rem; }
+    .thinking .step .plan-preview {
+      margin: 6px 0 0;
+      padding: 8px;
+      background: #0f172a;
+      border-radius: 6px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .msg.assistant .cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: #e94560;
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 0.8s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand"><span>Bee</span> 个人智能体</div>
+    <div class="token-stats" id="tokenStats">
+      <div><span class="label">本次：</span><span class="value" id="tokenCurrent">-</span></div>
+      <div><span class="label">累计：</span><span class="value" id="tokenTotal">-</span></div>
+    </div>
+  </div>
+  <div class="messages" id="messages"></div>
+  <div class="input-area">
+    <div class="input-row">
+      <textarea id="input" placeholder="输入消息，Ctrl+Enter 发送..." rows="2"></textarea>
+      <div class="input-actions">
+        <div class="hint">支持工具：cat、ls、shell、search 等</div>
+        <button id="send" type="button">发送</button>
+      </div>
+    </div>
+    <div id="error" class="error" style="display:none"></div>
+  </div>
+
+  <script>
+    const messagesEl = document.getElementById('messages');
+    const inputEl = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+    const errorEl = document.getElementById('error');
+    const tokenCurrentEl = document.getElementById('tokenCurrent');
+    const tokenTotalEl = document.getElementById('tokenTotal');
+
+    const STORAGE_KEY = 'bee_session_id';
+    let sessionId = localStorage.getItem(STORAGE_KEY) || null;
+    let loading = false;
+
+    function formatTokens(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+      return String(n);
+    }
+
+    function updateTokenStats(current, total) {
+      tokenCurrentEl.textContent = formatTokens(current);
+      tokenTotalEl.textContent = formatTokens(total);
+    }
+
+    function saveSessionId(id) {
+      sessionId = id;
+      if (id) localStorage.setItem(STORAGE_KEY, id);
+      else localStorage.removeItem(STORAGE_KEY);
+    }
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.style.display = msg ? 'block' : 'none';
+    }
+
+    function appendMessage(role, content) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + role;
+      const roleLabel = role === 'user' ? 'You' : 'Bee';
+      div.innerHTML = '<div class="role">' + roleLabel + '</div>' + escapeHtml(content);
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return div;
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function ensureThinkingBox() {
+      let box = document.getElementById('stream-thinking');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'stream-thinking';
+        box.className = 'thinking';
+        box.innerHTML = '<div class="title">ReAct 思考过程</div><div class="steps"></div>';
+        messagesEl.appendChild(box);
+      }
+      return box;
+    }
+
+    const THINK_TYPING_MS = 15;
+    const THINK_CHARS_PER_TICK = 2;
+
+    function typeIntoEl(el, str, done) {
+      if (!el) return;
+      str = str || '';
+      if (str.length === 0) {
+        if (done) done();
+        return;
+      }
+      let i = 0;
+      function tick() {
+        if (i >= str.length) {
+          if (done) done();
+          return;
+        }
+        const take = Math.min(THINK_CHARS_PER_TICK, str.length - i);
+        el.textContent += str.slice(i, i + take);
+        i += take;
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        setTimeout(tick, THINK_TYPING_MS);
+      }
+      setTimeout(tick, THINK_TYPING_MS);
+    }
+
+    function updateStepCounter(step, maxSteps) {
+      const box = ensureThinkingBox();
+      const title = box.querySelector('.title');
+      title.textContent = 'ReAct 思考过程 [步骤 ' + step + '/' + maxSteps + ']';
+    }
+
+    function addThinkingStep(type, text, tool, preview) {
+      const box = ensureThinkingBox();
+      const steps = box.querySelector('.steps');
+      const step = document.createElement('div');
+      step.className = 'step';
+      if (type === 'step_update') {
+        return;
+      }
+      else if (type === 'thinking') step.textContent = '思考中…';
+      else if (type === 'thinking_content') {
+        step.innerHTML = '<strong>Plan / 推理：</strong><pre class="plan-preview"></pre>';
+        const pre = step.querySelector('.plan-preview');
+        typeIntoEl(pre, text || '', null);
+      }
+      else if (type === 'memory_recovery') {
+        step.innerHTML = '<strong>使用长期记忆改进回答</strong><br><span class="preview"></span>';
+        typeIntoEl(step.querySelector('.preview'), preview || text || '', null);
+      }
+      else if (type === 'memory_consolidation') {
+        step.innerHTML = '<strong>整理对话到长期记忆</strong><br><span class="preview"></span>';
+        typeIntoEl(step.querySelector('.preview'), preview || text || '', null);
+      }
+      else if (type === 'tool_call') {
+        step.innerHTML = '调用工具 <span class="tool"></span>';
+        typeIntoEl(step.querySelector('.tool'), tool || '', null);
+      }
+      else if (type === 'observation') {
+        step.innerHTML = '观察 <span class="tool"></span>: <span class="preview"></span>';
+        const toolEl = step.querySelector('.tool');
+        const prevEl = step.querySelector('.preview');
+        typeIntoEl(toolEl, tool || '', function() {
+          typeIntoEl(prevEl, preview || text || '', null);
+        });
+      }
+      else if (type === 'tool_failure') {
+        step.innerHTML = '<strong style="color:#e94560;">⚠ 工具执行失败</strong> <span class="tool"></span><br><span class="preview"></span>';
+        const toolEl = step.querySelector('.tool');
+        const reasonEl = step.querySelector('.preview');
+        typeIntoEl(toolEl, tool || '', function() {
+          typeIntoEl(reasonEl, preview || text || '', null);
+        });
+      }
+      else if (type === 'recovery') {
+        step.innerHTML = '<strong style="color:#fbbf24;">🔄 错误恢复</strong> <span class="tool"></span><br><span class="preview"></span>';
+        const actionEl = step.querySelector('.tool');
+        const detailEl = step.querySelector('.preview');
+        typeIntoEl(actionEl, tool || '', function() {
+          typeIntoEl(detailEl, preview || text || '', null);
+        });
+      }
+      else step.textContent = text || type;
+      steps.appendChild(step);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function removeThinkingBox() {
+      const box = document.getElementById('stream-thinking');
+      if (box) box.remove();
+    }
+
+    async function loadHistory() {
+      if (!sessionId) return;
+      try {
+        const res = await fetch('/api/history?session_id=' + encodeURIComponent(sessionId));
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.messages || data.messages.length === 0) return;
+        messagesEl.innerHTML = '';
+        data.messages.forEach(function(m) {
+          appendMessage(m.role, m.content || '');
+        });
+      } catch (e) {
+        console.warn('Load history failed:', e);
+      }
+    }
+
+    async function send() {
+      const text = inputEl.value.trim();
+      if (!text || loading) return;
+      inputEl.value = '';
+      showError('');
+      appendMessage('user', text);
+      sendBtn.disabled = true;
+      loading = true;
+
+      let assistantBubble = null;
+      let contentEl = null;
+      let pendingBuffer = '';
+      let streamDone = false;
+      let typingId = null;
+      const TYPING_MS = 25;
+      const CHARS_PER_TICK = 1;
+
+      function startTypingLoop() {
+        if (typingId) return;
+        const cursorSpan = document.createElement('span');
+        cursorSpan.className = 'cursor';
+        assistantBubble.appendChild(cursorSpan);
+        function tick() {
+          if (!contentEl) return;
+          if (pendingBuffer.length > 0) {
+            const take = Math.min(CHARS_PER_TICK, pendingBuffer.length);
+            contentEl.textContent += pendingBuffer.slice(0, take);
+            pendingBuffer = pendingBuffer.slice(take);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          }
+          if (pendingBuffer.length > 0 || !streamDone) {
+            typingId = setTimeout(tick, TYPING_MS);
+          } else {
+            cursorSpan.remove();
+            typingId = null;
+          }
+        }
+        typingId = setTimeout(tick, TYPING_MS);
+      }
+
+      removeThinkingBox();
+
+      try {
+        const res = await fetch('/api/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text,
+            session_id: sessionId || undefined
+          })
+        });
+        if (!res.ok) {
+          const raw = await res.text();
+          throw new Error(raw || res.statusText);
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const ev = JSON.parse(line);
+              if (ev.type === 'session_id') {
+                saveSessionId(ev.session_id);
+                continue;
+              }
+              if (ev.type === 'step_update') {
+                updateStepCounter(ev.step || 0, ev.max_steps || 10);
+                continue;
+              }
+              if (ev.type === 'thinking') {
+                addThinkingStep('thinking');
+                continue;
+              }
+              if (ev.type === 'thinking_content') {
+                addThinkingStep('thinking_content', ev.text || '', null, null);
+                continue;
+              }
+              if (ev.type === 'memory_recovery') {
+                addThinkingStep('memory_recovery', null, null, ev.preview || '');
+                continue;
+              }
+              if (ev.type === 'memory_consolidation') {
+                addThinkingStep('memory_consolidation', null, null, ev.preview || '');
+                continue;
+              }
+              if (ev.type === 'tool_call') {
+                addThinkingStep('tool_call', null, ev.tool, null);
+                continue;
+              }
+              if (ev.type === 'observation') {
+                addThinkingStep('observation', null, ev.tool, ev.preview);
+                continue;
+              }
+              if (ev.type === 'tool_failure') {
+                addThinkingStep('tool_failure', ev.reason || '', ev.tool || '', ev.reason || '');
+                continue;
+              }
+              if (ev.type === 'recovery') {
+                addThinkingStep('recovery', ev.detail || '', ev.action || '', ev.detail || '');
+                continue;
+              }
+              if (ev.type === 'message_chunk') {
+                if (!assistantBubble) {
+                  assistantBubble = appendMessage('assistant', '');
+                  contentEl = document.createTextNode('');
+                  assistantBubble.appendChild(contentEl);
+                  startTypingLoop();
+                }
+                pendingBuffer += ev.text || '';
+                continue;
+              }
+              if (ev.type === 'message_done') {
+                streamDone = true;
+                removeThinkingBox();
+                continue;
+              }
+              if (ev.type === 'token_usage') {
+                updateTokenStats(
+                  ev.total_tokens || 0,
+                  ev.cumulative_total || 0
+                );
+                continue;
+              }
+              if (ev.type === 'error') {
+                showError(ev.text || '错误');
+              }
+            } catch (err) {
+              console.warn('Parse stream line:', err);
+            }
+          }
+        }
+        if (assistantBubble && contentEl) {
+          const total = contentEl.textContent.length + pendingBuffer.length;
+          if (total === 0) {
+            pendingBuffer = '';
+            streamDone = true;
+            contentEl.textContent = '(无回复)';
+          }
+        }
+        removeThinkingBox();
+      } catch (e) {
+        showError('请求失败: ' + e.message);
+        if (assistantBubble) {
+          if (contentEl) contentEl.textContent = '(请求失败)';
+          else assistantBubble.appendChild(document.createTextNode('(请求失败)'));
+        }
+      } finally {
+        sendBtn.disabled = false;
+        loading = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', send);
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', loadHistory);
+  </script>
+</body>
+</html>
