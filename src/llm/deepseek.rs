@@ -4,7 +4,7 @@
 //! - Base URL: https://api.deepseek.com
 //! - 模型: deepseek-chat (常规对话), deepseek-reasoner (思考模式)
 
-use crate::llm::{LlmClient, OpenAiClient};
+use crate::llm::OpenAiClient;
 
 /// DeepSeek API 常量
 pub const DEEPSEEK_BASE_URL: &str = "https://api.deepseek.com";

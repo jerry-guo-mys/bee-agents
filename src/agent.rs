@@ -5,12 +5,12 @@
 //! create_context_with_long_term 构建带长期记忆的 ContextManager，
 //! process_message 对单条用户输入跑 ReAct 并返回最终回复。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::config::{load_config, AppConfig};
 use crate::core::{AgentError, RecoveryEngine};
-use crate::memory::InMemoryLongTerm;
+use crate::memory::{FileLongTerm, InMemoryLongTerm, long_term_path, memory_root};
 use crate::react::{react_loop, ContextManager, Planner, ReactEvent};
 use tokio::sync::mpsc;
 use crate::tools::{
@@ -54,9 +54,18 @@ pub fn create_agent_components(
     }
 }
 
-/// 创建带长期记忆的 ContextManager（与 TUI 一致）
-pub fn create_context_with_long_term(max_turns: usize) -> ContextManager {
-    let long_term = Arc::new(InMemoryLongTerm::default());
+/// 创建带长期记忆的 ContextManager。
+/// 若 workspace 提供，则使用 Markdown 文件长期记忆（memory/long-term.md + BM25 检索）；
+/// 否则使用内存实现（与 TUI 一致）。
+pub fn create_context_with_long_term(max_turns: usize, workspace: Option<&Path>) -> ContextManager {
+    let long_term: Arc<dyn crate::memory::LongTermMemory> = match workspace {
+        Some(w) => {
+            let root = memory_root(w);
+            let path = long_term_path(&root);
+            Arc::new(FileLongTerm::new(path, 2000))
+        }
+        None => Arc::new(InMemoryLongTerm::default()),
+    };
     ContextManager::new(max_turns).with_long_term(long_term)
 }
 

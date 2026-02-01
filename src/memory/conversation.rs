@@ -57,6 +57,20 @@ impl ConversationMemory {
         }
     }
 
+    /// 从已有消息列表恢复（用于持久化后加载）
+    pub fn from_messages(messages: Vec<Message>, max_turns: usize) -> Self {
+        let mut c = Self {
+            messages,
+            max_turns,
+        };
+        c.prune();
+        c
+    }
+
+    pub fn max_turns(&self) -> usize {
+        self.max_turns
+    }
+
     pub fn push(&mut self, msg: Message) {
         self.messages.push(msg);
         self.prune();

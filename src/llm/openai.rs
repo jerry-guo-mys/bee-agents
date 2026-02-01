@@ -2,7 +2,6 @@
 //!
 //! 通过 async_openai 调用任意 OpenAI 兼容端点（可配置 base_url）；支持 DeepSeek、OpenAI、自建代理等。
 
-use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 

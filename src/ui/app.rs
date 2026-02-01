@@ -10,7 +10,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use crossterm::event::{KeyCode, KeyEventKind};
+use crossterm::event::KeyCode;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::sync::watch;
 

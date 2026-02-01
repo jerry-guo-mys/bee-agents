@@ -92,6 +92,10 @@
     .msg.assistant .content {
       color: #e8e8e8;
     }
+    .msg.assistant .content.plain {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
     .msg.assistant .content p { margin: 0.5em 0; }
     .msg.assistant .content p:first-child { margin-top: 0; }
     .msg.assistant .content p:last-child { margin-bottom: 0; }
@@ -444,11 +448,17 @@
             copyRow.appendChild(copyBtn);
             div.appendChild(copyRow);
           } else {
-            div.appendChild(document.createTextNode(content));
+            var plain = document.createElement('div');
+            plain.className = 'content plain';
+            plain.textContent = content;
+            div.appendChild(plain);
           }
         } catch (err) {
           console.warn('Markdown render failed:', err);
-          div.appendChild(document.createTextNode(content));
+          var plain = document.createElement('div');
+          plain.className = 'content plain';
+          plain.textContent = content;
+          div.appendChild(plain);
         }
       } else {
         // 用户消息直接用 textContent，自动转义
@@ -590,6 +600,9 @@
         if (!data.messages || data.messages.length === 0) return;
         messagesEl.innerHTML = '';
         data.messages.forEach(function(m) {
+          var content = (m.content || '').trim();
+          if (m.role === 'assistant' && (content.startsWith('Tool call:') || content.startsWith('Observation from '))) return;
+          if (m.role === 'user' && content.startsWith('Observation from ')) return;
           appendMessage(m.role, m.content || '', m.role === 'assistant');
         });
       } catch (e) {
@@ -761,7 +774,7 @@
             pendingBuffer = '';
             contentEl.textContent = '(无回复)';
           } else {
-            // 打字结束后只添加「渲染 Markdown」按钮，由用户手动切换
+            // 打字结束后默认用 Markdown 渲染，并添加「复制」「显示原文」按钮
             whenTypingDone = function() {
               const rawText = contentEl.textContent;
               const bubble = assistantBubble;
@@ -782,47 +795,64 @@
                 });
               };
               row.appendChild(copyBtn);
-              const btn = document.createElement('button');
+              function renderMarkdown(slot) {
+                try {
+                  if (typeof marked !== 'undefined') {
+                    var contentDiv = document.createElement('div');
+                    contentDiv.className = 'content';
+                    contentDiv.innerHTML = marked.parse(rawText);
+                    contentDiv.querySelectorAll('pre code').forEach(function(block) {
+                      var pre = block.parentElement;
+                      var codeCopyBtn = document.createElement('button');
+                      codeCopyBtn.className = 'copy-btn';
+                      codeCopyBtn.textContent = '复制';
+                      codeCopyBtn.onclick = function() {
+                        navigator.clipboard.writeText(block.textContent).then(function() {
+                          codeCopyBtn.textContent = '已复制';
+                          codeCopyBtn.classList.add('copied');
+                          setTimeout(function() { codeCopyBtn.textContent = '复制'; codeCopyBtn.classList.remove('copied'); }, 2000);
+                        });
+                      };
+                      pre.style.position = 'relative';
+                      pre.appendChild(codeCopyBtn);
+                    });
+                    slot.replaceWith(contentDiv);
+                    return true;
+                  }
+                } catch (err) {
+                  console.warn('Markdown render failed:', err);
+                }
+                var plain = document.createElement('div');
+                plain.className = 'content plain';
+                plain.textContent = rawText;
+                slot.replaceWith(plain);
+                return false;
+              }
+              var slot = bubble.children[1];
+              function showPlain(slot) {
+                var plain = document.createElement('div');
+                plain.className = 'content plain';
+                plain.textContent = rawText;
+                slot.replaceWith(plain);
+              }
+              var rendered = renderMarkdown(slot);
+              var btn = document.createElement('button');
               btn.className = 'markdown-toggle-btn';
               btn.type = 'button';
-              btn.setAttribute('data-rendered', 'false');
-              btn.textContent = '渲染 Markdown';
+              btn.setAttribute('data-rendered', rendered ? 'true' : 'false');
+              btn.textContent = rendered ? '显示原文' : '渲染 Markdown';
               btn.onclick = function() {
-                var slot = bubble.children[1];
+                var s = bubble.children[1];
                 var isRendered = btn.getAttribute('data-rendered') === 'true';
-                if (!isRendered) {
-                  try {
-                    if (typeof marked !== 'undefined') {
-                      const contentDiv = document.createElement('div');
-                      contentDiv.className = 'content';
-                      contentDiv.innerHTML = marked.parse(rawText);
-                      contentDiv.querySelectorAll('pre code').forEach(function(block) {
-                        var pre = block.parentElement;
-                        var codeCopyBtn = document.createElement('button');
-                        codeCopyBtn.className = 'copy-btn';
-                        codeCopyBtn.textContent = '复制';
-                        codeCopyBtn.onclick = function() {
-                          navigator.clipboard.writeText(block.textContent).then(function() {
-                            codeCopyBtn.textContent = '已复制';
-                            codeCopyBtn.classList.add('copied');
-                            setTimeout(function() { codeCopyBtn.textContent = '复制'; codeCopyBtn.classList.remove('copied'); }, 2000);
-                          });
-                        };
-                        pre.style.position = 'relative';
-                        pre.appendChild(codeCopyBtn);
-                      });
-                      slot.replaceWith(contentDiv);
-                      btn.setAttribute('data-rendered', 'true');
-                      btn.textContent = '显示原文';
-                    }
-                  } catch (err) {
-                    console.warn('Markdown render failed:', err);
-                  }
-                } else {
-                  var textNode = document.createTextNode(rawText);
-                  slot.replaceWith(textNode);
+                if (isRendered) {
+                  showPlain(s);
                   btn.setAttribute('data-rendered', 'false');
                   btn.textContent = '渲染 Markdown';
+                } else {
+                  if (renderMarkdown(s)) {
+                    btn.setAttribute('data-rendered', 'true');
+                    btn.textContent = '显示原文';
+                  }
                 }
                 messagesEl.scrollTop = messagesEl.scrollHeight;
               };
@@ -876,10 +906,21 @@
       }
     }
 
-    function newChat() {
+    async function newChat() {
       if (loading) {
-        if (!confirm('正在生成回复，确定要开始新对话吗？')) return;
+        if (!confirm('正在生成回复，确定要清除对话记录并开始新对话吗？')) return;
         stopGeneration();
+      }
+      if (sessionId) {
+        try {
+          await fetch('/api/session/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId })
+          });
+        } catch (e) {
+          console.warn('Clear session failed:', e);
+        }
       }
       sessionId = null;
       localStorage.removeItem(STORAGE_KEY);

@@ -2,8 +2,6 @@
 //!
 //! 取最后一条 User 消息，回显为 JSON Tool Call（echo），便于本地跑通 ReAct 流程。
 
-use std::pin::Pin;
-
 use async_trait::async_trait;
 use futures_util::stream;
 
