@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bee - 个人智能体</title>
+  <!-- Markdown 渲染 -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+  <!-- 代码高亮 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -24,8 +29,27 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 16px;
     }
     .header .brand span { color: #e94560; }
+    .header .actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .header .actions button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      background: #0f3460;
+      color: #e8e8e8;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .header .actions button:hover { background: #1b4d7e; }
+    .header .actions button.danger { background: #e94560; }
+    .header .actions button.danger:hover { background: #ff6b6b; }
     .header .token-stats {
       font-size: 0.75rem;
       font-weight: 400;
@@ -47,14 +71,14 @@
       max-width: 85%;
       padding: 10px 14px;
       border-radius: 12px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
+      line-height: 1.6;
     }
     .msg.user {
       align-self: flex-end;
       background: #0f3460;
       color: #e8e8e8;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     .msg.assistant {
       align-self: flex-start;
@@ -66,6 +90,65 @@
       opacity: 0.8;
       margin-bottom: 4px;
     }
+    .msg.assistant .content {
+      color: #e8e8e8;
+    }
+    .msg.assistant .content p { margin: 0.5em 0; }
+    .msg.assistant .content p:first-child { margin-top: 0; }
+    .msg.assistant .content p:last-child { margin-bottom: 0; }
+    .msg.assistant .content ul, .msg.assistant .content ol { 
+      margin: 0.5em 0;
+      padding-left: 1.5em;
+    }
+    .msg.assistant .content pre {
+      position: relative;
+      margin: 0.8em 0;
+      padding: 12px;
+      background: #0d1117;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+    .msg.assistant .content pre code {
+      background: none;
+      padding: 0;
+      font-size: 0.9em;
+      font-family: 'Courier New', monospace;
+    }
+    .msg.assistant .content code {
+      background: #0d1117;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.9em;
+      font-family: 'Courier New', monospace;
+    }
+    .msg.assistant .content a {
+      color: #63b3ed;
+      text-decoration: none;
+    }
+    .msg.assistant .content a:hover { text-decoration: underline; }
+    .msg.assistant .content blockquote {
+      margin: 0.5em 0;
+      padding-left: 1em;
+      border-left: 3px solid #0f3460;
+      color: #a0aec0;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 4px 8px;
+      background: #1b263b;
+      border: 1px solid #0f3460;
+      border-radius: 4px;
+      color: #a0aec0;
+      font-size: 0.75rem;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .msg.assistant .content pre:hover .copy-btn { opacity: 1; }
+    .copy-btn:hover { background: #0f3460; color: #e8e8e8; }
+    .copy-btn.copied { color: #4ade80; }
     .input-area {
       padding: 12px 16px;
       background: #16213e;
@@ -110,11 +193,33 @@
       color: #fff;
       font-weight: 600;
       cursor: pointer;
+      transition: background 0.2s;
+      position: relative;
     }
     .input-actions button:hover { background: #ff6b6b; }
     .input-actions button:disabled {
       background: #555;
       cursor: not-allowed;
+    }
+    .input-actions button.stop {
+      background: #f59e0b;
+    }
+    .input-actions button.stop:hover {
+      background: #fbbf24;
+    }
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
     .error {
       color: #e94560;
@@ -138,6 +243,26 @@
       font-weight: 600;
       color: #e94560;
       margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .thinking .title:hover { color: #ff6b6b; }
+    .thinking .toggle {
+      font-size: 0.9rem;
+      color: #718096;
+      transition: transform 0.2s;
+    }
+    .thinking.collapsed .toggle { transform: rotate(-90deg); }
+    .thinking .steps { 
+      transition: max-height 0.3s ease-out, opacity 0.3s;
+      overflow: hidden;
+    }
+    .thinking.collapsed .steps {
+      max-height: 0 !important;
+      opacity: 0;
     }
     .thinking .step {
       margin: 4px 0;
@@ -174,9 +299,12 @@
 <body>
   <div class="header">
     <div class="brand"><span>Bee</span> 个人智能体</div>
-    <div class="token-stats" id="tokenStats">
-      <div><span class="label">本次：</span><span class="value" id="tokenCurrent">-</span></div>
-      <div><span class="label">累计：</span><span class="value" id="tokenTotal">-</span></div>
+    <div class="actions">
+      <button id="newChat" type="button">新对话</button>
+      <div class="token-stats" id="tokenStats">
+        <div><span class="label">本次：</span><span class="value" id="tokenCurrent">-</span></div>
+        <div><span class="label">累计：</span><span class="value" id="tokenTotal">-</span></div>
+      </div>
     </div>
   </div>
   <div class="messages" id="messages"></div>
@@ -198,10 +326,30 @@
     const errorEl = document.getElementById('error');
     const tokenCurrentEl = document.getElementById('tokenCurrent');
     const tokenTotalEl = document.getElementById('tokenTotal');
+    const newChatBtn = document.getElementById('newChat');
 
     const STORAGE_KEY = 'bee_session_id';
+    const COLLAPSE_PREF_KEY = 'bee_collapse_thinking';
     let sessionId = localStorage.getItem(STORAGE_KEY) || null;
     let loading = false;
+    let abortController = null;
+    let collapseThinking = localStorage.getItem(COLLAPSE_PREF_KEY) === 'true';
+
+    // 配置 marked
+    if (typeof marked !== 'undefined') {
+      marked.setOptions({
+        highlight: function(code, lang) {
+          if (lang && hljs.getLanguage(lang)) {
+            try {
+              return hljs.highlight(code, { language: lang }).value;
+            } catch (e) {}
+          }
+          return hljs.highlightAuto(code).value;
+        },
+        breaks: true,
+        gfm: true
+      });
+    }
 
     function formatTokens(n) {
       if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
@@ -225,11 +373,43 @@
       errorEl.style.display = msg ? 'block' : 'none';
     }
 
-    function appendMessage(role, content) {
+    function appendMessage(role, content, isMarkdown = false) {
       const div = document.createElement('div');
       div.className = 'msg ' + role;
       const roleLabel = role === 'user' ? 'You' : 'Bee';
-      div.innerHTML = '<div class="role">' + roleLabel + '</div>' + escapeHtml(content);
+      const roleDiv = document.createElement('div');
+      roleDiv.className = 'role';
+      roleDiv.textContent = roleLabel;
+      div.appendChild(roleDiv);
+      
+      if (role === 'assistant' && isMarkdown && typeof marked !== 'undefined') {
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'content';
+        contentDiv.innerHTML = marked.parse(content);
+        // 为代码块添加复制按钮
+        contentDiv.querySelectorAll('pre code').forEach(function(block) {
+          const pre = block.parentElement;
+          const btn = document.createElement('button');
+          btn.className = 'copy-btn';
+          btn.textContent = '复制';
+          btn.onclick = function() {
+            navigator.clipboard.writeText(block.textContent).then(function() {
+              btn.textContent = '已复制';
+              btn.classList.add('copied');
+              setTimeout(function() {
+                btn.textContent = '复制';
+                btn.classList.remove('copied');
+              }, 2000);
+            });
+          };
+          pre.style.position = 'relative';
+          pre.appendChild(btn);
+        });
+        div.appendChild(contentDiv);
+      } else {
+        div.appendChild(document.createTextNode(escapeHtml(content)));
+      }
+      
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
       return div;
@@ -246,8 +426,17 @@
       if (!box) {
         box = document.createElement('div');
         box.id = 'stream-thinking';
-        box.className = 'thinking';
-        box.innerHTML = '<div class="title">ReAct 思考过程</div><div class="steps"></div>';
+        box.className = 'thinking' + (collapseThinking ? ' collapsed' : '');
+        box.innerHTML = '<div class="title"><span class="title-text">ReAct 思考过程</span><span class="toggle">▼</span></div><div class="steps"></div>';
+        
+        // 点击标题切换折叠
+        const titleEl = box.querySelector('.title');
+        titleEl.onclick = function() {
+          box.classList.toggle('collapsed');
+          collapseThinking = box.classList.contains('collapsed');
+          localStorage.setItem(COLLAPSE_PREF_KEY, collapseThinking);
+        };
+        
         messagesEl.appendChild(box);
       }
       return box;
@@ -280,8 +469,10 @@
 
     function updateStepCounter(step, maxSteps) {
       const box = ensureThinkingBox();
-      const title = box.querySelector('.title');
-      title.textContent = 'ReAct 思考过程 [步骤 ' + step + '/' + maxSteps + ']';
+      const titleText = box.querySelector('.title-text');
+      if (titleText) {
+        titleText.textContent = 'ReAct 思考过程 [步骤 ' + step + '/' + maxSteps + ']';
+      }
     }
 
     function addThinkingStep(type, text, tool, preview) {
@@ -353,7 +544,7 @@
         if (!data.messages || data.messages.length === 0) return;
         messagesEl.innerHTML = '';
         data.messages.forEach(function(m) {
-          appendMessage(m.role, m.content || '');
+          appendMessage(m.role, m.content || '', m.role === 'assistant');
         });
       } catch (e) {
         console.warn('Load history failed:', e);
@@ -365,9 +556,12 @@
       if (!text || loading) return;
       inputEl.value = '';
       showError('');
-      appendMessage('user', text);
+      appendMessage('user', text, false);
       sendBtn.disabled = true;
+      sendBtn.innerHTML = '<span class="spinner"></span>生成中...';
+      sendBtn.classList.add('stop');
       loading = true;
+      abortController = new AbortController();
 
       let assistantBubble = null;
       let contentEl = null;
@@ -409,7 +603,8 @@
           body: JSON.stringify({
             message: text,
             session_id: sessionId || undefined
-          })
+          }),
+          signal: abortController.signal
         });
         if (!res.ok) {
           const raw = await res.text();
@@ -470,9 +665,15 @@
               }
               if (ev.type === 'message_chunk') {
                 if (!assistantBubble) {
-                  assistantBubble = appendMessage('assistant', '');
+                  assistantBubble = document.createElement('div');
+                  assistantBubble.className = 'msg assistant';
+                  const roleDiv = document.createElement('div');
+                  roleDiv.className = 'role';
+                  roleDiv.textContent = 'Bee';
+                  assistantBubble.appendChild(roleDiv);
                   contentEl = document.createTextNode('');
                   assistantBubble.appendChild(contentEl);
+                  messagesEl.appendChild(assistantBubble);
                   startTypingLoop();
                 }
                 pendingBuffer += ev.text || '';
@@ -504,26 +705,100 @@
             pendingBuffer = '';
             streamDone = true;
             contentEl.textContent = '(无回复)';
+          } else {
+            // 转换为 Markdown 渲染
+            const rawText = contentEl.textContent;
+            if (typeof marked !== 'undefined') {
+              const contentDiv = document.createElement('div');
+              contentDiv.className = 'content';
+              contentDiv.innerHTML = marked.parse(rawText);
+              // 为代码块添加复制按钮
+              contentDiv.querySelectorAll('pre code').forEach(function(block) {
+                const pre = block.parentElement;
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn';
+                btn.textContent = '复制';
+                btn.onclick = function() {
+                  navigator.clipboard.writeText(block.textContent).then(function() {
+                    btn.textContent = '已复制';
+                    btn.classList.add('copied');
+                    setTimeout(function() {
+                      btn.textContent = '复制';
+                      btn.classList.remove('copied');
+                    }, 2000);
+                  });
+                };
+                pre.style.position = 'relative';
+                pre.appendChild(btn);
+              });
+              contentEl.replaceWith(contentDiv);
+            }
           }
         }
         removeThinkingBox();
       } catch (e) {
-        showError('请求失败: ' + e.message);
-        if (assistantBubble) {
-          if (contentEl) contentEl.textContent = '(请求失败)';
-          else assistantBubble.appendChild(document.createTextNode('(请求失败)'));
+        if (e.name === 'AbortError') {
+          showError('已停止生成');
+          if (assistantBubble && contentEl) {
+            const rawText = contentEl.textContent;
+            if (rawText && typeof marked !== 'undefined') {
+              const contentDiv = document.createElement('div');
+              contentDiv.className = 'content';
+              contentDiv.innerHTML = marked.parse(rawText + '\n\n_[已停止]_');
+              contentEl.replaceWith(contentDiv);
+            } else if (contentEl) {
+              contentEl.textContent += '\n\n[已停止]';
+            }
+          }
+        } else {
+          showError('请求失败: ' + e.message);
+          if (assistantBubble) {
+            if (contentEl) contentEl.textContent = '(请求失败)';
+            else assistantBubble.appendChild(document.createTextNode('(请求失败)'));
+          }
         }
+        removeThinkingBox();
       } finally {
         sendBtn.disabled = false;
+        sendBtn.textContent = '发送';
+        sendBtn.classList.remove('stop');
         loading = false;
+        abortController = null;
       }
     }
 
-    sendBtn.addEventListener('click', send);
+    function stopGeneration() {
+      if (abortController) {
+        abortController.abort();
+      }
+    }
+
+    function newChat() {
+      if (loading) {
+        if (!confirm('正在生成回复，确定要开始新对话吗？')) return;
+        stopGeneration();
+      }
+      sessionId = null;
+      localStorage.removeItem(STORAGE_KEY);
+      messagesEl.innerHTML = '';
+      updateTokenStats(0, 0);
+      inputEl.focus();
+    }
+
+    sendBtn.addEventListener('click', function() {
+      if (loading) {
+        stopGeneration();
+      } else {
+        send();
+      }
+    });
+    
+    newChatBtn.addEventListener('click', newChat);
+    
     inputEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && e.ctrlKey) {
         e.preventDefault();
-        send();
+        if (!loading) send();
       }
     });
 
