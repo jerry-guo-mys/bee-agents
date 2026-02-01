@@ -4,11 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bee - 个人智能体</title>
-  <!-- Markdown 渲染 -->
-  <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
-  <!-- 代码高亮 -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
+  <!-- Markdown 与代码高亮（同源托管，避免 CORB 阻止） -->
+  <script src="/js/marked.min.js"></script>
+  <link rel="stylesheet" href="/css/github-dark.min.css">
+  <script src="/js/highlight.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -149,6 +148,28 @@
     .msg.assistant .content pre:hover .copy-btn { opacity: 1; }
     .copy-btn:hover { background: #0f3460; color: #e8e8e8; }
     .copy-btn.copied { color: #4ade80; }
+    .markdown-toggle-row {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid #1b263b;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .markdown-toggle-btn {
+      padding: 4px 10px;
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      background: #1b263b;
+      color: #a0aec0;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .markdown-toggle-btn:hover {
+      background: #0f3460;
+      color: #e8e8e8;
+    }
     .input-area {
       padding: 12px 16px;
       background: #16213e;
@@ -335,16 +356,19 @@
     let abortController = null;
     let collapseThinking = localStorage.getItem(COLLAPSE_PREF_KEY) === 'true';
 
-    // 配置 marked
+    // 配置 marked（hljs 可能被 CORB 阻止加载，必须做空值判断）
     if (typeof marked !== 'undefined') {
       marked.setOptions({
         highlight: function(code, lang) {
-          if (lang && hljs.getLanguage(lang)) {
-            try {
+          if (typeof hljs === 'undefined') return escapeHtml(code);
+          try {
+            if (lang && hljs.getLanguage(lang)) {
               return hljs.highlight(code, { language: lang }).value;
-            } catch (e) {}
+            }
+            return hljs.highlightAuto(code).value;
+          } catch (e) {
+            return escapeHtml(code);
           }
-          return hljs.highlightAuto(code).value;
         },
         breaks: true,
         gfm: true
@@ -382,30 +406,50 @@
       roleDiv.textContent = roleLabel;
       div.appendChild(roleDiv);
       
-      if (role === 'assistant' && isMarkdown && typeof marked !== 'undefined') {
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'content';
-        contentDiv.innerHTML = marked.parse(content);
-        // 为代码块添加复制按钮
-        contentDiv.querySelectorAll('pre code').forEach(function(block) {
-          const pre = block.parentElement;
-          const btn = document.createElement('button');
-          btn.className = 'copy-btn';
-          btn.textContent = '复制';
-          btn.onclick = function() {
-            navigator.clipboard.writeText(block.textContent).then(function() {
-              btn.textContent = '已复制';
-              btn.classList.add('copied');
-              setTimeout(function() {
-                btn.textContent = '复制';
-                btn.classList.remove('copied');
-              }, 2000);
+      if (role === 'assistant' && isMarkdown) {
+        try {
+          if (typeof marked !== 'undefined') {
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'content';
+            contentDiv.innerHTML = marked.parse(content);
+            contentDiv.querySelectorAll('pre code').forEach(function(block) {
+              const pre = block.parentElement;
+              const btn = document.createElement('button');
+              btn.className = 'copy-btn';
+              btn.textContent = '复制';
+              btn.onclick = function() {
+                navigator.clipboard.writeText(block.textContent).then(function() {
+                  btn.textContent = '已复制';
+                  btn.classList.add('copied');
+                  setTimeout(function() { btn.textContent = '复制'; btn.classList.remove('copied'); }, 2000);
+                });
+              };
+              pre.style.position = 'relative';
+              pre.appendChild(btn);
             });
-          };
-          pre.style.position = 'relative';
-          pre.appendChild(btn);
-        });
-        div.appendChild(contentDiv);
+            div.appendChild(contentDiv);
+            var copyRow = document.createElement('div');
+            copyRow.className = 'markdown-toggle-row';
+            var copyBtn = document.createElement('button');
+            copyBtn.className = 'markdown-toggle-btn';
+            copyBtn.textContent = '复制';
+            copyBtn.type = 'button';
+            copyBtn.onclick = function() {
+              navigator.clipboard.writeText(content).then(function() {
+                copyBtn.textContent = '已复制';
+                copyBtn.classList.add('copied');
+                setTimeout(function() { copyBtn.textContent = '复制'; copyBtn.classList.remove('copied'); }, 2000);
+              });
+            };
+            copyRow.appendChild(copyBtn);
+            div.appendChild(copyRow);
+          } else {
+            div.appendChild(document.createTextNode(content));
+          }
+        } catch (err) {
+          console.warn('Markdown render failed:', err);
+          div.appendChild(document.createTextNode(content));
+        }
       } else {
         // 用户消息直接用 textContent，自动转义
         const contentNode = document.createTextNode(content);
@@ -570,6 +614,7 @@
       let pendingBuffer = '';
       let streamDone = false;
       let typingId = null;
+      let whenTypingDone = null;  // 打字全部结束后回调（用于再替换为 Markdown）
       const TYPING_MS = 25;
       const CHARS_PER_TICK = 1;
 
@@ -591,6 +636,10 @@
           } else {
             cursorSpan.remove();
             typingId = null;
+            if (whenTypingDone) {
+              whenTypingDone();
+              whenTypingDone = null;
+            }
           }
         }
         typingId = setTimeout(tick, TYPING_MS);
@@ -706,39 +755,81 @@
           }
         }
         if (assistantBubble && contentEl) {
-          const total = contentEl.textContent.length + pendingBuffer.length;
-          if (total === 0) {
+          const fullText = contentEl.textContent + pendingBuffer;
+          streamDone = true;
+          if (fullText.length === 0) {
             pendingBuffer = '';
-            streamDone = true;
             contentEl.textContent = '(无回复)';
           } else {
-            // 转换为 Markdown 渲染
-            const rawText = contentEl.textContent;
-            if (typeof marked !== 'undefined') {
-              const contentDiv = document.createElement('div');
-              contentDiv.className = 'content';
-              contentDiv.innerHTML = marked.parse(rawText);
-              // 为代码块添加复制按钮
-              contentDiv.querySelectorAll('pre code').forEach(function(block) {
-                const pre = block.parentElement;
-                const btn = document.createElement('button');
-                btn.className = 'copy-btn';
-                btn.textContent = '复制';
-                btn.onclick = function() {
-                  navigator.clipboard.writeText(block.textContent).then(function() {
-                    btn.textContent = '已复制';
-                    btn.classList.add('copied');
-                    setTimeout(function() {
-                      btn.textContent = '复制';
-                      btn.classList.remove('copied');
-                    }, 2000);
-                  });
-                };
-                pre.style.position = 'relative';
-                pre.appendChild(btn);
-              });
-              contentEl.replaceWith(contentDiv);
-            }
+            // 打字结束后只添加「渲染 Markdown」按钮，由用户手动切换
+            whenTypingDone = function() {
+              const rawText = contentEl.textContent;
+              const bubble = assistantBubble;
+              const row = document.createElement('div');
+              row.className = 'markdown-toggle-row';
+              var copyBtn = document.createElement('button');
+              copyBtn.className = 'markdown-toggle-btn';
+              copyBtn.textContent = '复制';
+              copyBtn.type = 'button';
+              copyBtn.onclick = function() {
+                navigator.clipboard.writeText(rawText).then(function() {
+                  copyBtn.textContent = '已复制';
+                  copyBtn.classList.add('copied');
+                  setTimeout(function() {
+                    copyBtn.textContent = '复制';
+                    copyBtn.classList.remove('copied');
+                  }, 2000);
+                });
+              };
+              row.appendChild(copyBtn);
+              const btn = document.createElement('button');
+              btn.className = 'markdown-toggle-btn';
+              btn.type = 'button';
+              btn.setAttribute('data-rendered', 'false');
+              btn.textContent = '渲染 Markdown';
+              btn.onclick = function() {
+                var slot = bubble.children[1];
+                var isRendered = btn.getAttribute('data-rendered') === 'true';
+                if (!isRendered) {
+                  try {
+                    if (typeof marked !== 'undefined') {
+                      const contentDiv = document.createElement('div');
+                      contentDiv.className = 'content';
+                      contentDiv.innerHTML = marked.parse(rawText);
+                      contentDiv.querySelectorAll('pre code').forEach(function(block) {
+                        var pre = block.parentElement;
+                        var codeCopyBtn = document.createElement('button');
+                        codeCopyBtn.className = 'copy-btn';
+                        codeCopyBtn.textContent = '复制';
+                        codeCopyBtn.onclick = function() {
+                          navigator.clipboard.writeText(block.textContent).then(function() {
+                            codeCopyBtn.textContent = '已复制';
+                            codeCopyBtn.classList.add('copied');
+                            setTimeout(function() { codeCopyBtn.textContent = '复制'; codeCopyBtn.classList.remove('copied'); }, 2000);
+                          });
+                        };
+                        pre.style.position = 'relative';
+                        pre.appendChild(codeCopyBtn);
+                      });
+                      slot.replaceWith(contentDiv);
+                      btn.setAttribute('data-rendered', 'true');
+                      btn.textContent = '显示原文';
+                    }
+                  } catch (err) {
+                    console.warn('Markdown render failed:', err);
+                  }
+                } else {
+                  var textNode = document.createTextNode(rawText);
+                  slot.replaceWith(textNode);
+                  btn.setAttribute('data-rendered', 'false');
+                  btn.textContent = '渲染 Markdown';
+                }
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+              };
+              row.appendChild(btn);
+              bubble.appendChild(row);
+              messagesEl.scrollTop = messagesEl.scrollHeight;
+            };
           }
         }
         removeThinkingBox();
@@ -746,14 +837,20 @@
         if (e.name === 'AbortError') {
           showError('已停止生成');
           if (assistantBubble && contentEl) {
-            const rawText = contentEl.textContent;
-            if (rawText && typeof marked !== 'undefined') {
-              const contentDiv = document.createElement('div');
-              contentDiv.className = 'content';
-              contentDiv.innerHTML = marked.parse(rawText + '\n\n_[已停止]_');
-              contentEl.replaceWith(contentDiv);
-            } else if (contentEl) {
-              contentEl.textContent += '\n\n[已停止]';
+            const rawText = (contentEl.textContent || '') + (pendingBuffer || '');
+            if (rawText) {
+              try {
+                if (typeof marked !== 'undefined') {
+                  const contentDiv = document.createElement('div');
+                  contentDiv.className = 'content';
+                  contentDiv.innerHTML = marked.parse(rawText + '\n\n_[已停止]_');
+                  contentEl.replaceWith(contentDiv);
+                } else {
+                  contentEl.textContent += '\n\n[已停止]';
+                }
+              } catch (err) {
+                contentEl.textContent += '\n\n[已停止]';
+              }
             }
           }
         } else {

@@ -11,8 +11,8 @@ use std::sync::Arc;
 use axum::{
     body::Body,
     extract::{Query, State},
-    http::StatusCode,
-    response::Html,
+    http::{header, StatusCode},
+    response::{Html, Response},
     routing::{get, post},
     Json, Router,
 };
@@ -93,6 +93,9 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/", get(index))
+        .route("/js/marked.min.js", get(serve_marked_js))
+        .route("/js/highlight.min.js", get(serve_highlight_js))
+        .route("/css/github-dark.min.css", get(serve_highlight_css))
         .route("/api/chat", post(api_chat))
         .route("/api/chat/stream", post(api_chat_stream))
         .route("/api/history", get(api_history))
@@ -110,6 +113,30 @@ async fn main() -> anyhow::Result<()> {
 
 async fn index() -> Html<&'static str> {
     Html(include_str!("../../static/index.html"))
+}
+
+async fn serve_marked_js() -> Response {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/javascript; charset=utf-8")
+        .body(Body::from(include_str!("../../static/js/marked.min.js")))
+        .unwrap()
+}
+
+async fn serve_highlight_js() -> Response {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/javascript; charset=utf-8")
+        .body(Body::from(include_str!("../../static/js/highlight.min.js")))
+        .unwrap()
+}
+
+async fn serve_highlight_css() -> Response {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/css; charset=utf-8")
+        .body(Body::from(include_str!("../../static/css/github-dark.min.css")))
+        .unwrap()
 }
 
 async fn api_history(
