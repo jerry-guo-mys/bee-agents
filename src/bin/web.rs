@@ -299,7 +299,7 @@ async fn api_history(
             }
         }
     };
-    /// 主聊天区不展示内部消息：User 的 "Observation from ..."、Assistant 的 "Tool call: ..."
+    // 主聊天区不展示内部消息：User 的 "Observation from ..."、Assistant 的 "Tool call: ..."
     let messages: Vec<HistoryMessage> = context
         .messages()
         .iter()

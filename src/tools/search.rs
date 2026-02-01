@@ -15,7 +15,6 @@ use crate::tools::Tool;
 pub struct SearchTool {
     client: Client,
     allowed_domains: HashSet<String>,
-    timeout_secs: u64,
     max_result_chars: usize,
 }
 
@@ -46,7 +45,6 @@ impl SearchTool {
         Self {
             client,
             allowed_domains,
-            timeout_secs,
             max_result_chars,
         }
     }
@@ -92,7 +90,7 @@ impl Tool for SearchTool {
     }
 
     fn description(&self) -> &str {
-        "Fetch URL content (domain allowlist). Args: {\"url\": \"https://en.wikipedia.org/...\"}. Use for reading docs or pages."
+        "Fetch URL content (domain allowlist: Wikipedia, Baidu, JD, Zhihu, GitHub, StackOverflow, docs.rs, MDN, arxiv, etc). Args: {\"url\": \"https://...\"}."
     }
 
     async fn execute(&self, args: Value) -> Result<String, String> {

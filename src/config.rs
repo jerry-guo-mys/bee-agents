@@ -143,11 +143,47 @@ fn default_max_result_chars() -> usize {
 
 fn default_allowed_domains() -> Vec<String> {
     vec![
+        // 维基百科
         "en.wikipedia.org".into(),
         "zh.wikipedia.org".into(),
-        "docs.rs".into(),
+        "ja.wikipedia.org".into(),
+        // 中文常用
+        "www.baidu.com".into(),
+        "baike.baidu.com".into(),      // 百度百科
+        "www.jd.com".into(),
+        "item.jd.com".into(),          // 京东商品页
+        "www.taobao.com".into(),
+        "www.zhihu.com".into(),
+        "zhuanlan.zhihu.com".into(),   // 知乎专栏
+        "www.bilibili.com".into(),
+        "www.douban.com".into(),
+        "movie.douban.com".into(),
+        "book.douban.com".into(),
+        // 开发者资源
         "github.com".into(),
+        "raw.githubusercontent.com".into(),
+        "gist.github.com".into(),
         "stackoverflow.com".into(),
+        "docs.rs".into(),
+        "crates.io".into(),
+        "doc.rust-lang.org".into(),
+        "www.rust-lang.org".into(),
+        "docs.python.org".into(),
+        "pypi.org".into(),
+        "www.npmjs.com".into(),
+        "nodejs.org".into(),
+        "developer.mozilla.org".into(), // MDN
+        "devdocs.io".into(),
+        "dev.to".into(),
+        "medium.com".into(),
+        // 学术 / 新闻
+        "arxiv.org".into(),
+        "news.ycombinator.com".into(), // Hacker News
+        "www.reddit.com".into(),
+        // 工具类
+        "www.wolframalpha.com".into(),
+        "www.weather.com".into(),
+        "openweathermap.org".into(),
     ]
 }
 
