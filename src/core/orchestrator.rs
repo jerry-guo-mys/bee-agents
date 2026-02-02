@@ -16,6 +16,8 @@ use crate::react::{react_loop, ContextManager, Planner};
 use crate::tools::{
     CatTool, EchoTool, LsTool, SearchTool, ShellTool, ToolExecutor, ToolRegistry,
 };
+#[cfg(feature = "browser")]
+use crate::tools::BrowserTool;
 
 /// 从 UI 发往编排器的用户命令
 #[derive(Debug, Clone)]
@@ -115,6 +117,12 @@ pub async fn create_agent(
     tools.register(SearchTool::new(
         cfg.tools.search.allowed_domains.clone(),
         cfg.tools.search.timeout_secs,
+        cfg.tools.search.max_result_chars,
+    ));
+
+    #[cfg(feature = "browser")]
+    tools.register(BrowserTool::new(
+        cfg.tools.search.allowed_domains.clone(),
         cfg.tools.search.max_result_chars,
     ));
 

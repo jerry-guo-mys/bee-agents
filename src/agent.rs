@@ -16,6 +16,8 @@ use tokio::sync::mpsc;
 use crate::tools::{
     CatTool, EchoTool, LsTool, SearchTool, ShellTool, ToolExecutor, ToolRegistry,
 };
+#[cfg(feature = "browser")]
+use crate::tools::BrowserTool;
 
 /// 预构建的 Agent 组件：Planner、ToolExecutor、Recovery，可多会话共享
 pub struct AgentComponents {
@@ -44,6 +46,12 @@ pub fn create_agent_components(
     tools.register(SearchTool::new(
         cfg.tools.search.allowed_domains.clone(),
         cfg.tools.search.timeout_secs,
+        cfg.tools.search.max_result_chars,
+    ));
+
+    #[cfg(feature = "browser")]
+    tools.register(BrowserTool::new(
+        cfg.tools.search.allowed_domains.clone(),
         cfg.tools.search.max_result_chars,
     ));
 

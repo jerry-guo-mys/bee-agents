@@ -1280,15 +1280,7 @@
         if (!confirm('正在生成回复，确定开始新对话吗？')) return;
         stopGeneration();
       }
-      if (sessionId) {
-        try {
-          await fetch('/api/session/clear', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sessionId })
-          });
-        } catch (e) {}
-      }
+      // 仅切换为空会话并清空界面，不删除当前会话（历史对话保留在侧栏，可点击切换回来）
       sessionId = null;
       localStorage.removeItem(STORAGE_KEY);
       messagesEl.innerHTML = '';
