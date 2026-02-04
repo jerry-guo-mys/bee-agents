@@ -25,8 +25,8 @@ use tokio::sync::{mpsc, RwLock};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use bee::agent::{
-    create_agent_components, create_context_with_long_term, process_message,
-    process_message_stream, AgentComponents,
+    consolidate_memory_with_llm, create_agent_components, create_context_with_long_term,
+    process_message, process_message_stream, AgentComponents,
 };
 use bee::config::{load_config, AppConfig};
 use bee::memory::{
@@ -167,6 +167,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/compact", post(api_compact))
         .route("/api/session/rename", post(api_session_rename))
         .route("/api/memory/consolidate", post(api_memory_consolidate))
+        .route("/api/memory/consolidate-llm", post(api_memory_consolidate_llm))
         .route("/api/health", get(|| async { "OK" }))
         .with_state(Arc::clone(&state));
 
@@ -272,13 +273,28 @@ fn save_session_to_disk(
     let _ = append_daily_log(memory_root, &date, session_id, context.messages());
 }
 
-/// POST /api/memory/consolidate?since_days=7：手动触发记忆整理，将近期短期日志归纳写入长期记忆
+/// POST /api/memory/consolidate?since_days=7：手动触发记忆整理（截断式），将近期短期日志归纳写入长期记忆
 async fn api_memory_consolidate(
     State(state): State<Arc<AppState>>,
     Query(q): Query<ConsolidateQuery>,
 ) -> Result<Json<ConsolidateResponse>, (StatusCode, String)> {
     let since_days = q.since_days.unwrap_or(7);
     let r = consolidate_memory(&state.memory_root, since_days)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(ConsolidateResponse {
+        dates_processed: r.dates_processed,
+        blocks_added: r.blocks_added,
+    }))
+}
+
+/// POST /api/memory/consolidate-llm?since_days=7：用 LLM 对近期每日日志做摘要后写入长期记忆（EVOLUTION §3.3）
+async fn api_memory_consolidate_llm(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<ConsolidateQuery>,
+) -> Result<Json<ConsolidateResponse>, (StatusCode, String)> {
+    let since_days = q.since_days.unwrap_or(7);
+    let r = consolidate_memory_with_llm(&state.components.planner, &state.workspace, since_days)
+        .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(ConsolidateResponse {
         dates_processed: r.dates_processed,

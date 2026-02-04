@@ -311,6 +311,7 @@ pub async fn react_loop(
                                 action: "Critic".to_string(),
                                 detail: suggestion.clone(),
                             });
+                            context.append_critic_lesson(&suggestion);
                             context.push_message(Message::user(format!(
                                 "Critic 建议：{}",
                                 suggestion

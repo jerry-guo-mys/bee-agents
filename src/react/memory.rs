@@ -106,6 +106,18 @@ impl ContextManager {
         }
     }
 
+    /// 当 Critic 给出修正建议时追加到 lessons.md，供后续对话遵守（EVOLUTION §3.4 Critic → Lessons）
+    pub fn append_critic_lesson(&self, suggestion: &str) {
+        if suggestion.trim().is_empty() {
+            return;
+        }
+        let Some(ref p) = self.lessons_path else {
+            return;
+        };
+        let line = format!("Critic 建议：{}", suggestion.trim());
+        let _ = append_lesson(p, &line);
+    }
+
     /// 当发生 HallucinatedTool 时追加一条教训到 lessons.md，减少后续幻觉（受 auto_lesson_on_hallucination 控制）
     pub fn append_hallucination_lesson(&self, hallucinated_tool: &str, valid_tools: &[String]) {
         if !self.auto_lesson_on_hallucination {

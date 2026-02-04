@@ -11,8 +11,8 @@ use std::sync::Arc;
 use crate::config::{load_config, AppConfig};
 use crate::core::{AgentError, RecoveryEngine};
 use crate::memory::{
-    FileLongTerm, InMemoryLongTerm, lessons_path, long_term_path, memory_root, preferences_path,
-    procedural_path,
+    ConsolidateResult, FileLongTerm, InMemoryLongTerm, list_daily_logs_for_llm, lessons_path,
+    long_term_path, memory_root, preferences_path, procedural_path, LongTermMemory, Message,
 };
 use crate::core::TaskScheduler;
 use crate::react::{react_loop, ContextManager, Critic, Planner, ReactEvent};
@@ -118,6 +118,43 @@ pub fn create_context_with_long_term(max_turns: usize, workspace: Option<&Path>)
         ctx = ctx.with_preferences_path(p);
     }
     ctx
+}
+
+/// 用 LLM 对近期每日日志做摘要后写入长期记忆（EVOLUTION §3.3 整理与摘要的智能化）
+pub async fn consolidate_memory_with_llm(
+    planner: &Planner,
+    workspace: &Path,
+    since_days: u32,
+) -> Result<ConsolidateResult, AgentError> {
+    let root = memory_root(workspace);
+    let list = list_daily_logs_for_llm(&root, since_days)
+        .map_err(|e| AgentError::ConfigError(e.to_string()))?;
+    if list.is_empty() {
+        return Ok(ConsolidateResult::default());
+    }
+    let path = long_term_path(&root);
+    let lt = FileLongTerm::new(path, 2000);
+    let mut dates_processed = Vec::new();
+    for (date, content) in list {
+        let prompt = format!(
+            "Summarize the following daily log in one short paragraph: key facts, decisions, user preferences. Use the same language as the log. Output only the summary, no preamble.\n\n{}",
+            content
+        );
+        let summary = planner
+            .summarize(&[Message::user(prompt)])
+            .await
+            .unwrap_or_else(|_| content.chars().take(500).collect::<String>());
+        if summary.is_empty() {
+            continue;
+        }
+        lt.add(&format!("整理 {}（LLM 摘要）：\n\n{}", date, summary));
+        dates_processed.push(date);
+    }
+    let blocks_added = dates_processed.len();
+    Ok(ConsolidateResult {
+        dates_processed,
+        blocks_added,
+    })
 }
 
 /// 处理单条用户消息：跑 ReAct 循环（无 stream），返回最终回复文本

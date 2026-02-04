@@ -125,3 +125,19 @@
 - **机制**：当模型调用了不存在的工具（HallucinatedTool）时，在返回错误前自动向 `memory/lessons.md` 追加一条教训，内容为「仅使用以下已注册工具：cat、ls、…；不要编造不存在的工具名（例如曾误用「xxx」）。」
 - **作用**：后续对话中该段落会随 lessons 注入 system，减少重复幻觉。
 - **代码**：`ContextManager::append_hallucination_lesson(hallucinated_tool, valid_tools)`，在 ReAct 循环检测到 HallucinatedTool 时调用。
+
+---
+
+## 11. 已实现：Critic 建议写入 Lessons（§3.4）
+
+- **机制**：当 Critic 对工具结果给出修正建议（`CriticResult::Correction(suggestion)`）时，除注入当轮 user 消息外，自动向 `memory/lessons.md` 追加一行「Critic 建议：{suggestion}」。
+- **作用**：后续对话中该内容会随 lessons 注入 system，减少同类工具使用错误。
+- **代码**：`ContextManager::append_critic_lesson(suggestion)`，在 ReAct 循环 Critic 返回 Correction 时调用。
+
+---
+
+## 12. 已实现：整理时用 LLM 摘要（§3.3）
+
+- **机制**：对近期每日日志（`memory/logs/YYYY-MM-DD.md`）不再仅做截断，而是调用 LLM 对每日本内容生成简短摘要后写入长期记忆（块标题为「整理 YYYY-MM-DD（LLM 摘要）」）。
+- **入口**：`agent::consolidate_memory_with_llm(planner, workspace, since_days)`；Web API `POST /api/memory/consolidate-llm?since_days=7`。
+- **依赖**：`memory::list_daily_logs_for_llm` 列出待整理日志；`Planner::summarize` 对单日内容做摘要。

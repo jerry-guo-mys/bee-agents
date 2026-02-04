@@ -171,6 +171,47 @@ pub fn consolidate_memory(memory_root: &Path, since_days: u32) -> std::io::Resul
     Ok(result)
 }
 
+/// 列出需整理的每日日志（since_days 内），返回 (日期, 预处理后的内容) 供 LLM 摘要
+pub fn list_daily_logs_for_llm(memory_root: &Path, since_days: u32) -> std::io::Result<Vec<(String, String)>> {
+    let logs_dir = memory_root.join("logs");
+    if !logs_dir.exists() {
+        return Ok(Vec::new());
+    }
+    let today = chrono::Local::now().date_naive();
+    let cutoff = today - chrono::Duration::days(since_days as i64);
+
+    let mut entries: Vec<_> = std::fs::read_dir(&logs_dir)?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path().extension().map_or(false, |ext| ext == "md")
+                && e.path().file_stem().and_then(|s| s.to_str()).is_some()
+        })
+        .collect();
+    entries.sort_by_key(|e| e.path().file_name().unwrap().to_owned());
+
+    let mut out = Vec::new();
+    for entry in entries {
+        let path = entry.path();
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let date = match chrono::NaiveDate::parse_from_str(stem, "%Y-%m-%d") {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+        if date < cutoff {
+            continue;
+        }
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let summary = summarize_log_content(&content);
+        if !summary.is_empty() {
+            out.push((stem.to_string(), summary));
+        }
+    }
+    Ok(out)
+}
+
 /// 将当日日志内容做摘要：去掉 Tool call / Observation 等内部消息，保留用户与助手的实质对话，截断长度
 fn summarize_log_content(content: &str) -> String {
     let mut out = Vec::new();
