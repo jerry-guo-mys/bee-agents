@@ -45,12 +45,15 @@ struct SessionSnapshot {
 const DEFAULT_MAX_TURNS: usize = 20;
 
 struct AppState {
-    components: Arc<AgentComponents>,
+    /// 可运行时替换，以支持「多 LLM 后端切换」与配置热更新（白皮书 Phase 5）
+    components: Arc<RwLock<Arc<AgentComponents>>>,
     sessions: Arc<RwLock<HashMap<String, ContextManager>>>,
     sessions_dir: PathBuf,
     /// 记忆根目录（workspace/memory），用于短期日志与长期 Markdown
     memory_root: PathBuf,
     workspace: PathBuf,
+    /// 启动时加载的 system prompt，重载组件时复用
+    system_prompt: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -147,11 +150,12 @@ async fn main() -> anyhow::Result<()> {
 
     let components = Arc::new(create_agent_components(&workspace, &system_prompt));
     let state = Arc::new(AppState {
-        components,
+        components: Arc::new(RwLock::new(components)),
         sessions: Arc::new(RwLock::new(HashMap::new())),
         sessions_dir,
         memory_root: memory_root.clone(),
         workspace: workspace.clone(),
+        system_prompt: system_prompt.clone(),
     });
 
     let app = Router::new()
@@ -168,6 +172,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/session/rename", post(api_session_rename))
         .route("/api/memory/consolidate", post(api_memory_consolidate))
         .route("/api/memory/consolidate-llm", post(api_memory_consolidate_llm))
+        .route("/api/config/reload", post(api_config_reload))
         .route("/api/health", get(|| async { "OK" }))
         .with_state(Arc::clone(&state));
 
@@ -294,13 +299,25 @@ async fn api_memory_consolidate_llm(
     Query(q): Query<ConsolidateQuery>,
 ) -> Result<Json<ConsolidateResponse>, (StatusCode, String)> {
     let since_days = q.since_days.unwrap_or(7);
-    let r = consolidate_memory_with_llm(&state.components.planner, &state.workspace, since_days)
+    let components = state.components.read().await;
+    let r = consolidate_memory_with_llm(&components.planner, &state.workspace, since_days)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(ConsolidateResponse {
         dates_processed: r.dates_processed,
         blocks_added: r.blocks_added,
     }))
+}
+
+/// POST /api/config/reload：重新加载配置并重建 Agent 组件（LLM/Planner/Recovery/Critic 等），实现运行时多 LLM 后端切换（白皮书 Phase 5）
+async fn api_config_reload(
+    State(state): State<Arc<AppState>>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let _ = bee::config::reload_config(); // 使后续 load_config 读到最新配置
+    let new_components = Arc::new(create_agent_components(&state.workspace, &state.system_prompt));
+    let mut guard = state.components.write().await;
+    *guard = new_components;
+    Ok(StatusCode::OK)
 }
 
 /// POST /api/compact：对指定会话执行 Context Compaction（摘要写入长期记忆并替换为摘要消息），请求体 { "session_id": "..." }
@@ -321,7 +338,8 @@ async fn api_compact(
             load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root)
                 .unwrap_or_else(|| create_context_with_long_term(DEFAULT_MAX_TURNS, Some(&state.workspace)))
         });
-    match compact_context(&state.components.planner, &mut context).await {
+    let components = state.components.read().await;
+    match compact_context(&components.planner, &mut context).await {
         Ok(()) => {
             save_session_to_disk(&state.sessions_dir, &state.memory_root, &session_id, &context);
             state.sessions.write().await.insert(session_id, context);
@@ -508,7 +526,8 @@ async fn api_chat(
         })
     };
 
-    let reply = process_message(state.components.as_ref(), &mut context, message)
+    let components = state.components.read().await.clone();
+    let reply = process_message(components.as_ref(), &mut context, message)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -550,7 +569,7 @@ async fn api_chat_stream(
     let (event_tx, event_rx) = mpsc::unbounded_channel::<ReactEvent>();
     let (context_tx, context_rx) = tokio::sync::oneshot::channel();
 
-    let components = Arc::clone(&state.components);
+    let components = state.components.read().await.clone();
     let session_id_clone = session_id.clone();
     tokio::spawn(async move {
         let mut ctx = context;

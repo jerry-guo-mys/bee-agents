@@ -375,7 +375,7 @@ bee/
 |-------------|------------|----------|------|
 | **§3.1 通信管道** | cmd_tx / state_tx / stream_tx 三通道 | ✅ 已实现 | Orchestrator 使用 mpsc::Command、watch::UiState、broadcast::Token |
 | **§3.1 UiState** | phase, history, active_tool, input_locked | ✅ 已实现 | `core/state.rs`，另有 error_message |
-| **§3.1 InternalState** | 完整内部状态 + project() | ⚠️ 部分 | 有 `InternalStateSnapshot` + `project()`，无独立 MemoryManager/ToolBox 等名字 |
+| **§3.1 InternalState** | 完整内部状态 + project() | ✅ 已实现 | `core` 中提供白皮书命名：`MemoryManager` = ContextManager，`ToolBox` = ToolExecutor，`InternalState` = InternalStateSnapshot（投影源）；memory/tool_box 由 Orchestrator 分别持有 |
 | **§3.2 Session Supervisor** | Cancel / Pause、CancellationToken | ✅ 已实现 | `SessionSupervisor` + 用户 Cancel 触发取消 |
 | **§3.2 Task Scheduler** | Foreground / ToolExecution / Background 调度 | ✅ 已实现 | ReAct 循环在工具执行前调用 `task_scheduler.acquire_tool().await`；Orchestrator 与 AgentComponents 均创建并传入 `TaskScheduler::default()`（工具并发上限 3） |
 | **§3.3 Critic** | 工具结果后 LLM 校验 + 修正建议注入下一轮 | ✅ 已实现 | 工具执行得到 Observation 后调用 `Critic::evaluate(goal, tool, observation)`；若返回 `Correction(s)` 则注入一条 user 消息「Critic 建议：…」再写回 Tool call / Observation |
@@ -386,9 +386,9 @@ bee/
 | **§3.6 审计日志** | 每工具每次调用记录 | ✅ 已实现 | Shell / Search / Browser / Cat / Ls 均在 execute 时 `tracing::info!(...)` 记录 |
 | **§4 技术栈** | BOM（tokio、ratatui、async-openai、config…） | ✅ 基本一致 | 无 `qdrant-client`（向量检索为预留）；无 `schemars` |
 | **Phase 5 配置热更新** | 运行时重新加载配置 | ✅ 已实现 | `config::reload_config()` 重新从磁盘与环境变量加载；调用方可用新配置决定是否重建 LLM |
-| **Phase 5 多 LLM 后端切换** | 运行时切换后端 | ⚠️ 部分 | 通过配置 + 环境变量选择 DeepSeek/OpenAI；调用 `reload_config()` 后需调用方重建 Agent/LLM 才生效 |
+| **Phase 5 多 LLM 后端切换** | 运行时切换后端 | ✅ 已实现 | Web 层 `components` 置于 `RwLock`，`POST /api/config/reload` 调用 `reload_config()` 并重建 `AgentComponents`（新 LLM/Planner/Critic 等）后替换，后续请求即使用新后端 |
 
-**上述项均已实现**（Task Scheduler、Critic、SummarizeAndPrune、DowngradeModel、Cat/Ls 审计、`reload_config()`）。多 LLM 运行时切换仍为「调用方根据 `reload_config()` 结果重建 LLM」即可生效。
+**上述项均已实现**。InternalState/MemoryManager/ToolBox 命名在 `core` 中与白皮书一致；多 LLM 运行时切换通过 `POST /api/config/reload` 生效。
 
 ---
 

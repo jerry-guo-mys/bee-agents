@@ -45,6 +45,9 @@ cargo build --bin bee-web --features web
 - **GET /api/health**  
   返回 `OK`（纯文本）。
 
+- **POST /api/config/reload**  
+  重新加载配置并重建 Agent 组件（LLM/Planner 等），实现运行时多 LLM 后端切换；修改 `config/default.toml` 或环境变量后调用此接口即可生效，无需重启进程。
+
 ## 项目内文件
 
 - **前端**：`static/index.html`（单页，内联 CSS/JS，编译时由 `include_str!` 打进二进制）。
