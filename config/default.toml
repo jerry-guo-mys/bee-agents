@@ -48,3 +48,8 @@ allowed_domains = [
 auto_lesson_on_hallucination = true
 # 是否将工具调用成功也写入 memory/procedural.md（§3.5 工具统计；默认 false 减少噪音）
 record_tool_success = false
+
+# 心跳机制（仅 bee-web：后台自主循环，思考现状 → 检查待办 → 反思）
+[heartbeat]
+enabled = false
+interval_secs = 300

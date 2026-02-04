@@ -18,6 +18,8 @@ pub struct AppConfig {
     pub tools: ToolsSection,
     #[serde(default)]
     pub evolution: EvolutionSection,
+    #[serde(default)]
+    pub heartbeat: HeartbeatSection,
 }
 
 /// [app] 段：应用名、工作目录、对话轮数上限
@@ -48,6 +50,21 @@ pub struct EvolutionSection {
 
 fn default_auto_lesson_on_hallucination() -> bool {
     true
+}
+
+/// [heartbeat] 段：后台自主循环（OpenClaw 风格：无人时定期「思考现状 → 检查待办 → 反思」）
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct HeartbeatSection {
+    /// 是否启用心跳（仅 bee-web 生效，定时向 Agent 发送一次 tick 提示）
+    #[serde(default)]
+    pub enabled: bool,
+    /// 心跳间隔秒数
+    #[serde(default = "default_heartbeat_interval_secs")]
+    pub interval_secs: u64,
+}
+
+fn default_heartbeat_interval_secs() -> u64 {
+    300
 }
 
 /// [llm] 段：后端选择与超时
@@ -212,6 +229,7 @@ impl Default for AppConfig {
             llm: LlmSection::default(),
             tools: ToolsSection::default(),
             evolution: EvolutionSection::default(),
+            heartbeat: HeartbeatSection::default(),
         }
     }
 }

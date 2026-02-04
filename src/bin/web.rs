@@ -44,6 +44,9 @@ struct SessionSnapshot {
 
 const DEFAULT_MAX_TURNS: usize = 20;
 
+/// 心跳时发给 Agent 的提示：根据长期记忆与当前状态检查待办或需跟进事项
+const HEARTBEAT_PROMPT: &str = "Heartbeat: 你正在后台自主运行。请根据长期记忆与当前状态，检查是否有待办或需跟进的事项；若有则输出一条简短建议，若无则仅回复 OK。可使用 cat/ls 查看 workspace 下 memory 或任务文件。";
+
 struct AppState {
     /// 可运行时替换，以支持「多 LLM 后端切换」与配置热更新（白皮书 Phase 5）
     components: Arc<RwLock<Arc<AgentComponents>>>,
@@ -190,6 +193,28 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     });
+
+    // 心跳：若配置启用了 heartbeat，后台定期让 Agent 自主检查待办与反思
+    let app_config = load_config(None).unwrap_or_else(|_| AppConfig::default());
+    if app_config.heartbeat.enabled {
+        let heartbeat_state = Arc::clone(&state);
+        let interval_secs = app_config.heartbeat.interval_secs;
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+            interval.tick().await; // 跳过启动后立即执行
+            loop {
+                interval.tick().await;
+                let mut context =
+                    create_context_with_long_term(DEFAULT_MAX_TURNS, Some(&heartbeat_state.workspace));
+                let guard = heartbeat_state.components.read().await;
+                match process_message(&**guard, &mut context, HEARTBEAT_PROMPT).await {
+                    Ok(reply) => tracing::info!("heartbeat ok: {}", reply.trim()),
+                    Err(e) => tracing::warn!("heartbeat error: {:?}", e),
+                }
+            }
+        });
+        tracing::info!("heartbeat enabled, interval {}s", interval_secs);
+    }
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 8080));
     tracing::info!("Bee Web UI: http://{}", addr);
