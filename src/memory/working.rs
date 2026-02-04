@@ -32,6 +32,17 @@ impl WorkingMemory {
         self.failures.clear();
     }
 
+    /// 从本轮的 attempts（格式 "tool -> observation"）中提取工具名列表，用于策略沉淀（EVOLUTION §3.5）
+    pub fn tool_names_used(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .attempts
+            .iter()
+            .filter_map(|a| a.split(" -> ").next().map(|s| s.trim().to_string()))
+            .collect();
+        names.dedup();
+        names
+    }
+
     /// 构建供 Planner 使用的 Prompt 片段（Current Goal / What has been tried / Failures）
     pub fn to_prompt_section(&self) -> String {
         let mut s = String::new();

@@ -107,7 +107,8 @@ pub fn create_context_with_long_term(max_turns: usize, workspace: Option<&Path>)
     };
     let mut ctx = ContextManager::new(max_turns)
         .with_long_term(long_term)
-        .with_auto_lesson_on_hallucination(cfg.evolution.auto_lesson_on_hallucination);
+        .with_auto_lesson_on_hallucination(cfg.evolution.auto_lesson_on_hallucination)
+        .with_record_tool_success(cfg.evolution.record_tool_success);
     if let Some(p) = lessons_path_opt {
         ctx = ctx.with_lessons_path(p);
     }

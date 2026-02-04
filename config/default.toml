@@ -46,3 +46,5 @@ allowed_domains = [
 [evolution]
 # 当模型调用不存在的工具（HallucinatedTool）时，是否自动向 memory/lessons.md 追加一条教训（默认 true）
 auto_lesson_on_hallucination = true
+# 是否将工具调用成功也写入 memory/procedural.md（§3.5 工具统计；默认 false 减少噪音）
+record_tool_success = false

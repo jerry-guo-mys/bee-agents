@@ -41,6 +41,9 @@ pub struct EvolutionSection {
     /// HallucinatedTool 时是否自动向 lessons.md 追加教训
     #[serde(default = "default_auto_lesson_on_hallucination")]
     pub auto_lesson_on_hallucination: bool,
+    /// 是否将工具调用成功也写入 procedural.md（EVOLUTION §3.5 工具统计；默认 false 减少噪音）
+    #[serde(default)]
+    pub record_tool_success: bool,
 }
 
 fn default_auto_lesson_on_hallucination() -> bool {

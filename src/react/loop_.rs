@@ -255,6 +255,10 @@ pub async fn react_loop(
                     cumulative_total: cur_total,
                 });
 
+                // 策略沉淀：将本轮目标与使用的工具写入长期记忆，供后续检索（EVOLUTION §3.5）
+                let tools_used = context.working.tool_names_used();
+                context.push_session_strategy_to_long_term(user_input, &tools_used);
+
                 return Ok(ReactResult {
                     response: resp,
                     messages: context.messages().to_vec(),
@@ -278,7 +282,12 @@ pub async fn react_loop(
                 };
                 let result = executor.execute(&tc.tool, tc.args).await;
                 let observation = match result {
-                    Ok(r) => r,
+                    Ok(r) => {
+                        if context.record_tool_success {
+                            context.append_procedural_record(&tc.tool, true, "ok");
+                        }
+                        r
+                    }
                     Err(e) => {
                         let failure_msg = format!("{}: {}", tc.tool, e.to_string());
                         context.working.add_failure(failure_msg.clone());

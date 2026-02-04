@@ -25,6 +25,8 @@ pub struct ContextManager {
     pub preferences_path: Option<PathBuf>,
     /// HallucinatedTool 时是否自动向 lessons.md 追加教训（由 config [evolution] 控制）
     pub auto_lesson_on_hallucination: bool,
+    /// 是否将工具调用成功也写入 procedural.md（EVOLUTION §3.5 工具统计）
+    pub record_tool_success: bool,
 }
 
 impl ContextManager {
@@ -37,6 +39,7 @@ impl ContextManager {
             procedural_path: None,
             preferences_path: None,
             auto_lesson_on_hallucination: true,
+            record_tool_success: false,
         }
     }
 
@@ -138,6 +141,22 @@ impl ContextManager {
     pub fn with_auto_lesson_on_hallucination(mut self, enabled: bool) -> Self {
         self.auto_lesson_on_hallucination = enabled;
         self
+    }
+
+    /// 设置是否记录工具成功到 procedural（与 config [evolution].record_tool_success 一致）
+    pub fn with_record_tool_success(mut self, enabled: bool) -> Self {
+        self.record_tool_success = enabled;
+        self
+    }
+
+    /// 将本轮会话策略（目标 + 使用的工具）写入长期记忆，供后续检索（EVOLUTION §3.5）
+    pub fn push_session_strategy_to_long_term(&self, goal: &str, tool_names: &[String]) {
+        if tool_names.is_empty() {
+            return;
+        }
+        let tools = tool_names.join(", ");
+        let line = format!("Session strategy: goal \"{}\"; tools used: {}.", goal.trim(), tools);
+        self.push_to_long_term(&line);
     }
 
     /// 记录一次工具调用结果到程序记忆（失败时调用可减少重复错误）

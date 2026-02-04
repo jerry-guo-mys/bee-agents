@@ -141,3 +141,11 @@
 - **机制**：对近期每日日志（`memory/logs/YYYY-MM-DD.md`）不再仅做截断，而是调用 LLM 对每日本内容生成简短摘要后写入长期记忆（块标题为「整理 YYYY-MM-DD（LLM 摘要）」）。
 - **入口**：`agent::consolidate_memory_with_llm(planner, workspace, since_days)`；Web API `POST /api/memory/consolidate-llm?since_days=7`。
 - **依赖**：`memory::list_daily_logs_for_llm` 列出待整理日志；`Planner::summarize` 对单日内容做摘要。
+
+---
+
+## 13. 已实现：工具使用统计与策略偏好（§3.5）
+
+- **工具成功记录**：配置 `[evolution].record_tool_success = true` 时，每次工具调用成功也会写入 `memory/procedural.md`（与失败记录一致，便于后续检索「哪些工具常用且成功」）。默认 `false` 以减少文件噪音。
+- **策略沉淀**：当一轮对话以「直接回复用户」成功结束时，将「本轮目标 + 使用的工具列表」写入长期记忆，格式为 `Session strategy: goal "..."; tools used: cat, search.`，供后续 `long_term_section(query)` 检索到类似任务下的工具组合。
+- **代码**：`WorkingMemory::tool_names_used()` 从本轮的 `attempts`（`tool -> observation`）提取工具名；`ContextManager::push_session_strategy_to_long_term(goal, tool_names)`、`with_record_tool_success`；ReAct 成功返回前调用策略写入，工具成功时按配置调用 `append_procedural_record(..., true, "ok")`。

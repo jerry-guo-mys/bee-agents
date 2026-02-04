@@ -249,7 +249,8 @@ fn load_session_from_disk(
         .with_lessons_path(lessons_path(memory_root))
         .with_procedural_path(procedural_path(memory_root))
         .with_preferences_path(preferences_path(memory_root))
-        .with_auto_lesson_on_hallucination(cfg.evolution.auto_lesson_on_hallucination);
+        .with_auto_lesson_on_hallucination(cfg.evolution.auto_lesson_on_hallucination)
+        .with_record_tool_success(cfg.evolution.record_tool_success);
     ctx.conversation = conversation;
     Some(ctx)
 }
