@@ -18,7 +18,8 @@ use crate::core::TaskScheduler;
 use crate::react::{react_loop, ContextManager, Critic, Planner, ReactEvent};
 use tokio::sync::mpsc;
 use crate::tools::{
-    CatTool, EchoTool, LsTool, SearchTool, ShellTool, ToolExecutor, ToolRegistry,
+    tool_call_schema_json, CatTool, EchoTool, LsTool, SearchTool, ShellTool, ToolExecutor,
+    ToolRegistry,
 };
 #[cfg(feature = "browser")]
 use crate::tools::BrowserTool;
@@ -74,8 +75,17 @@ pub fn create_agent_components(
         cfg.tools.search.max_result_chars,
     ));
 
+    let tool_schema = tool_call_schema_json();
+    let full_system_prompt = if tool_schema.is_empty() {
+        system_prompt.to_string()
+    } else {
+        format!(
+            "{}\n\n## Tool call JSON Schema (you must output valid JSON matching this)\n```json\n{}\n```",
+            system_prompt, tool_schema
+        )
+    };
     AgentComponents {
-        planner: Planner::new(llm.clone(), system_prompt.to_string()),
+        planner: Planner::new(llm.clone(), full_system_prompt),
         executor: ToolExecutor::new(tools, cfg.tools.tool_timeout_secs),
         recovery: RecoveryEngine::new(),
         critic,

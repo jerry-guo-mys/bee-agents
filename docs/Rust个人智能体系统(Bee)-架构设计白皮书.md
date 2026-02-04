@@ -384,11 +384,13 @@ bee/
 | **§3.5 Recovery DowngradeModel** | 降级模型 | ✅ 已实现 | `RecoveryEngine` 对 `LlmError` 返回 `DowngradeModel`；react_loop 返回 `Err(AgentError::SuggestDowngradeModel(...))` 供上层提示切换轻量模型 |
 | **§3.6 工具沙箱** | SafeFs、Shell 白名单、Search 域名 | ✅ 已实现 | SafeFs.resolve 防逃逸；Shell AllowList；Search 白名单 |
 | **§3.6 审计日志** | 每工具每次调用记录 | ✅ 已实现 | Shell / Search / Browser / Cat / Ls 均在 execute 时 `tracing::info!(...)` 记录 |
-| **§4 技术栈** | BOM（tokio、ratatui、async-openai、config…） | ✅ 基本一致 | 无 `qdrant-client`（向量检索为预留）；无 `schemars` |
+| **§4 技术栈** | BOM（tokio、ratatui、async-openai、schemars…） | ✅ 基本一致 | `schemars` 已用于工具调用 JSON Schema 生成；无 `qdrant-client`（向量检索为预留） |
 | **Phase 5 配置热更新** | 运行时重新加载配置 | ✅ 已实现 | `config::reload_config()` 重新从磁盘与环境变量加载；调用方可用新配置决定是否重建 LLM |
 | **Phase 5 多 LLM 后端切换** | 运行时切换后端 | ✅ 已实现 | Web 层 `components` 置于 `RwLock`，`POST /api/config/reload` 调用 `reload_config()` 并重建 `AgentComponents`（新 LLM/Planner/Critic 等）后替换，后续请求即使用新后端 |
 
-**上述项均已实现**。InternalState/MemoryManager/ToolBox 命名在 `core` 中与白皮书一致；多 LLM 运行时切换通过 `POST /api/config/reload` 生效。
+**上述项均已实现**。InternalState/MemoryManager/ToolBox 命名在 `core` 中与白皮书一致；多 LLM 运行时切换通过 `POST /api/config/reload` 生效；工具调用 JSON Schema 由 `schemars` 生成并注入 system prompt（`tools::schema::tool_call_schema_json`）。
+
+**预留 / 后续可做**（非本版必做）：向量检索（如 `qdrant-client` 与长期记忆结合）、心跳机制（后台自主循环）、技能插件（Agent 动态注册新工具）。参见 `docs/EVOLUTION.md`、`docs/OPENCLAW_REFERENCE.md`（若存在）。
 
 ---
 
@@ -435,8 +437,9 @@ bee/
   - 三层记忆 + 长期记忆（**已实现**：`FileLongTerm` + BM25；向量检索预留扩展）
   - Headless 模式（**已实现**：`bee-web`、HTTP API、流式 NDJSON）
   - 自我进化（**已实现**：Lessons、程序记忆、Context Compaction；参见 `docs/EVOLUTION.md`）
-  - Task Scheduler + 用户 Cancel（部分实现：CancellationToken）
-  - 配置热更新、多 LLM 后端切换
+  - Task Scheduler + 用户 Cancel（**已实现**：工具执行前 `acquire_tool`，CancellationToken 取消）
+  - 配置热更新、多 LLM 后端切换（**已实现**：`reload_config()`、`POST /api/config/reload` 重建组件）
+  - 工具调用 JSON Schema（**已实现**：schemars 生成 Schema 并注入 system prompt，见 §4 BOM）
 
 ---
 

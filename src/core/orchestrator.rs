@@ -14,7 +14,8 @@ use crate::llm::{create_deepseek_client, LlmClient, OpenAiClient};
 use crate::memory::InMemoryLongTerm;
 use crate::react::{react_loop, ContextManager, Critic, Planner};
 use crate::tools::{
-    CatTool, EchoTool, LsTool, SearchTool, ShellTool, ToolExecutor, ToolRegistry,
+    tool_call_schema_json, CatTool, EchoTool, LsTool, SearchTool, ShellTool, ToolExecutor,
+    ToolRegistry,
 };
 #[cfg(feature = "browser")]
 use crate::tools::BrowserTool;
@@ -127,7 +128,16 @@ pub async fn create_agent(
     ));
 
     let executor = ToolExecutor::new(tools, cfg.tools.tool_timeout_secs);
-    let planner = Planner::new(llm.clone(), system_prompt);
+    let tool_schema = tool_call_schema_json();
+    let full_system_prompt = if tool_schema.is_empty() {
+        system_prompt.clone()
+    } else {
+        format!(
+            "{}\n\n## Tool call JSON Schema (you must output valid JSON matching this)\n```json\n{}\n```",
+            system_prompt, tool_schema
+        )
+    };
+    let planner = Planner::new(llm.clone(), full_system_prompt);
     let critic_prompt = [
         "config/prompts/critic.txt",
         "../config/prompts/critic.txt",
