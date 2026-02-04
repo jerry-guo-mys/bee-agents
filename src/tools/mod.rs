@@ -6,6 +6,7 @@
 pub mod executor;
 pub mod filesystem;
 pub mod echo;
+pub mod plugin;
 pub mod registry;
 pub mod schema;
 pub mod shell;
@@ -17,6 +18,7 @@ pub mod browser;
 pub use executor::ToolExecutor;
 pub use echo::EchoTool;
 pub use filesystem::{CatTool, LsTool, SafeFs};
+pub use plugin::PluginTool;
 pub use registry::{Tool, ToolRegistry};
 pub use schema::tool_call_schema_json;
 pub use shell::ShellTool;

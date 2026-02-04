@@ -1,7 +1,7 @@
 //! 长期记忆：向量化知识、用户偏好，跨会话检索
 //!
-//! 支持 add(text) 与 search(query, k)；当前实现为 InMemoryLongTerm（关键词重叠），
-//! 后续可接 Qdrant/LanceDB 等真实向量库。
+//! 支持 add(text) 与 search(query, k)。当前实现：FileLongTerm（BM25 风格）、InMemoryLongTerm（关键词重叠）。
+//! 向量检索扩展：config [memory].vector_enabled、qdrant_url 已预留；可在此接入 qdrant-client + 嵌入 API 实现 VectorLongTerm。
 
 use std::sync::Arc;
 

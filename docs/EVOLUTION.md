@@ -157,3 +157,18 @@
 - **机制**：bee-web 启动时若配置 `[heartbeat] enabled = true`，会 spawn 一个后台任务，按 `interval_secs`（默认 300 秒）周期执行一次「心跳」：用 `create_context_with_long_term` 构建上下文，向 Agent 发送固定提示（Heartbeat prompt），让其根据长期记忆与当前状态检查待办或需跟进事项；若有则输出简短建议，若无则回复 OK；可使用 cat/ls 查看 workspace 下 memory 或任务文件。
 - **配置**：`config/default.toml` 中 `[heartbeat]` 段：`enabled`（是否启用）、`interval_secs`（间隔秒数）。默认关闭。
 - **代码**：`src/bin/web.rs` 启动时 `load_config` 读取配置，若 `heartbeat.enabled` 则 `tokio::spawn` 定时循环，每次 tick 调用 `process_message(..., HEARTBEAT_PROMPT)`，结果以 `tracing::info` / `tracing::warn` 打日志。
+
+---
+
+## 15. 已实现：技能插件（Agent 动态注册新工具）
+
+- **机制**：在 `config/default.toml` 中通过 `[[tools.plugins]]` 配置额外工具；每项指定 `name`、`description`、`program`、`args`（参数模板）。模板中 `{{workspace}}` 替换为沙箱根路径，`{{key}}` 从 LLM 传入的 `args` JSON 中取对应 key。执行时无 shell，直接 `exec` 程序 + 替换后的参数，带全局工具超时与审计日志。
+- **注册**：`create_agent_components`（agent.rs）与 TUI 侧 `create_agent`（orchestrator.rs）在注册内置工具后，遍历 `cfg.tools.plugins` 并 `register(PluginTool::new(...))`，故 Web / TUI / WhatsApp 均支持插件。
+- **代码**：`src/tools/plugin.rs`（`PluginTool`）、`src/config.rs`（`PluginEntry`、`ToolsSection.plugins`）。
+
+---
+
+## 16. 向量检索扩展点（预留）
+
+- **配置**：`config [memory].vector_enabled`、`qdrant_url` 已预留；当前未实现真实向量写入/检索时，该配置被忽略，仍使用 FileLongTerm（BM25）或 InMemoryLongTerm。
+- **扩展**：在 `memory/long_term.rs` 中可实现 `VectorLongTerm`（实现 `LongTermMemory`），接入 qdrant-client 与嵌入 API（如 OpenAI embeddings），并在 `create_context_with_long_term` 中当 `cfg.memory.vector_enabled` 时选用该实现。

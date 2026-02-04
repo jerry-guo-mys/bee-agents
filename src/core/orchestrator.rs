@@ -14,8 +14,8 @@ use crate::llm::{create_deepseek_client, LlmClient, OpenAiClient};
 use crate::memory::InMemoryLongTerm;
 use crate::react::{react_loop, ContextManager, Critic, Planner};
 use crate::tools::{
-    tool_call_schema_json, CatTool, EchoTool, LsTool, SearchTool, ShellTool, ToolExecutor,
-    ToolRegistry,
+    tool_call_schema_json, CatTool, EchoTool, LsTool, PluginTool, SearchTool, ShellTool,
+    ToolExecutor, ToolRegistry,
 };
 #[cfg(feature = "browser")]
 use crate::tools::BrowserTool;
@@ -126,6 +126,10 @@ pub async fn create_agent(
         cfg.tools.search.allowed_domains.clone(),
         cfg.tools.search.max_result_chars,
     ));
+
+    for entry in &cfg.tools.plugins {
+        tools.register(PluginTool::new(entry, &workspace, cfg.tools.tool_timeout_secs));
+    }
 
     let executor = ToolExecutor::new(tools, cfg.tools.tool_timeout_secs);
     let tool_schema = tool_call_schema_json();

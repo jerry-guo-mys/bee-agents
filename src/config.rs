@@ -17,6 +17,8 @@ pub struct AppConfig {
     #[serde(default)]
     pub tools: ToolsSection,
     #[serde(default)]
+    pub memory: MemorySection,
+    #[serde(default)]
     pub evolution: EvolutionSection,
     #[serde(default)]
     pub heartbeat: HeartbeatSection,
@@ -65,6 +67,16 @@ pub struct HeartbeatSection {
 
 fn default_heartbeat_interval_secs() -> u64 {
     300
+}
+
+/// [memory] 段：长期记忆后端（白皮书：向量检索与 qdrant 结合为预留扩展）
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct MemorySection {
+    /// 是否启用向量长期记忆（需 feature "vector"；未实现时忽略）
+    #[serde(default)]
+    pub vector_enabled: bool,
+    /// 向量库 URL（如 http://localhost:6333），预留
+    pub qdrant_url: Option<String>,
 }
 
 /// [llm] 段：后端选择与超时
@@ -118,7 +130,7 @@ fn default_stream_timeout() -> u64 {
     120
 }
 
-/// [tools] 段：文件系统根、工具超时、Shell 白名单、Search 域名
+/// [tools] 段：文件系统根、工具超时、Shell 白名单、Search 域名、技能插件
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ToolsSection {
     pub filesystem_root: Option<PathBuf>,
@@ -129,6 +141,23 @@ pub struct ToolsSection {
     pub shell: ShellSection,
     #[serde(default)]
     pub search: SearchSection,
+    /// 技能插件：从配置注册，每项对应一个「程序 + 参数模板」工具（白皮书：Agent 动态注册新工具）
+    #[serde(default)]
+    pub plugins: Vec<PluginEntry>,
+}
+
+/// 单条技能插件配置：[[tools.plugins]]
+#[derive(Debug, Clone, Deserialize)]
+pub struct PluginEntry {
+    /// 工具名（LLM 可见）
+    pub name: String,
+    /// 工具描述（供 LLM 选择）
+    pub description: String,
+    /// 可执行程序（如 python、node、/path/to/script）
+    pub program: String,
+    /// 参数模板列表；{{workspace}} 替换为沙箱根路径，{{key}} 从 LLM 传入的 args 中取 key
+    #[serde(default)]
+    pub args: Vec<String>,
 }
 
 fn default_tool_timeout_secs() -> u64 {
@@ -228,6 +257,7 @@ impl Default for AppConfig {
             app: AppSection::default(),
             llm: LlmSection::default(),
             tools: ToolsSection::default(),
+            memory: MemorySection::default(),
             evolution: EvolutionSection::default(),
             heartbeat: HeartbeatSection::default(),
         }

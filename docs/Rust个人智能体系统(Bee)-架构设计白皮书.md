@@ -388,10 +388,12 @@ bee/
 | **Phase 5 配置热更新** | 运行时重新加载配置 | ✅ 已实现 | `config::reload_config()` 重新从磁盘与环境变量加载；调用方可用新配置决定是否重建 LLM |
 | **Phase 5 多 LLM 后端切换** | 运行时切换后端 | ✅ 已实现 | Web 层 `components` 置于 `RwLock`，`POST /api/config/reload` 调用 `reload_config()` 并重建 `AgentComponents`（新 LLM/Planner/Critic 等）后替换，后续请求即使用新后端 |
 | **心跳机制** | 后台自主循环（思考现状 → 检查待办 → 反思） | ✅ 已实现 | `config/default.toml` 中 `[heartbeat] enabled / interval_secs`；bee-web 启动时若启用则 spawn 定时任务，按间隔调用 `process_message(HEARTBEAT_PROMPT)`，结果打日志 |
+| **技能插件** | Agent 动态注册新工具 | ✅ 已实现 | `config/default.toml` 中 `[[tools.plugins]]`：name、description、program、args（模板含 `{{workspace}}`、`{{key}}`）；`PluginTool` 无 shell 直接 exec，TUI/Web/WhatsApp 均注册 |
+| **向量检索** | 长期记忆 + 向量库（如 qdrant） | 扩展点已就绪 | `config [memory].vector_enabled`、`qdrant_url` 已预留；`LongTermMemory` 可接入 qdrant-client + 嵌入 API 实现，见 `memory/long_term.rs` |
 
-**上述项均已实现**。InternalState/MemoryManager/ToolBox 命名在 `core` 中与白皮书一致；多 LLM 运行时切换通过 `POST /api/config/reload` 生效；工具调用 JSON Schema 由 `schemars` 生成并注入 system prompt（`tools::schema::tool_call_schema_json`）。
+**上述项均已实现或扩展点已就绪**。InternalState/MemoryManager/ToolBox 命名在 `core` 中与白皮书一致；多 LLM 运行时切换通过 `POST /api/config/reload` 生效；工具调用 JSON Schema 由 `schemars` 生成并注入 system prompt（`tools::schema::tool_call_schema_json`）。
 
-**预留 / 后续可做**（非本版必做）：向量检索（如 `qdrant-client` 与长期记忆结合）、技能插件（Agent 动态注册新工具）。参见 `docs/EVOLUTION.md`。
+**预留**（可选实现）：向量检索的完整实现（嵌入 API + qdrant-client 写入/检索）。参见 `docs/EVOLUTION.md`。
 
 ---
 

@@ -42,6 +42,19 @@ allowed_domains = [
   "news.google.com", "developer.mozilla.org", "arxiv.org"
 ]
 
+# 技能插件（白皮书：Agent 动态注册新工具）。每项运行「程序 + 参数模板」，{{workspace}} 替换为沙箱根路径，{{key}} 从 LLM 传入的 args 取 key
+# [[tools.plugins]]
+# name = "run_script"
+# description = "Run a Python script in workspace. Args: query (string)."
+# program = "python"
+# args = ["{{workspace}}/scripts/run.py", "{{query}}"]
+
+# 长期记忆后端（向量检索为预留扩展，参见白皮书）
+[memory]
+# 启用向量长期记忆（需实现 feature "vector" 或接入 qdrant；当前未实现时忽略）
+vector_enabled = false
+# qdrant_url = "http://localhost:6333"
+
 # 自我进化（参见 docs/EVOLUTION.md）
 [evolution]
 # 当模型调用不存在的工具（HallucinatedTool）时，是否自动向 memory/lessons.md 追加一条教训（默认 true）
