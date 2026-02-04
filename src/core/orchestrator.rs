@@ -9,10 +9,10 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, watch};
 
 use crate::config::{load_config, AppConfig};
-use crate::core::{AgentPhase, RecoveryEngine, SessionSupervisor, UiState};
+use crate::core::{AgentPhase, RecoveryEngine, SessionSupervisor, TaskScheduler, UiState};
 use crate::llm::{create_deepseek_client, LlmClient, OpenAiClient};
 use crate::memory::InMemoryLongTerm;
-use crate::react::{react_loop, ContextManager, Planner};
+use crate::react::{react_loop, ContextManager, Critic, Planner};
 use crate::tools::{
     CatTool, EchoTool, LsTool, SearchTool, ShellTool, ToolExecutor, ToolRegistry,
 };
@@ -128,7 +128,18 @@ pub async fn create_agent(
 
     let executor = ToolExecutor::new(tools, cfg.tools.tool_timeout_secs);
     let planner = Planner::new(llm.clone(), system_prompt);
+    let critic_prompt = [
+        "config/prompts/critic.txt",
+        "../config/prompts/critic.txt",
+    ]
+    .into_iter()
+    .find_map(|p| std::fs::read_to_string(p).ok())
+    .unwrap_or_else(|| {
+        "The user wanted: {goal}\nYou executed tool: {tool} with result: {observation}\nIs this result reasonable? If yes, respond with exactly: OK\nIf not, provide a brief correction (one sentence).".to_string()
+    });
+    let critic = Critic::new(llm.clone(), critic_prompt);
     let recovery = RecoveryEngine::new();
+    let task_scheduler = TaskScheduler::default();
     let supervisor = SessionSupervisor::new();
 
     // 三通道：UI -> Core 命令；Core -> UI 状态快照；Core -> UI Token 流
@@ -163,6 +174,8 @@ pub async fn create_agent(
                                 Some(&stream_tx),
                                 None,
                                 supervisor.cancel_token(),
+                                Some(&critic),
+                                Some(&task_scheduler),
                             ).await;
 
                             match result {

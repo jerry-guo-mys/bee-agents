@@ -5,9 +5,9 @@
 
 use tokio::sync::broadcast;
 
-use crate::core::{AgentError, RecoveryAction, RecoveryEngine};
+use crate::core::{AgentError, RecoveryAction, RecoveryEngine, TaskScheduler};
 use crate::memory::Message;
-use crate::react::{parse_llm_output, ContextManager, Planner, ReactEvent};
+use crate::react::{parse_llm_output, ContextManager, Critic, CriticResult, Planner, ReactEvent};
 use crate::tools::ToolExecutor;
 
 /// 单次对话内最大 ReAct 步数，防止死循环
@@ -71,7 +71,7 @@ pub async fn compact_context(
     Ok(())
 }
 
-/// 执行 ReAct 循环：用户输入 -> 拼 system(working+long_term) -> plan -> 解析输出 -> 若 ToolCall 则执行并写回 Observation，若 Response 则返回并写入长期记忆
+/// 执行 ReAct 循环：用户输入 -> 拼 system(working+long_term) -> plan -> 解析输出 -> 若 ToolCall 则执行并写回 Observation（可选 Critic 校验）-> 若 Response 则返回并写入长期记忆
 pub async fn react_loop(
     planner: &Planner,
     executor: &ToolExecutor,
@@ -81,6 +81,8 @@ pub async fn react_loop(
     stream_tx: Option<&broadcast::Sender<String>>,
     event_tx: Option<&tokio::sync::mpsc::UnboundedSender<ReactEvent>>,
     cancel_token: tokio_util::sync::CancellationToken,
+    critic: Option<&Critic>,
+    task_scheduler: Option<&TaskScheduler>,
 ) -> Result<ReactResult, AgentError> {
     context.push_message(Message::user(user_input.to_string()));
     context.working.set_goal(user_input);
@@ -174,6 +176,29 @@ pub async fn react_loop(
                         send_event(&event_tx, ReactEvent::Error { text: e.to_string() });
                         return Err(e);
                     }
+                    RecoveryAction::SummarizeAndPrune => {
+                        send_event(&event_tx, ReactEvent::Recovery {
+                            action: "SummarizeAndPrune".to_string(),
+                            detail: "Compacting context and retrying".to_string(),
+                        });
+                        if let Err(compact_err) = compact_context(planner, context).await {
+                            send_event(&event_tx, ReactEvent::Error {
+                                text: format!("Compaction failed: {}", compact_err),
+                            });
+                            return Err(compact_err);
+                        }
+                        step += 1;
+                        continue;
+                    }
+                    RecoveryAction::DowngradeModel => {
+                        send_event(&event_tx, ReactEvent::Recovery {
+                            action: "DowngradeModel".to_string(),
+                            detail: "建议切换至轻量模型".to_string(),
+                        });
+                        return Err(AgentError::SuggestDowngradeModel(
+                            "LLM 调用失败，建议切换至轻量模型或检查网络与 API Key。".to_string(),
+                        ));
+                    }
                     _ => {
                         send_event(&event_tx, ReactEvent::Recovery {
                             action: "Abort".to_string(),
@@ -245,6 +270,12 @@ pub async fn react_loop(
                     context.append_hallucination_lesson(&tc.tool, &executor.tool_names());
                     return Err(AgentError::HallucinatedTool(tc.tool.clone()));
                 }
+                // 工具并发限制：从 TaskScheduler 获取许可后再执行
+                let _permit = if let Some(sched) = task_scheduler {
+                    Some(sched.acquire_tool().await)
+                } else {
+                    None
+                };
                 let result = executor.execute(&tc.tool, tc.args).await;
                 let observation = match result {
                     Ok(r) => r,
@@ -272,6 +303,21 @@ pub async fn react_loop(
                     });
                 }
                 context.working.add_attempt(format!("{} -> {}", tc.tool, observation));
+                // 可选 Critic：校验工具结果是否符合目标，若需修正则注入建议供下一轮 Plan 使用
+                if let Some(c) = critic {
+                    if let Ok(critic_result) = c.evaluate(user_input, &tc.tool, &observation).await {
+                        if let CriticResult::Correction(suggestion) = critic_result {
+                            send_event(&event_tx, ReactEvent::Recovery {
+                                action: "Critic".to_string(),
+                                detail: suggestion.clone(),
+                            });
+                            context.push_message(Message::user(format!(
+                                "Critic 建议：{}",
+                                suggestion
+                            )));
+                        }
+                    }
+                }
                 // 将工具调用与结果写回对话，供下一轮 Plan 使用
                 context.push_message(Message::assistant(format!(
                     "Tool call: {} | Result: {}",

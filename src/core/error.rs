@@ -28,6 +28,10 @@ pub enum AgentError {
     #[error("LLM error: {0}")]
     LlmError(String),
 
+    /// 恢复引擎建议降级模型（如 LLM 持续失败时），由上层决定是否切换轻量模型
+    #[error("Suggest downgrade model: {0}")]
+    SuggestDowngradeModel(String),
+
     #[error("Config error: {0}")]
     ConfigError(String),
 

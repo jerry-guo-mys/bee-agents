@@ -103,6 +103,7 @@ impl Tool for CatTool {
             .get("path")
             .and_then(|v| v.as_str())
             .unwrap_or("");
+        tracing::info!(path = %path, "cat tool execute");
         self.fs.read_file(path).map_err(|e| e.to_string())
     }
 }
@@ -135,6 +136,7 @@ impl Tool for LsTool {
             .get("path")
             .and_then(|v| v.as_str())
             .unwrap_or(".");
+        tracing::info!(path = %path, "ls tool execute");
         let entries = self.fs.list_dir(path).map_err(|e| e.to_string())?;
         Ok(entries.join("\n"))
     }

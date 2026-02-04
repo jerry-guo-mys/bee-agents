@@ -36,6 +36,7 @@ impl RecoveryEngine {
             AgentError::NetworkTimeout => RecoveryAction::RetryWithPrompt(
                 "网络请求超时，请重试。".to_string(),
             ),
+            AgentError::LlmError(_) => RecoveryAction::DowngradeModel,
             _ => RecoveryAction::Abort,
         }
     }

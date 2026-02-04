@@ -367,6 +367,31 @@ bee/
 
 ---
 
+## 5.1 实现状态对照（白皮书 vs 代码）
+
+以下为白皮书中描述与当前代码的对照，便于按图索骥补齐。
+
+| 模块 / 能力 | 白皮书描述 | 当前状态 | 说明 |
+|-------------|------------|----------|------|
+| **§3.1 通信管道** | cmd_tx / state_tx / stream_tx 三通道 | ✅ 已实现 | Orchestrator 使用 mpsc::Command、watch::UiState、broadcast::Token |
+| **§3.1 UiState** | phase, history, active_tool, input_locked | ✅ 已实现 | `core/state.rs`，另有 error_message |
+| **§3.1 InternalState** | 完整内部状态 + project() | ⚠️ 部分 | 有 `InternalStateSnapshot` + `project()`，无独立 MemoryManager/ToolBox 等名字 |
+| **§3.2 Session Supervisor** | Cancel / Pause、CancellationToken | ✅ 已实现 | `SessionSupervisor` + 用户 Cancel 触发取消 |
+| **§3.2 Task Scheduler** | Foreground / ToolExecution / Background 调度 | ✅ 已实现 | ReAct 循环在工具执行前调用 `task_scheduler.acquire_tool().await`；Orchestrator 与 AgentComponents 均创建并传入 `TaskScheduler::default()`（工具并发上限 3） |
+| **§3.3 Critic** | 工具结果后 LLM 校验 + 修正建议注入下一轮 | ✅ 已实现 | 工具执行得到 Observation 后调用 `Critic::evaluate(goal, tool, observation)`；若返回 `Correction(s)` 则注入一条 user 消息「Critic 建议：…」再写回 Tool call / Observation |
+| **§3.4 记忆与持久化** | 三层 + Lessons + Procedural + Preferences + Compaction | ✅ 已实现 | 见 §7、§3.4 |
+| **§3.5 Recovery SummarizeAndPrune** | ContextWindowExceeded → 压缩后继续 | ✅ 已实现 | react_loop 匹配 `SummarizeAndPrune` 时调用 `compact_context(planner, context)` 后 `continue` 重试 |
+| **§3.5 Recovery DowngradeModel** | 降级模型 | ✅ 已实现 | `RecoveryEngine` 对 `LlmError` 返回 `DowngradeModel`；react_loop 返回 `Err(AgentError::SuggestDowngradeModel(...))` 供上层提示切换轻量模型 |
+| **§3.6 工具沙箱** | SafeFs、Shell 白名单、Search 域名 | ✅ 已实现 | SafeFs.resolve 防逃逸；Shell AllowList；Search 白名单 |
+| **§3.6 审计日志** | 每工具每次调用记录 | ✅ 已实现 | Shell / Search / Browser / Cat / Ls 均在 execute 时 `tracing::info!(...)` 记录 |
+| **§4 技术栈** | BOM（tokio、ratatui、async-openai、config…） | ✅ 基本一致 | 无 `qdrant-client`（向量检索为预留）；无 `schemars` |
+| **Phase 5 配置热更新** | 运行时重新加载配置 | ✅ 已实现 | `config::reload_config()` 重新从磁盘与环境变量加载；调用方可用新配置决定是否重建 LLM |
+| **Phase 5 多 LLM 后端切换** | 运行时切换后端 | ⚠️ 部分 | 通过配置 + 环境变量选择 DeepSeek/OpenAI；调用 `reload_config()` 后需调用方重建 Agent/LLM 才生效 |
+
+**上述项均已实现**（Task Scheduler、Critic、SummarizeAndPrune、DowngradeModel、Cat/Ls 审计、`reload_config()`）。多 LLM 运行时切换仍为「调用方根据 `reload_config()` 结果重建 LLM」即可生效。
+
+---
+
 ## 6. 开发路线图 (Phased Implementation)
 
 ### Phase 1: 骨架与大脑 (The Brain)

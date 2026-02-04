@@ -247,3 +247,8 @@ pub fn load_config(config_path: Option<PathBuf>) -> Result<AppConfig, config::Co
     let c = builder.build()?;
     c.try_deserialize()
 }
+
+/// 重新从磁盘与环境变量加载配置（用于「配置热更新」：调用方可在运行时调用此函数并决定是否用新配置重建 LLM 等组件）
+pub fn reload_config() -> Result<AppConfig, config::ConfigError> {
+    load_config(None)
+}

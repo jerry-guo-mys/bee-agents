@@ -6,7 +6,7 @@ pub mod loop_;
 pub mod memory;
 pub mod planner;
 
-pub use critic::Critic;
+pub use critic::{Critic, CriticResult};
 pub use events::ReactEvent;
 pub use loop_::{compact_context, react_loop};
 pub use memory::ContextManager;
