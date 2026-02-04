@@ -8,6 +8,7 @@
 2. **Safety First**：工具执行层必须具备沙箱隔离，杜绝 AI「幻觉」导致的系统性破坏。
 3. **Responsiveness**：UI 渲染与 AI 推理彻底解耦，确保在繁重的推理任务中界面依然流畅。
 4. **Cognitive Loop**：采用 `Plan -> Act -> Observe -> Critic` 的增强型 ReAct 循环，提升解决复杂任务的能力。
+5. **Self-Evolution**：通过本地记忆（Lessons、程序记忆、长期摘要）与 Context Compaction，让 Agent 在不改代码的前提下「越用越听话、越少重复错」（参见 `docs/EVOLUTION.md`）。
 
 ---
 
@@ -75,12 +76,18 @@ graph TD
         subgraph Memory [记忆库]
             ShortTerm[Conversation 短期]
             Working[Working 中期]
-            VectorDB[(Qdrant / LanceDB 长期)]
+            LongTerm[Long-term 长期<br>Markdown+BM25/向量]
+            Lessons[Lessons 行为约束]
+            Procedural[Procedural 程序记忆]
         end
         
         Planner --> LLM
         Planner -- "ToolCall" --> Tooling
-        Context <--> Memory
+        Context <--> ShortTerm
+        Context <--> Working
+        Context <--> LongTerm
+        Context --> Lessons
+        Context --> Procedural
     end
 
     class UI_Layer ui;
@@ -187,15 +194,24 @@ pub struct Critic;
 pub struct Executor;
 ```
 
-### 3.4 三层记忆 (Memory)
+### 3.4 三层记忆与持久化 (Memory)
 
-| 层级 | 名称 | 内容 | 生命周期 |
-|------|------|------|----------|
-| **短期** | Conversation Memory | 最近 N 轮对话 | 单会话 |
-| **中期** | Working Memory | 当前任务目标、已尝试方案、失败原因 | 单任务 |
-| **长期** | Long-term Memory | 向量化知识、用户偏好 | 跨会话 |
+| 层级 | 名称 | 内容 | 实现与生命周期 |
+|------|------|------|----------------|
+| **短期** | Conversation Memory | 最近 N 轮对话 | `ConversationMemory`，单会话；可被 Context Compaction 替换为摘要 |
+| **中期** | Working Memory | 当前任务目标、已尝试方案、失败原因 | `WorkingMemory`，单任务 |
+| **长期** | Long-term Memory | 知识、摘要、用户偏好 | `FileLongTerm`（`memory/long-term.md` + BM25 检索），跨会话；可扩展向量检索 |
+| **行为约束** | Lessons | 规则与教训 | `memory/lessons.md`，每次规划时整块注入 system |
+| **程序记忆** | Procedural | 工具成功/失败经验 | `memory/procedural.md`，工具失败时自动追加，规划时注入 system |
 
-在 Prompt 中显式区分，减少 LLM 重复犯错：
+**持久化布局（workspace 下）：**
+
+- `memory/logs/YYYY-MM-DD.md`：按日短期日志，供 `consolidate_memory` 整理入长期。
+- `memory/long-term.md`：长期记忆块，按 `## 时间戳` 分块，BM25 风格检索。
+- `memory/lessons.md`：行为约束/教训，人工或 Recovery 写入。
+- `memory/procedural.md`：程序记忆，工具失败时自动追加（`append_procedural_record`）。
+
+**Context Manager** 拼装动态 system 时包含：`working_memory_section`、`long_term_section(query)`、`lessons_section()`、`procedural_section()`，从而在 Prompt 中显式区分，减少 LLM 重复犯错：
 
 ```
 ## Current Goal
@@ -206,7 +222,15 @@ pub struct Executor;
 
 ## Relevant Past Knowledge
 {long_term_retrieval}
+
+## 行为约束 / Lessons（请遵守）
+{lessons}
+
+## 程序记忆 / 工具使用经验（请参考，避免重复失败）
+{procedural}
 ```
+
+**Context Compaction（上下文压缩）**：当对话条数超过阈值（如 24）时，在规划前自动执行：用 LLM 对当前对话生成摘要 → 写入长期记忆 → 将当前消息替换为一条「Previous conversation summary」的 system 消息（`ConversationMemory::set_messages`），避免 token 溢出。亦可手动触发：Web API `POST /api/compact`，详见 `docs/EVOLUTION.md`。
 
 ### 3.5 错误恢复引擎 (Recovery Engine)
 
@@ -280,7 +304,7 @@ impl RecoveryEngine {
 
 ---
 
-## 5. 目录结构建议
+## 5. 目录结构
 
 ```
 bee/
@@ -288,13 +312,14 @@ bee/
 ├── config/
 │   ├── default.toml
 │   └── prompts/
-│       ├── system.txt
-│       ├── tool_calling.txt
-│       └── critic.txt
+│       └── system.txt
 ├── src/
 │   ├── main.rs
 │   ├── lib.rs
-│   ├── ui/                      # 交互层
+│   ├── agent.rs                  # Headless Agent：create_agent_components、create_context_with_long_term、process_message
+│   ├── bin/
+│   │   └── web.rs                # bee-web：HTTP API、流式聊天、/api/compact、会话持久化
+│   ├── ui/                      # 交互层（TUI）
 │   │   ├── mod.rs
 │   │   ├── app.rs
 │   │   ├── event.rs
@@ -302,39 +327,37 @@ bee/
 │   ├── core/                    # 核心编排
 │   │   ├── mod.rs
 │   │   ├── orchestrator.rs
-│   │   ├── session_supervisor.rs
-│   │   ├── task_scheduler.rs
-│   │   ├── state.rs             # InternalState + UiState
 │   │   ├── error.rs
-│   │   └── recovery.rs
+│   │   ├── recovery.rs
+│   │   └── ...
 │   ├── react/                   # 认知层
 │   │   ├── mod.rs
-│   │   ├── planner.rs
+│   │   ├── planner.rs            # 含 summarize() 用于 Context Compaction
 │   │   ├── critic.rs
-│   │   ├── memory.rs            # 三层记忆协调
-│   │   └── loop.rs
+│   │   ├── memory.rs            # ContextManager：working + long_term + lessons + procedural + set_messages
+│   │   └── loop_.rs             # react_loop、compact_context
 │   ├── llm/
-│   │   ├── mod.rs
-│   │   ├── trait.rs
-│   │   ├── openai.rs
-│   │   └── ollama.rs
 │   ├── tools/
 │   │   ├── mod.rs
 │   │   ├── executor.rs
-│   │   ├── filesystem.rs
-│   │   ├── shell.rs
-│   │   └── search.rs
+│   │   ├── cat.rs, ls.rs, shell.rs, search.rs, echo.rs
+│   │   └── ...
 │   ├── memory/                  # 记忆存储
 │   │   ├── mod.rs
-│   │   ├── conversation.rs
+│   │   ├── conversation.rs      # 含 set_messages（Compaction 用）
 │   │   ├── working.rs
 │   │   ├── long_term.rs
+│   │   ├── markdown_store.rs    # memory 路径、lessons/procedural 读写、consolidate_memory
 │   │   └── persistence.rs
-│   └── observability/
-│       ├── mod.rs
-│       └── tracing.rs
+│   └── ...
+├── static/
+│   └── index.html               # Web UI
 └── docs/
-    └── Rust个人智能体系统(Bee)-架构设计白皮书.md
+    ├── Rust个人智能体系统(Bee)-架构设计白皮书.md
+    ├── EVOLUTION.md              # 自我进化设计及已实现：Lessons、程序记忆、Context Compaction
+    ├── MEMORY.md
+    ├── WEBUI.md
+    └── ...
 ```
 
 ---
@@ -379,20 +402,34 @@ bee/
 
 - **目标**：向 Agent Runtime 演进
 - **任务**：
-  - 三层记忆 + Vector DB
-  - Headless 模式（CLI / HTTP API）
-  - Task Scheduler + 用户 Cancel
+  - 三层记忆 + 长期记忆（**已实现**：`FileLongTerm` + BM25；向量检索预留扩展）
+  - Headless 模式（**已实现**：`bee-web`、HTTP API、流式 NDJSON）
+  - 自我进化（**已实现**：Lessons、程序记忆、Context Compaction；参见 `docs/EVOLUTION.md`）
+  - Task Scheduler + 用户 Cancel（部分实现：CancellationToken）
   - 配置热更新、多 LLM 后端切换
 
 ---
 
-## 7. 总结
+## 7. 自我进化
+
+Bee 的自我进化设计通过**记忆、反馈与规则积累**让后续行为更符合用户习惯。
+
+| 能力 | 说明 | 文档 |
+|------|------|------|
+| **行为约束 (Lessons)** | `memory/lessons.md` 内容注入 system，模型遵守规则、减少幻觉 | `EVOLUTION.md` §6 |
+| **程序记忆 (Procedural)** | 工具失败时写入 `memory/procedural.md`，规划时注入「工具使用经验」 | `EVOLUTION.md` §7 |
+| **Context Compaction** | 对话超阈值时摘要写入长期、替换为摘要消息，避免 token 溢出 | `EVOLUTION.md` §8 |
+| **长期记忆检索** | 按 query 检索 `long-term.md`，拼入 Relevant Past Knowledge | `MEMORY.md` |
+---
+
+## 8. 总结
 
 本架构设计面向**稳定、安全、可扩展**的 Agent Runtime，而非一次性玩具。其核心能力在于：
 
 1. **并发模型**：UI 不卡顿，Stream 与 State 分离，后台多任务并行
 2. **安全沙箱**：敢让 Agent 执行本地操作
 3. **类型系统**：在编译期捕获大部分逻辑错误（如状态机非法流转）
-4. **可演进性**：目录与模块划分可支撑至 Phase 5（本地 Agent OS、任务队列、定时触发）
+4. **记忆与进化**：三层记忆 + Lessons + 程序记忆 + Context Compaction，实现「越用越听话、越少重复错」
+5. **可演进性**：目录与模块划分可支撑至 Phase 5（本地 Agent OS、任务队列、定时触发、心跳与技能插件）
 
-> 这不是「写个 Agent 玩玩」的设计，而是 **一个 Rust 原生 Agent Runtime 的蓝图**。
+> 这不是「写个 Agent 玩玩」的设计，而是 **一个 Rust 原生 Agent Runtime 的蓝图**。当前实现状态见各 Phase 任务列表及 `docs/` 下 EVOLUTION、MEMORY、WEBUI 等文档。

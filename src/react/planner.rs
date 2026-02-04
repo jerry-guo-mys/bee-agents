@@ -120,6 +120,20 @@ impl Planner {
         self.llm
             .complete(&full_messages)
             .await
-            .map_err(|e| AgentError::LlmError(e))
+            .map_err(AgentError::LlmError)
+    }
+
+    /// 将对话历史压缩为一段摘要（用于 Context Compaction：写入长期记忆后替换当前消息）
+    pub async fn summarize(&self, messages: &[Message]) -> Result<String, AgentError> {
+        if messages.is_empty() {
+            return Ok(String::new());
+        }
+        let system = "You are a summarizer. Summarize the following conversation in one short paragraph: key facts, decisions, user preferences, and the latest question if any. Use the same language as the conversation. Output only the summary, no preamble.";
+        let mut full = vec![Message::system(system.to_string())];
+        full.extend(messages.to_vec());
+        self.llm
+            .complete(&full)
+            .await
+            .map_err(AgentError::LlmError)
     }
 }

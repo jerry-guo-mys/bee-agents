@@ -84,6 +84,12 @@ impl ConversationMemory {
         self.messages.clear();
     }
 
+    /// 替换为指定消息列表（用于 Context Compaction：摘要后仅保留摘要消息）
+    pub fn set_messages(&mut self, messages: Vec<Message>) {
+        self.messages = messages;
+        self.prune();
+    }
+
     /// 超出 max_turns*2 时丢弃最旧的消息，保留最近部分
     fn prune(&mut self) {
         if self.messages.len() > self.max_turns * 2 {

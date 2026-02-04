@@ -28,8 +28,11 @@ use bee::agent::{
     create_agent_components, create_context_with_long_term, process_message,
     process_message_stream, AgentComponents,
 };
-use bee::memory::{append_daily_log, consolidate_memory, ConversationMemory, memory_root};
-use bee::react::{ContextManager, ReactEvent};
+use bee::memory::{
+    append_daily_log, consolidate_memory, lessons_path, procedural_path, ConversationMemory,
+    memory_root,
+};
+use bee::react::{compact_context, ContextManager, ReactEvent};
 
 /// 会话快照：仅持久化对话消息，重启后恢复
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -160,6 +163,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/history", get(api_history))
         .route("/api/sessions", get(api_sessions_list))
         .route("/api/session/clear", post(api_session_clear))
+        .route("/api/compact", post(api_compact))
         .route("/api/session/rename", post(api_session_rename))
         .route("/api/memory/consolidate", post(api_memory_consolidate))
         .route("/api/health", get(|| async { "OK" }))
@@ -237,7 +241,10 @@ fn load_session_from_disk(
         bee::memory::long_term_path(memory_root),
         2000,
     ));
-    let mut ctx = ContextManager::new(snap.max_turns).with_long_term(long_term);
+    let mut ctx = ContextManager::new(snap.max_turns)
+        .with_long_term(long_term)
+        .with_lessons_path(lessons_path(memory_root))
+        .with_procedural_path(procedural_path(memory_root));
     ctx.conversation = conversation;
     Some(ctx)
 }
@@ -273,6 +280,37 @@ async fn api_memory_consolidate(
         dates_processed: r.dates_processed,
         blocks_added: r.blocks_added,
     }))
+}
+
+/// POST /api/compact：对指定会话执行 Context Compaction（摘要写入长期记忆并替换为摘要消息），请求体 { "session_id": "..." }
+async fn api_compact(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<ClearSessionRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let session_id = match req.session_id.filter(|s| !s.is_empty()) {
+        Some(s) => s,
+        None => return Err((StatusCode::BAD_REQUEST, "session_id is required".to_string())),
+    };
+    let mut context = state
+        .sessions
+        .write()
+        .await
+        .remove(&session_id)
+        .unwrap_or_else(|| {
+            load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root)
+                .unwrap_or_else(|| create_context_with_long_term(DEFAULT_MAX_TURNS, Some(&state.workspace)))
+        });
+    match compact_context(&state.components.planner, &mut context).await {
+        Ok(()) => {
+            save_session_to_disk(&state.sessions_dir, &state.memory_root, &session_id, &context);
+            state.sessions.write().await.insert(session_id, context);
+            Ok(StatusCode::OK)
+        }
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Compaction failed: {}", e),
+        )),
+    }
 }
 
 /// POST /api/session/clear：清除指定会话（从内存移除并删除磁盘文件），请求体可选 { "session_id": "..." }

@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 use crate::config::{load_config, AppConfig};
 use crate::core::{AgentError, RecoveryEngine};
-use crate::memory::{FileLongTerm, InMemoryLongTerm, lessons_path, long_term_path, memory_root};
+use crate::memory::{
+    FileLongTerm, InMemoryLongTerm, lessons_path, long_term_path, memory_root, procedural_path,
+};
 use crate::react::{react_loop, ContextManager, Planner, ReactEvent};
 use tokio::sync::mpsc;
 use crate::tools::{
@@ -66,19 +68,27 @@ pub fn create_agent_components(
 /// 若 workspace 提供，则使用 Markdown 文件长期记忆（memory/long-term.md + BM25 检索）；
 /// 否则使用内存实现（与 TUI 一致）。
 pub fn create_context_with_long_term(max_turns: usize, workspace: Option<&Path>) -> ContextManager {
-    let (long_term, lessons_path_opt): (Arc<dyn crate::memory::LongTermMemory>, Option<std::path::PathBuf>) = match workspace {
+    let (long_term, lessons_path_opt, procedural_path_opt): (
+        Arc<dyn crate::memory::LongTermMemory>,
+        Option<std::path::PathBuf>,
+        Option<std::path::PathBuf>,
+    ) = match workspace {
         Some(w) => {
             let root = memory_root(w);
             let path = long_term_path(&root);
             let lt = Arc::new(FileLongTerm::new(path, 2000));
             let lessons = Some(lessons_path(&root));
-            (lt, lessons)
+            let procedural = Some(procedural_path(&root));
+            (lt, lessons, procedural)
         }
-        None => (Arc::new(InMemoryLongTerm::default()), None),
+        None => (Arc::new(InMemoryLongTerm::default()), None, None),
     };
     let mut ctx = ContextManager::new(max_turns).with_long_term(long_term);
     if let Some(p) = lessons_path_opt {
         ctx = ctx.with_lessons_path(p);
+    }
+    if let Some(p) = procedural_path_opt {
+        ctx = ctx.with_procedural_path(p);
     }
     ctx
 }

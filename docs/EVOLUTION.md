@@ -91,3 +91,20 @@
   用户说「记住：xxx」时，将 xxx 写入你的回复并可在后续对话中引用。
   ```
 - **生效**：无需重启，保存后下一轮对话即会带上最新内容。未创建该文件时不会注入任何内容。
+
+---
+
+## 7. 已实现：程序记忆 (Procedural Memory)
+
+- **文件**：`workspace/memory/procedural.md`
+- **作用**：记录工具调用失败（工具名 + 错误原因），并在每次规划时拼入 system prompt 的「## 程序记忆 / 工具使用经验」段落，减少重复错误。
+- **写入**：ReAct 循环中工具执行失败时自动追加一条记录（`append_procedural_record`）。
+- **生效**：无需重启；未创建该文件时首次失败会自动创建并写入。
+
+---
+
+## 8. 已实现：Context Compaction（上下文压缩）
+
+- **机制**：当对话条数超过阈值（默认 24）时，在规划前自动执行一次压缩：用 LLM 对当前对话生成摘要，写入长期记忆（`push_to_long_term`），并将当前消息替换为一条「Previous conversation summary」的 system 消息（`set_messages`），避免 token 溢出。
+- **手动触发**：Web API `POST /api/compact`，请求体 `{ "session_id": "..." }`。
+- **代码**：`Planner::summarize()`、`compact_context()`、`ConversationMemory::set_messages()`；ReAct 循环内按 `COMPACT_THRESHOLD` 自动调用。

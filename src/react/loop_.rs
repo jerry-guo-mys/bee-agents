@@ -12,6 +12,8 @@ use crate::tools::ToolExecutor;
 
 /// 单次对话内最大 ReAct 步数，防止死循环
 const MAX_REACT_STEPS: usize = 10;
+/// 对话条数超过此值时在规划前执行一次 Context Compaction（摘要写入长期记忆并替换为摘要消息）
+const COMPACT_THRESHOLD: usize = 24;
 /// 流式回复时每段字符数（模拟打字效果）
 const CHUNK_CHARS: usize = 6;
 /// Observation 预览最大字符数
@@ -31,6 +33,28 @@ fn send_event(tx: &Option<&tokio::sync::mpsc::UnboundedSender<ReactEvent>>, ev: 
     if let Some(t) = tx {
         let _ = t.send(ev);
     }
+}
+
+/// Context Compaction：将当前对话摘要写入长期记忆，并替换为一条摘要型 system 消息，避免 token 溢出。
+/// 可由 ReAct 循环在消息数超过阈值时自动调用，或由 Web API 手动触发。
+pub async fn compact_context(
+    planner: &Planner,
+    context: &mut ContextManager,
+) -> Result<(), AgentError> {
+    let messages = context.messages().to_vec();
+    if messages.len() < 2 {
+        return Ok(());
+    }
+    let summary = planner.summarize(&messages).await?;
+    if summary.is_empty() {
+        return Ok(());
+    }
+    context.push_to_long_term(&format!("Conversation summary: {}", summary));
+    context.set_messages(vec![Message::system(format!(
+        "Previous conversation summary:\n\n{}",
+        summary
+    ))]);
+    Ok(())
 }
 
 /// 执行 ReAct 循环：用户输入 -> 拼 system(working+long_term) -> plan -> 解析输出 -> 若 ToolCall 则执行并写回 Observation，若 Response 则返回并写入长期记忆
@@ -71,6 +95,16 @@ pub async fn react_loop(
             });
         }
 
+        // 若当前对话条数过多，先压缩：摘要写入长期记忆并替换为一条摘要消息
+        if context.messages().len() > COMPACT_THRESHOLD {
+            if let Err(e) = compact_context(planner, context).await {
+                send_event(&event_tx, ReactEvent::Error {
+                    text: format!("Compaction failed: {}", e),
+                });
+                // 不中止，继续用当前消息规划
+            }
+        }
+
         let messages = context.to_llm_messages();
         let working_section = context.working_memory_section();
         let long_term_block = context.long_term_section(user_input);
@@ -83,14 +117,16 @@ pub async fn react_loop(
             };
             send_event(&event_tx, ReactEvent::MemoryRecovery { preview });
         }
-        // 动态 system：基础 prompt + Working Memory + 长期记忆检索 + 行为约束/教训（自我进化）
+        // 动态 system：基础 prompt + Working Memory + 长期记忆检索 + 行为约束/教训 + 程序记忆（自我进化）
         let lessons_block = context.lessons_section();
+        let procedural_block = context.procedural_section();
         let system = format!(
-            "{}\n\n{}\n\n{}{}",
+            "{}\n\n{}\n\n{}{}{}",
             planner.base_system_prompt(),
             working_section,
             long_term_block,
-            lessons_block
+            lessons_block,
+            procedural_block
         );
         send_event(&event_tx, ReactEvent::Thinking);
         let output = match planner.plan_with_system(&messages, &system).await {
@@ -192,6 +228,7 @@ pub async fn react_loop(
                     Err(e) => {
                         let failure_msg = format!("{}: {}", tc.tool, e.to_string());
                         context.working.add_failure(failure_msg.clone());
+                        context.append_procedural_record(&tc.tool, false, &e.to_string());
                         send_event(&event_tx, ReactEvent::ToolFailure {
                             tool: tc.tool.clone(),
                             reason: e.to_string(),

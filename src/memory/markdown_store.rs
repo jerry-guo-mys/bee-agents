@@ -30,12 +30,39 @@ pub fn lessons_path(memory_root: &Path) -> PathBuf {
     memory_root.join("lessons.md")
 }
 
+/// 程序记忆文件路径：memory/procedural.md（工具成功/失败经验，会注入 system prompt）
+pub fn procedural_path(memory_root: &Path) -> PathBuf {
+    memory_root.join("procedural.md")
+}
+
 /// 若存在则读取 lessons 内容，用于拼入 system prompt
 pub fn load_lessons(path: &Path) -> String {
     match std::fs::read_to_string(path) {
         Ok(s) => s.trim().to_string(),
         Err(_) => String::new(),
     }
+}
+
+/// 若存在则读取 procedural 内容，用于拼入 system prompt（程序记忆：工具使用经验）
+pub fn load_procedural(path: &Path) -> String {
+    match std::fs::read_to_string(path) {
+        Ok(s) => s.trim().to_string(),
+        Err(_) => String::new(),
+    }
+}
+
+/// 追加一条程序记忆（工具名、成功/失败、简要原因），用于自我进化
+pub fn append_procedural(path: &Path, tool: &str, success: bool, detail: &str) -> std::io::Result<()> {
+    if let Some(p) = path.parent() {
+        std::fs::create_dir_all(p)?;
+    }
+    let status = if success { "ok" } else { "fail" };
+    let line = format!("- {} {}: {}\n", tool, status, detail);
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?
+        .write_all(line.as_bytes())
 }
 
 /// 整理结果：处理了哪些日期、写入了多少条
