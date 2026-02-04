@@ -16,6 +16,8 @@ pub struct AppConfig {
     pub llm: LlmSection,
     #[serde(default)]
     pub tools: ToolsSection,
+    #[serde(default)]
+    pub evolution: EvolutionSection,
 }
 
 /// [app] 段：应用名、工作目录、对话轮数上限
@@ -31,6 +33,18 @@ pub struct AppSection {
 
 fn default_max_context_turns() -> usize {
     20
+}
+
+/// [evolution] 段：自我进化相关（参见 docs/EVOLUTION.md）
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct EvolutionSection {
+    /// HallucinatedTool 时是否自动向 lessons.md 追加教训
+    #[serde(default = "default_auto_lesson_on_hallucination")]
+    pub auto_lesson_on_hallucination: bool,
+}
+
+fn default_auto_lesson_on_hallucination() -> bool {
+    true
 }
 
 /// [llm] 段：后端选择与超时
@@ -194,6 +208,7 @@ impl Default for AppConfig {
             app: AppSection::default(),
             llm: LlmSection::default(),
             tools: ToolsSection::default(),
+            evolution: EvolutionSection::default(),
         }
     }
 }

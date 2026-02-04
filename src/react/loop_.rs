@@ -14,6 +14,20 @@ use crate::tools::ToolExecutor;
 const MAX_REACT_STEPS: usize = 10;
 /// 对话条数超过此值时在规划前执行一次 Context Compaction（摘要写入长期记忆并替换为摘要消息）
 const COMPACT_THRESHOLD: usize = 24;
+
+/// 从用户输入中提取「记住：xxx」类内容，用于写入 preferences
+fn extract_remember_content(input: &str) -> Option<String> {
+    let input = input.trim();
+    let idx = input.find("记住")?;
+    let after = input.get(idx + "记住".len()..)?;
+    let sep = after.find('：').or_else(|| after.find(':'))?;
+    let content = after.get(sep + 1..)?.trim();
+    if content.is_empty() {
+        None
+    } else {
+        Some(content.to_string())
+    }
+}
 /// 流式回复时每段字符数（模拟打字效果）
 const CHUNK_CHARS: usize = 6;
 /// Observation 预览最大字符数
@@ -71,6 +85,12 @@ pub async fn react_loop(
     context.push_message(Message::user(user_input.to_string()));
     context.working.set_goal(user_input);
 
+    // 显式用户偏好：若用户说「记住：xxx」，写入 preferences 并同步到长期记忆
+    if let Some(pref) = extract_remember_content(user_input) {
+        context.append_preference(&pref);
+        context.push_to_long_term(&format!("User preference: {}", pref));
+    }
+
     // 记录初始 token 数，用于计算本次增量
     let (init_prompt, init_completion, _) = planner.token_usage();
 
@@ -117,16 +137,18 @@ pub async fn react_loop(
             };
             send_event(&event_tx, ReactEvent::MemoryRecovery { preview });
         }
-        // 动态 system：基础 prompt + Working Memory + 长期记忆检索 + 行为约束/教训 + 程序记忆（自我进化）
+        // 动态 system：基础 prompt + Working Memory + 长期记忆检索 + 行为约束/教训 + 程序记忆 + 用户偏好（自我进化）
         let lessons_block = context.lessons_section();
         let procedural_block = context.procedural_section();
+        let preferences_block = context.preferences_section();
         let system = format!(
-            "{}\n\n{}\n\n{}{}{}",
+            "{}\n\n{}\n\n{}{}{}{}",
             planner.base_system_prompt(),
             working_section,
             long_term_block,
             lessons_block,
-            procedural_block
+            procedural_block,
+            preferences_block
         );
         send_event(&event_tx, ReactEvent::Thinking);
         let output = match planner.plan_with_system(&messages, &system).await {
@@ -220,6 +242,7 @@ pub async fn react_loop(
                 });
                 if !executor.tool_names().iter().any(|n| n == &tc.tool) {
                     send_event(&event_tx, ReactEvent::Error { text: format!("Hallucinated tool: {}", tc.tool) });
+                    context.append_hallucination_lesson(&tc.tool, &executor.tool_names());
                     return Err(AgentError::HallucinatedTool(tc.tool.clone()));
                 }
                 let result = executor.execute(&tc.tool, tc.args).await;

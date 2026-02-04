@@ -35,6 +35,11 @@ pub fn procedural_path(memory_root: &Path) -> PathBuf {
     memory_root.join("procedural.md")
 }
 
+/// 用户偏好文件路径：memory/preferences.md（显式「记住：xxx」等，会注入 system prompt）
+pub fn preferences_path(memory_root: &Path) -> PathBuf {
+    memory_root.join("preferences.md")
+}
+
 /// 若存在则读取 lessons 内容，用于拼入 system prompt
 pub fn load_lessons(path: &Path) -> String {
     match std::fs::read_to_string(path) {
@@ -49,6 +54,46 @@ pub fn load_procedural(path: &Path) -> String {
         Ok(s) => s.trim().to_string(),
         Err(_) => String::new(),
     }
+}
+
+/// 若存在则读取 preferences 内容，用于拼入 system prompt（用户显式偏好）
+pub fn load_preferences(path: &Path) -> String {
+    match std::fs::read_to_string(path) {
+        Ok(s) => s.trim().to_string(),
+        Err(_) => String::new(),
+    }
+}
+
+/// 追加一条用户偏好（显式「记住：xxx」时调用）
+pub fn append_preference(path: &Path, content: &str) -> std::io::Result<()> {
+    if content.trim().is_empty() {
+        return Ok(());
+    }
+    if let Some(p) = path.parent() {
+        std::fs::create_dir_all(p)?;
+    }
+    let line = format!("- {}\n", content.trim());
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?
+        .write_all(line.as_bytes())
+}
+
+/// 追加一条教训到 lessons.md（如 HallucinatedTool 时自动写入「仅使用以下工具：...」）
+pub fn append_lesson(path: &Path, line: &str) -> std::io::Result<()> {
+    if line.trim().is_empty() {
+        return Ok(());
+    }
+    if let Some(p) = path.parent() {
+        std::fs::create_dir_all(p)?;
+    }
+    let content = format!("{}\n", line.trim());
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?
+        .write_all(content.as_bytes())
 }
 
 /// 追加一条程序记忆（工具名、成功/失败、简要原因），用于自我进化

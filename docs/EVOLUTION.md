@@ -108,3 +108,20 @@
 - **机制**：当对话条数超过阈值（默认 24）时，在规划前自动执行一次压缩：用 LLM 对当前对话生成摘要，写入长期记忆（`push_to_long_term`），并将当前消息替换为一条「Previous conversation summary」的 system 消息（`set_messages`），避免 token 溢出。
 - **手动触发**：Web API `POST /api/compact`，请求体 `{ "session_id": "..." }`。
 - **代码**：`Planner::summarize()`、`compact_context()`、`ConversationMemory::set_messages()`；ReAct 循环内按 `COMPACT_THRESHOLD` 自动调用。
+
+---
+
+## 9. 已实现：显式用户偏好 (Preferences)
+
+- **文件**：`workspace/memory/preferences.md`
+- **作用**：用户说「记住：xxx」时，自动将 xxx 写入该文件并同步到长期记忆；每次规划时拼入 system prompt 的「## 用户偏好 / Preferences」段落，模型会遵守。
+- **识别**：ReAct 循环在收到用户输入后检测「记住」+「：」或「:」后的内容（如「记住：我喜欢简短回答」），提取并调用 `append_preference` + `push_to_long_term`。
+- **生效**：无需重启；未创建该文件时首次「记住：」会自动创建并写入。
+
+---
+
+## 10. 已实现：HallucinatedTool 自动写入 Lesson
+
+- **机制**：当模型调用了不存在的工具（HallucinatedTool）时，在返回错误前自动向 `memory/lessons.md` 追加一条教训，内容为「仅使用以下已注册工具：cat、ls、…；不要编造不存在的工具名（例如曾误用「xxx」）。」
+- **作用**：后续对话中该段落会随 lessons 注入 system，减少重复幻觉。
+- **代码**：`ContextManager::append_hallucination_lesson(hallucinated_tool, valid_tools)`，在 ReAct 循环检测到 HallucinatedTool 时调用。

@@ -201,17 +201,19 @@ pub struct Executor;
 | **短期** | Conversation Memory | 最近 N 轮对话 | `ConversationMemory`，单会话；可被 Context Compaction 替换为摘要 |
 | **中期** | Working Memory | 当前任务目标、已尝试方案、失败原因 | `WorkingMemory`，单任务 |
 | **长期** | Long-term Memory | 知识、摘要、用户偏好 | `FileLongTerm`（`memory/long-term.md` + BM25 检索），跨会话；可扩展向量检索 |
-| **行为约束** | Lessons | 规则与教训 | `memory/lessons.md`，每次规划时整块注入 system |
+| **行为约束** | Lessons | 规则与教训 | `memory/lessons.md`，人工或 HallucinatedTool 时自动追加，规划时整块注入 system |
 | **程序记忆** | Procedural | 工具成功/失败经验 | `memory/procedural.md`，工具失败时自动追加，规划时注入 system |
+| **用户偏好** | Preferences | 显式「记住：xxx」 | `memory/preferences.md`，识别「记住：」后写入并同步长期，规划时注入 system |
 
 **持久化布局（workspace 下）：**
 
 - `memory/logs/YYYY-MM-DD.md`：按日短期日志，供 `consolidate_memory` 整理入长期。
 - `memory/long-term.md`：长期记忆块，按 `## 时间戳` 分块，BM25 风格检索。
-- `memory/lessons.md`：行为约束/教训，人工或 Recovery 写入。
+- `memory/lessons.md`：行为约束/教训，人工或 HallucinatedTool 时自动追加（`append_hallucination_lesson`）。
 - `memory/procedural.md`：程序记忆，工具失败时自动追加（`append_procedural_record`）。
+- `memory/preferences.md`：用户偏好，用户说「记住：xxx」时自动追加（`append_preference`）并写入长期。
 
-**Context Manager** 拼装动态 system 时包含：`working_memory_section`、`long_term_section(query)`、`lessons_section()`、`procedural_section()`，从而在 Prompt 中显式区分，减少 LLM 重复犯错：
+**Context Manager** 拼装动态 system 时包含：`working_memory_section`、`long_term_section(query)`、`lessons_section()`、`procedural_section()`、`preferences_section()`，从而在 Prompt 中显式区分，减少 LLM 重复犯错：
 
 ```
 ## Current Goal
@@ -228,6 +230,9 @@ pub struct Executor;
 
 ## 程序记忆 / 工具使用经验（请参考，避免重复失败）
 {procedural}
+
+## 用户偏好 / Preferences（请遵守）
+{preferences}
 ```
 
 **Context Compaction（上下文压缩）**：当对话条数超过阈值（如 24）时，在规划前自动执行：用 LLM 对当前对话生成摘要 → 写入长期记忆 → 将当前消息替换为一条「Previous conversation summary」的 system 消息（`ConversationMemory::set_messages`），避免 token 溢出。亦可手动触发：Web API `POST /api/compact`，详见 `docs/EVOLUTION.md`。
@@ -416,8 +421,9 @@ Bee 的自我进化设计通过**记忆、反馈与规则积累**让后续行为
 
 | 能力 | 说明 | 文档 |
 |------|------|------|
-| **行为约束 (Lessons)** | `memory/lessons.md` 内容注入 system，模型遵守规则、减少幻觉 | `EVOLUTION.md` §6 |
+| **行为约束 (Lessons)** | `memory/lessons.md` 内容注入 system；HallucinatedTool 时自动追加教训 | `EVOLUTION.md` §6、§10 |
 | **程序记忆 (Procedural)** | 工具失败时写入 `memory/procedural.md`，规划时注入「工具使用经验」 | `EVOLUTION.md` §7 |
+| **用户偏好 (Preferences)** | 用户说「记住：xxx」时写入 `memory/preferences.md` 并同步长期，规划时注入 | `EVOLUTION.md` §9 |
 | **Context Compaction** | 对话超阈值时摘要写入长期、替换为摘要消息，避免 token 溢出 | `EVOLUTION.md` §8 |
 | **长期记忆检索** | 按 query 检索 `long-term.md`，拼入 Relevant Past Knowledge | `MEMORY.md` |
 ---

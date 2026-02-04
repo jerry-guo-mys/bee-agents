@@ -7,11 +7,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::memory::{
-    append_procedural, load_lessons, load_procedural, ConversationMemory, LongTermMemory, Message,
-    WorkingMemory,
+    append_lesson, append_preference, append_procedural, load_lessons, load_preferences,
+    load_procedural, ConversationMemory, LongTermMemory, Message, WorkingMemory,
 };
 
-/// 上下文管理器：整合短期/中期/长期记忆，提供 to_llm_messages、working_memory_section、long_term_section、lessons_section、procedural_section
+/// 上下文管理器：整合短期/中期/长期记忆，提供 to_llm_messages、working_memory_section、long_term_section、lessons_section、procedural_section、preferences_section
 #[derive(Clone)]
 pub struct ContextManager {
     pub conversation: ConversationMemory,
@@ -21,6 +21,10 @@ pub struct ContextManager {
     pub lessons_path: Option<PathBuf>,
     /// 程序记忆文件路径（memory/procedural.md），工具成功/失败经验会注入 system prompt
     pub procedural_path: Option<PathBuf>,
+    /// 用户偏好文件路径（memory/preferences.md），显式「记住：xxx」会写入并注入 system prompt
+    pub preferences_path: Option<PathBuf>,
+    /// HallucinatedTool 时是否自动向 lessons.md 追加教训（由 config [evolution] 控制）
+    pub auto_lesson_on_hallucination: bool,
 }
 
 impl ContextManager {
@@ -31,6 +35,8 @@ impl ContextManager {
             long_term: None,
             lessons_path: None,
             procedural_path: None,
+            preferences_path: None,
+            auto_lesson_on_hallucination: true,
         }
     }
 
@@ -48,6 +54,12 @@ impl ContextManager {
     /// 设置程序记忆文件路径（自我进化：工具经验会注入 system prompt）
     pub fn with_procedural_path(mut self, path: PathBuf) -> Self {
         self.procedural_path = Some(path);
+        self
+    }
+
+    /// 设置用户偏好文件路径（自我进化：显式「记住：xxx」写入并注入 system prompt）
+    pub fn with_preferences_path(mut self, path: PathBuf) -> Self {
+        self.preferences_path = Some(path);
         self
     }
 
@@ -73,6 +85,47 @@ impl ContextManager {
             return String::new();
         }
         format!("\n## 程序记忆 / 工具使用经验（请参考，避免重复失败）\n{}\n", s)
+    }
+
+    /// 用户偏好段落（从 memory/preferences.md 读取，显式「记住：xxx」会写入该文件）
+    pub fn preferences_section(&self) -> String {
+        let Some(ref p) = self.preferences_path else {
+            return String::new();
+        };
+        let s = load_preferences(p);
+        if s.is_empty() {
+            return String::new();
+        }
+        format!("\n## 用户偏好 / Preferences（请遵守）\n{}\n", s)
+    }
+
+    /// 记录一次用户显式偏好（用户说「记住：xxx」时调用）
+    pub fn append_preference(&self, content: &str) {
+        if let Some(ref p) = self.preferences_path {
+            let _ = append_preference(p, content);
+        }
+    }
+
+    /// 当发生 HallucinatedTool 时追加一条教训到 lessons.md，减少后续幻觉（受 auto_lesson_on_hallucination 控制）
+    pub fn append_hallucination_lesson(&self, hallucinated_tool: &str, valid_tools: &[String]) {
+        if !self.auto_lesson_on_hallucination {
+            return;
+        }
+        let Some(ref p) = self.lessons_path else {
+            return;
+        };
+        let tools_list = valid_tools.join("、");
+        let line = format!(
+            "仅使用以下已注册工具：{}；不要编造不存在的工具名（例如曾误用「{}」）。",
+            tools_list, hallucinated_tool
+        );
+        let _ = append_lesson(p, &line);
+    }
+
+    /// 设置 HallucinatedTool 时是否自动追加教训（与 config [evolution].auto_lesson_on_hallucination 一致）
+    pub fn with_auto_lesson_on_hallucination(mut self, enabled: bool) -> Self {
+        self.auto_lesson_on_hallucination = enabled;
+        self
     }
 
     /// 记录一次工具调用结果到程序记忆（失败时调用可减少重复错误）

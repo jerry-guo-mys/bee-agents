@@ -41,3 +41,8 @@ allowed_domains = [
   "docs.rs", "github.com", "stackoverflow.com",
   "news.google.com", "developer.mozilla.org", "arxiv.org"
 ]
+
+# 自我进化（参见 docs/EVOLUTION.md）
+[evolution]
+# 当模型调用不存在的工具（HallucinatedTool）时，是否自动向 memory/lessons.md 追加一条教训（默认 true）
+auto_lesson_on_hallucination = true

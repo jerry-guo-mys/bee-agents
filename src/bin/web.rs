@@ -28,9 +28,10 @@ use bee::agent::{
     create_agent_components, create_context_with_long_term, process_message,
     process_message_stream, AgentComponents,
 };
+use bee::config::{load_config, AppConfig};
 use bee::memory::{
-    append_daily_log, consolidate_memory, lessons_path, procedural_path, ConversationMemory,
-    memory_root,
+    append_daily_log, consolidate_memory, lessons_path, preferences_path, procedural_path,
+    ConversationMemory, memory_root,
 };
 use bee::react::{compact_context, ContextManager, ReactEvent};
 
@@ -241,10 +242,13 @@ fn load_session_from_disk(
         bee::memory::long_term_path(memory_root),
         2000,
     ));
+    let cfg = load_config(None).unwrap_or_else(|_| AppConfig::default());
     let mut ctx = ContextManager::new(snap.max_turns)
         .with_long_term(long_term)
         .with_lessons_path(lessons_path(memory_root))
-        .with_procedural_path(procedural_path(memory_root));
+        .with_procedural_path(procedural_path(memory_root))
+        .with_preferences_path(preferences_path(memory_root))
+        .with_auto_lesson_on_hallucination(cfg.evolution.auto_lesson_on_hallucination);
     ctx.conversation = conversation;
     Some(ctx)
 }
