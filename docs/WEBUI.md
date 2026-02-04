@@ -29,8 +29,9 @@ cargo build --bin bee-web --features web
 
 - **对话**：输入消息后点击「发送」或按 Enter，Bee 经 ReAct 循环后返回回复。
 - **工具**：支持 cat、ls、shell、search、echo 等，与 TUI/WhatsApp 一致。
-- **会话**：同一浏览器会话内保持上下文（短期 + 中期 + 长期记忆）。
+- **会话**：同一浏览器会话内保持上下文（短期 + 中期 + 长期记忆）；会话按 `session_id` 持久化到 `workspace/sessions/*.json`，重启后可从磁盘恢复。
 - **健康检查**：GET `/api/health` 返回 `OK`。
+- **心跳**（可选）：若在 `config/default.toml` 中设置 `[heartbeat] enabled = true`，后台会按 `interval_secs` 定期执行一次自主「检查待办 / 反思」任务，结果仅写日志，不推送到前端。
 
 ## API
 
@@ -55,6 +56,6 @@ cargo build --bin bee-web --features web
 
 ## 与 TUI 的区别
 
-- 无流式输出：Web 端一次请求得到完整回复。
-- 会话以 `session_id` 区分，存在服务端内存中，重启后清空。
+- 无流式输出：Web 端一次请求得到完整回复（另有 `/api/chat/stream` 可做流式，按需使用）。
+- 会话以 `session_id` 区分，存在服务端内存中，并会持久化到 `workspace/sessions/<session_id>.json`，重启后自动从磁盘加载已有会话。
 - 端口固定为 8080（如需修改可改 `src/bin/web.rs` 中的 `addr`）。

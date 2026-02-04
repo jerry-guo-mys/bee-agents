@@ -149,3 +149,11 @@
 - **工具成功记录**：配置 `[evolution].record_tool_success = true` 时，每次工具调用成功也会写入 `memory/procedural.md`（与失败记录一致，便于后续检索「哪些工具常用且成功」）。默认 `false` 以减少文件噪音。
 - **策略沉淀**：当一轮对话以「直接回复用户」成功结束时，将「本轮目标 + 使用的工具列表」写入长期记忆，格式为 `Session strategy: goal "..."; tools used: cat, search.`，供后续 `long_term_section(query)` 检索到类似任务下的工具组合。
 - **代码**：`WorkingMemory::tool_names_used()` 从本轮的 `attempts`（`tool -> observation`）提取工具名；`ContextManager::push_session_strategy_to_long_term(goal, tool_names)`、`with_record_tool_success`；ReAct 成功返回前调用策略写入，工具成功时按配置调用 `append_procedural_record(..., true, "ok")`。
+
+---
+
+## 14. 已实现：心跳机制（后台自主循环）
+
+- **机制**：bee-web 启动时若配置 `[heartbeat] enabled = true`，会 spawn 一个后台任务，按 `interval_secs`（默认 300 秒）周期执行一次「心跳」：用 `create_context_with_long_term` 构建上下文，向 Agent 发送固定提示（Heartbeat prompt），让其根据长期记忆与当前状态检查待办或需跟进事项；若有则输出简短建议，若无则回复 OK；可使用 cat/ls 查看 workspace 下 memory 或任务文件。
+- **配置**：`config/default.toml` 中 `[heartbeat]` 段：`enabled`（是否启用）、`interval_secs`（间隔秒数）。默认关闭。
+- **代码**：`src/bin/web.rs` 启动时 `load_config` 读取配置，若 `heartbeat.enabled` 则 `tokio::spawn` 定时循环，每次 tick 调用 `process_message(..., HEARTBEAT_PROMPT)`，结果以 `tracing::info` / `tracing::warn` 打日志。
