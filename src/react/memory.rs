@@ -1,18 +1,21 @@
 //! 三层记忆协调
 //!
 //! 将短期（Conversation）、中期（Working）、长期（LongTerm）统一为 ContextManager，
-//! 供 ReAct 循环拼 system prompt（working_memory_section + long_term_section）与写入长期记忆。
+//! 供 ReAct 循环拼 system prompt（working_memory_section + long_term_section + lessons_section）与写入长期记忆。
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::memory::{ConversationMemory, LongTermMemory, Message, WorkingMemory};
+use crate::memory::{load_lessons, ConversationMemory, LongTermMemory, Message, WorkingMemory};
 
-/// 上下文管理器：整合短期/中期/长期记忆，提供 to_llm_messages、working_memory_section、long_term_section
+/// 上下文管理器：整合短期/中期/长期记忆，提供 to_llm_messages、working_memory_section、long_term_section、lessons_section
 #[derive(Clone)]
 pub struct ContextManager {
     pub conversation: ConversationMemory,
     pub working: WorkingMemory,
     pub long_term: Option<Arc<dyn LongTermMemory>>,
+    /// 行为约束/教训文件路径（memory/lessons.md），用于自我进化：内容会注入 system prompt
+    pub lessons_path: Option<PathBuf>,
 }
 
 impl ContextManager {
@@ -21,12 +24,31 @@ impl ContextManager {
             conversation: ConversationMemory::new(max_turns),
             working: WorkingMemory::new(),
             long_term: None,
+            lessons_path: None,
         }
     }
 
     pub fn with_long_term(mut self, long_term: Arc<dyn LongTermMemory>) -> Self {
         self.long_term = Some(long_term);
         self
+    }
+
+    /// 设置行为约束/教训文件路径（自我进化：该文件内容会注入 system prompt）
+    pub fn with_lessons_path(mut self, path: PathBuf) -> Self {
+        self.lessons_path = Some(path);
+        self
+    }
+
+    /// 行为约束/教训段落（从 memory/lessons.md 读取，供自我进化）
+    pub fn lessons_section(&self) -> String {
+        let Some(ref p) = self.lessons_path else {
+            return String::new();
+        };
+        let s = load_lessons(p);
+        if s.is_empty() {
+            return String::new();
+        }
+        format!("\n## 行为约束 / Lessons（请遵守）\n{}\n", s)
     }
 
     pub fn push_message(&mut self, msg: Message) {

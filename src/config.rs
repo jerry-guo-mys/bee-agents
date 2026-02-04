@@ -55,7 +55,7 @@ fn default_provider() -> String {
 }
 
 fn default_model() -> String {
-    "deepseek-chat".to_string()
+    "deepseek-reasoner".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

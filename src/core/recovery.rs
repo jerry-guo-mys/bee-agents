@@ -18,7 +18,10 @@ impl RecoveryEngine {
     pub fn handle(&self, err: &AgentError, _history: &mut Vec<Message>) -> RecoveryAction {
         match err {
             AgentError::JsonParseError(raw) => RecoveryAction::RetryWithPrompt(format!(
-                "上一轮输出的 JSON 格式错误: {raw}。请修正，仅输出有效的 JSON。"
+                "上一轮输出的 JSON 格式错误: {raw}。\
+                调用工具时你必须只输出一个合法的 JSON 对象，不能输出代码、Markdown 或其它文字。\
+                格式必须为: {{\"tool\": \"工具名\", \"args\": {{...}}}}。\
+                例如: {{\"tool\": \"echo\", \"args\": {{\"text\": \"hi\"}}}}。请只输出这一行 JSON。"
             )),
             AgentError::ContextWindowExceeded => RecoveryAction::SummarizeAndPrune,
             AgentError::HallucinatedTool(name) => RecoveryAction::AskUser(format!(

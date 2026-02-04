@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crate::config::{load_config, AppConfig};
 use crate::core::{AgentError, RecoveryEngine};
-use crate::memory::{FileLongTerm, InMemoryLongTerm, long_term_path, memory_root};
+use crate::memory::{FileLongTerm, InMemoryLongTerm, lessons_path, long_term_path, memory_root};
 use crate::react::{react_loop, ContextManager, Planner, ReactEvent};
 use tokio::sync::mpsc;
 use crate::tools::{
@@ -66,15 +66,21 @@ pub fn create_agent_components(
 /// 若 workspace 提供，则使用 Markdown 文件长期记忆（memory/long-term.md + BM25 检索）；
 /// 否则使用内存实现（与 TUI 一致）。
 pub fn create_context_with_long_term(max_turns: usize, workspace: Option<&Path>) -> ContextManager {
-    let long_term: Arc<dyn crate::memory::LongTermMemory> = match workspace {
+    let (long_term, lessons_path_opt): (Arc<dyn crate::memory::LongTermMemory>, Option<std::path::PathBuf>) = match workspace {
         Some(w) => {
             let root = memory_root(w);
             let path = long_term_path(&root);
-            Arc::new(FileLongTerm::new(path, 2000))
+            let lt = Arc::new(FileLongTerm::new(path, 2000));
+            let lessons = Some(lessons_path(&root));
+            (lt, lessons)
         }
-        None => Arc::new(InMemoryLongTerm::default()),
+        None => (Arc::new(InMemoryLongTerm::default()), None),
     };
-    ContextManager::new(max_turns).with_long_term(long_term)
+    let mut ctx = ContextManager::new(max_turns).with_long_term(long_term);
+    if let Some(p) = lessons_path_opt {
+        ctx = ctx.with_lessons_path(p);
+    }
+    ctx
 }
 
 /// 处理单条用户消息：跑 ReAct 循环（无 stream），返回最终回复文本

@@ -5,15 +5,17 @@ max_context_turns = 20
 
 [llm]
 # 优先级: DEEPSEEK_API_KEY > OPENAI_API_KEY
-# DeepSeek: https://api.deepseek.com, 模型 deepseek-chat / deepseek-reasoner
+# DeepSeek: https://api.deepseek.com
+# - deepseek-chat: 常规对话，响应快
+# - deepseek-reasoner: 思考模式（DeepSeek-R1），适合复杂推理、代码、数学
 # OpenAI:   https://api.openai.com/v1, 模型 gpt-4o-mini 等
 provider = "deepseek"
-model = "deepseek-chat"
+model = "deepseek-reasoner"
 base_url = "https://api.deepseek.com"
 
 [llm.deepseek]
-model = "deepseek-chat"
-# 思考模式 (deepseek-reasoner) 适合复杂推理
+model = "deepseek-reasoner"
+# 可选 deepseek-chat（常规）、deepseek-reasoner（思考/推理，更强）
 
 [llm.openai]
 model = "gpt-4o-mini"

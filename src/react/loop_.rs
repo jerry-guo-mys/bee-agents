@@ -83,12 +83,14 @@ pub async fn react_loop(
             };
             send_event(&event_tx, ReactEvent::MemoryRecovery { preview });
         }
-        // 动态 system：基础 prompt + Working Memory + 长期记忆检索
+        // 动态 system：基础 prompt + Working Memory + 长期记忆检索 + 行为约束/教训（自我进化）
+        let lessons_block = context.lessons_section();
         let system = format!(
-            "{}\n\n{}\n\n{}",
+            "{}\n\n{}\n\n{}{}",
             planner.base_system_prompt(),
             working_section,
-            long_term_block
+            long_term_block,
+            lessons_block
         );
         send_event(&event_tx, ReactEvent::Thinking);
         let output = match planner.plan_with_system(&messages, &system).await {

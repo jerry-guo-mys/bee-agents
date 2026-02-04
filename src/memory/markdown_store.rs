@@ -25,6 +25,19 @@ pub fn long_term_path(memory_root: &Path) -> PathBuf {
     memory_root.join("long-term.md")
 }
 
+/// 行为约束/教训文件路径：memory/lessons.md（自我进化：规则与教训，会注入 system prompt）
+pub fn lessons_path(memory_root: &Path) -> PathBuf {
+    memory_root.join("lessons.md")
+}
+
+/// 若存在则读取 lessons 内容，用于拼入 system prompt
+pub fn load_lessons(path: &Path) -> String {
+    match std::fs::read_to_string(path) {
+        Ok(s) => s.trim().to_string(),
+        Err(_) => String::new(),
+    }
+}
+
 /// 整理结果：处理了哪些日期、写入了多少条
 #[derive(Debug, Default)]
 pub struct ConsolidateResult {

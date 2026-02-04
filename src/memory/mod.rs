@@ -10,8 +10,8 @@ pub mod working;
 pub use conversation::{ConversationMemory, Message, Role};
 pub use long_term::{InMemoryLongTerm, LongTermMemory, NoopLongTerm};
 pub use markdown_store::{
-    append_daily_log, consolidate_memory, daily_log_path, long_term_path, memory_root,
-    ConsolidateResult, FileLongTerm,
+    append_daily_log, consolidate_memory, daily_log_path, load_lessons, long_term_path,
+    lessons_path, memory_root, ConsolidateResult, FileLongTerm,
 };
 pub use persistence::ConversationPersistence;
 pub use working::WorkingMemory;
