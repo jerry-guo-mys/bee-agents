@@ -170,7 +170,7 @@ async fn webhook_receive(
                     let mut sessions: tokio::sync::RwLockWriteGuard<
                         HashMap<String, ContextManager>,
                     > = state.sessions.write().await;
-                    sessions.remove(&user_id).unwrap_or_else(|| create_context_with_long_term(20, None))
+                    sessions.remove(&user_id).unwrap_or_else(|| create_context_with_long_term(20, None, None))
                 };
 
                 // 处理消息

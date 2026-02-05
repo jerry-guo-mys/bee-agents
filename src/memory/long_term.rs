@@ -1,8 +1,9 @@
 //! 长期记忆：向量化知识、用户偏好，跨会话检索
 //!
 //! 支持 add(text) 与 search(query, k)。实现：FileLongTerm（BM25）、InMemoryLongTerm（词重叠）、
-//! InMemoryVectorLongTerm（嵌入 API + 余弦相似度，config [memory].vector_enabled 启用）。
+//! InMemoryVectorLongTerm（嵌入 API + 余弦相似度，config [memory].vector_enabled 启用；支持快照持久化）。
 
+use std::path::Path;
 use std::sync::Arc;
 
 /// 长期记忆 trait：支持写入与相似度检索
@@ -106,11 +107,19 @@ impl Default for InMemoryLongTerm {
     }
 }
 
-/// 向量长期记忆：调用嵌入 API 将文本转为向量，检索时按余弦相似度返回 top-k
+/// 向量长期记忆：调用嵌入 API 将文本转为向量，检索时按余弦相似度返回 top-k；可选快照路径实现持久化
 pub struct InMemoryVectorLongTerm {
     store: Arc<std::sync::RwLock<Vec<(String, Vec<f32>)>>>,
     embedder: Arc<dyn crate::llm::EmbeddingProvider>,
     max_entries: usize,
+    snapshot_path: Option<std::path::PathBuf>,
+}
+
+/// 快照 JSON 条目（与 vector_snapshot.json 格式一致）
+#[derive(serde::Serialize, serde::Deserialize)]
+struct VectorSnapshotEntry {
+    text: String,
+    embedding: Vec<f32>,
 }
 
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
@@ -126,12 +135,73 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     dot / (norm_a * norm_b)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cosine_similarity() {
+        assert_eq!(cosine_similarity(&[], &[1.0]), 0.0);
+        assert_eq!(cosine_similarity(&[1.0, 0.0], &[0.0, 1.0]), 0.0);
+        assert!((cosine_similarity(&[1.0, 0.0], &[1.0, 0.0]) - 1.0).abs() < 1e-6);
+        assert!((cosine_similarity(&[1.0, 1.0], &[1.0, 1.0]) - 1.0).abs() < 1e-6);
+    }
+}
+
 impl InMemoryVectorLongTerm {
+    /// 仅内存，不持久化
     pub fn new(embedder: Arc<dyn crate::llm::EmbeddingProvider>, max_entries: usize) -> Self {
+        Self::new_with_persistence(embedder, max_entries, Option::<std::path::PathBuf>::None)
+    }
+
+    /// 可选快照路径：若存在则启动时加载；可调用 save_snapshot() 定期或退出时保存
+    pub fn new_with_persistence(
+        embedder: Arc<dyn crate::llm::EmbeddingProvider>,
+        max_entries: usize,
+        snapshot_path: Option<impl AsRef<Path>>,
+    ) -> Self {
+        let path_buf = snapshot_path.map(|p| p.as_ref().to_path_buf());
+        let store = Arc::new(std::sync::RwLock::new(Vec::new()));
+        if let Some(ref path) = path_buf {
+            if let Ok(data) = std::fs::read_to_string(path) {
+                if let Ok(entries) = serde_json::from_str::<Vec<VectorSnapshotEntry>>(&data) {
+                    let loaded: Vec<(String, Vec<f32>)> =
+                        entries.into_iter().map(|e| (e.text, e.embedding)).collect();
+                    let n = loaded.len().min(max_entries);
+                    let start = loaded.len().saturating_sub(n);
+                    store.write().unwrap().extend(loaded.into_iter().skip(start));
+                    tracing::info!("vector long-term loaded {} entries from snapshot", n);
+                }
+            }
+        }
         Self {
-            store: Arc::new(std::sync::RwLock::new(Vec::new())),
+            store,
             embedder,
             max_entries,
+            snapshot_path: path_buf,
+        }
+    }
+
+    /// 将当前 store 写入快照路径（若配置了 snapshot_path）
+    pub fn save_snapshot(&self) {
+        if let Some(ref path) = self.snapshot_path {
+            let store = self.store.read().unwrap();
+            let entries: Vec<VectorSnapshotEntry> = store
+                .iter()
+                .map(|(text, emb)| VectorSnapshotEntry {
+                    text: text.clone(),
+                    embedding: emb.clone(),
+                })
+                .collect();
+            drop(store);
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Ok(json) = serde_json::to_string_pretty(&entries) {
+                if std::fs::write(path, json).is_ok() {
+                    tracing::debug!("vector snapshot saved to {:?}", path);
+                }
+            }
         }
     }
 }

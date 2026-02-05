@@ -51,10 +51,13 @@ allowed_domains = [
 
 # 长期记忆后端（向量检索：嵌入 API + 内存向量存储，与 FileLongTerm 二选一）
 [memory]
-# 启用向量长期记忆（调用 OpenAI 兼容 /embeddings，与 LLM 共用 base_url、OPENAI_API_KEY）
+# 启用向量长期记忆（调用 OpenAI 兼容 /embeddings）
 vector_enabled = false
 # 嵌入模型名（如 text-embedding-3-small）
 embedding_model = "text-embedding-3-small"
+# 嵌入 API 独立 base_url / api_key（未设置时使用 [llm].base_url 与 OPENAI_API_KEY）
+# embedding_base_url = "https://api.openai.com/v1"
+# embedding_api_key = "sk-..."
 # qdrant_url = "http://localhost:6333"
 
 # 自我进化（参见 docs/EVOLUTION.md）
@@ -63,6 +66,10 @@ embedding_model = "text-embedding-3-small"
 auto_lesson_on_hallucination = true
 # 是否将工具调用成功也写入 memory/procedural.md（§3.5 工具统计；默认 false 减少噪音）
 record_tool_success = false
+
+# bee-web 服务（端口可由环境变量 BEE_WEB_PORT 覆盖）
+[web]
+port = 8080
 
 # 心跳机制（仅 bee-web：后台自主循环，思考现状 → 检查待办 → 反思）
 [heartbeat]

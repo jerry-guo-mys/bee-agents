@@ -40,6 +40,34 @@ pub fn preferences_path(memory_root: &Path) -> PathBuf {
     memory_root.join("preferences.md")
 }
 
+/// 向量长期记忆快照路径：memory/vector_snapshot.json（持久化 (text, embedding) 避免重启丢失）
+pub fn vector_snapshot_path(memory_root: &Path) -> PathBuf {
+    memory_root.join("vector_snapshot.json")
+}
+
+/// 心跳日志路径：memory/heartbeat_log.md（后台心跳结果沉淀，供下次心跳或用户查看）
+pub fn heartbeat_log_path(memory_root: &Path) -> PathBuf {
+    memory_root.join("heartbeat_log.md")
+}
+
+/// 追加一条心跳结果到 memory/heartbeat_log.md
+pub fn append_heartbeat_log(memory_root: &Path, reply: &str) {
+    let path = heartbeat_log_path(memory_root);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let line = format!(
+        "\n## {}\n\n{}\n\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+        reply.trim()
+    );
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+}
+
 /// 若存在则读取 lessons 内容，用于拼入 system prompt
 pub fn load_lessons(path: &Path) -> String {
     match std::fs::read_to_string(path) {

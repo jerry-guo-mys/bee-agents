@@ -22,6 +22,27 @@ pub struct AppConfig {
     pub evolution: EvolutionSection,
     #[serde(default)]
     pub heartbeat: HeartbeatSection,
+    #[serde(default)]
+    pub web: WebSection,
+}
+
+/// [web] 段：bee-web 服务端口等（可被环境变量 BEE__WEB__PORT 覆盖）
+#[derive(Debug, Clone, Deserialize)]
+pub struct WebSection {
+    #[serde(default = "default_web_port")]
+    pub port: u16,
+}
+
+fn default_web_port() -> u16 {
+    8080
+}
+
+impl Default for WebSection {
+    fn default() -> Self {
+        Self {
+            port: default_web_port(),
+        }
+    }
 }
 
 /// [app] 段：应用名、工作目录、对话轮数上限
@@ -75,9 +96,13 @@ pub struct MemorySection {
     /// 是否启用向量长期记忆（嵌入 API 写入/检索，与 FileLongTerm 二选一）
     #[serde(default)]
     pub vector_enabled: bool,
-    /// 嵌入模型名（如 text-embedding-3-small），与 LLM 共用 base_url / OPENAI_API_KEY
+    /// 嵌入模型名（如 text-embedding-3-small）
     #[serde(default = "default_embedding_model")]
     pub embedding_model: String,
+    /// 嵌入 API base_url（未设置时使用 [llm].base_url，便于嵌入服务独立部署）
+    pub embedding_base_url: Option<String>,
+    /// 嵌入 API Key（未设置时使用 OPENAI_API_KEY）
+    pub embedding_api_key: Option<String>,
     /// 向量库 URL（如 http://localhost:6333），预留供 qdrant 扩展
     pub qdrant_url: Option<String>,
 }
@@ -165,6 +190,10 @@ pub struct PluginEntry {
     /// 参数模板列表；{{workspace}} 替换为沙箱根路径，{{key}} 从 LLM 传入的 args 中取 key
     #[serde(default)]
     pub args: Vec<String>,
+    /// 本插件超时秒数（未设置时使用全局 tool_timeout_secs）
+    pub timeout_secs: Option<u64>,
+    /// 工作目录（未设置时使用 workspace 根）
+    pub working_dir: Option<PathBuf>,
 }
 
 fn default_tool_timeout_secs() -> u64 {
@@ -267,6 +296,7 @@ impl Default for AppConfig {
             memory: MemorySection::default(),
             evolution: EvolutionSection::default(),
             heartbeat: HeartbeatSection::default(),
+            web: WebSection::default(),
         }
     }
 }
@@ -309,4 +339,16 @@ pub fn load_config(config_path: Option<PathBuf>) -> Result<AppConfig, config::Co
 /// 重新从磁盘与环境变量加载配置（用于「配置热更新」：调用方可在运行时调用此函数并决定是否用新配置重建 LLM 等组件）
 pub fn reload_config() -> Result<AppConfig, config::ConfigError> {
     load_config(None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_app_config() {
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.web.port, 8080);
+        assert!(!cfg.memory.vector_enabled);
+    }
 }

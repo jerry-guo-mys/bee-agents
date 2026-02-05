@@ -18,20 +18,40 @@ pub struct PluginTool {
     description: String,
     program: String,
     args_template: Vec<String>,
+    /// 模板中 {{workspace}} 替换为此沙箱根
     workspace: std::path::PathBuf,
+    /// 执行时 current_dir（entry.working_dir 或 workspace）
+    working_dir: std::path::PathBuf,
     timeout_secs: u64,
 }
 
 impl PluginTool {
-    /// 从配置条目与工作区路径、超时创建
-    pub fn new(entry: &PluginEntry, workspace: &Path, timeout_secs: u64) -> Self {
+    /// 从配置条目与工作区路径、全局超时创建（entry.timeout_secs / working_dir 覆盖）；working_dir 必须落在 workspace 内
+    pub fn new(entry: &PluginEntry, workspace: &Path, global_timeout_secs: u64) -> Self {
+        let workspace_buf = workspace.to_path_buf();
+        let working_dir = entry
+            .working_dir
+            .as_ref()
+            .and_then(|p| {
+                if p.components().any(|c| c == std::path::Component::ParentDir) {
+                    tracing::warn!(
+                        "plugin {} working_dir {:?} contains '..', using workspace",
+                        entry.name,
+                        p
+                    );
+                    return None;
+                }
+                Some(workspace.join(p))
+            })
+            .unwrap_or_else(|| workspace_buf.clone());
         Self {
             name: entry.name.clone(),
             description: entry.description.clone(),
             program: entry.program.clone(),
             args_template: entry.args.clone(),
-            workspace: workspace.to_path_buf(),
-            timeout_secs,
+            workspace: workspace_buf,
+            working_dir,
+            timeout_secs: entry.timeout_secs.unwrap_or(global_timeout_secs),
         }
     }
 
@@ -75,7 +95,7 @@ impl Tool for PluginTool {
         tracing::info!(tool = %self.name, program = %program, "plugin tool invoke");
         let child = Command::new(&program)
             .args(&args_vec)
-            .current_dir(&self.workspace)
+            .current_dir(&self.working_dir)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
@@ -88,11 +108,26 @@ impl Tool for PluginTool {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         if !output.status.success() {
-            return Err(format!(
-                "exit {:?}: stderr {}",
-                output.status.code(),
-                stderr.trim()
-            ));
+            let code = output
+                .status
+                .code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "signal".to_string());
+            let stderr_trim = stderr.trim();
+            let err = if stderr_trim.is_empty() {
+                format!("plugin exit code {} (no stderr)", code)
+            } else {
+                format!(
+                    "plugin exit code {}; stderr: {}",
+                    code,
+                    if stderr_trim.len() > 500 {
+                        format!("{}...", &stderr_trim[..500])
+                    } else {
+                        stderr_trim.to_string()
+                    }
+                )
+            };
+            return Err(err);
         }
         Ok(stdout.trim().to_string())
     }

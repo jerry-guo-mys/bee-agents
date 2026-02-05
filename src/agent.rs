@@ -13,8 +13,8 @@ use crate::core::{AgentError, RecoveryEngine};
 use crate::llm::create_embedder_from_config;
 use crate::memory::{
     ConsolidateResult, FileLongTerm, InMemoryLongTerm, InMemoryVectorLongTerm, list_daily_logs_for_llm,
-    lessons_path, long_term_path, memory_root, preferences_path, procedural_path, LongTermMemory,
-    Message,
+    lessons_path, long_term_path, memory_root, preferences_path, procedural_path,
+    vector_snapshot_path, LongTermMemory, Message,
 };
 use crate::core::TaskScheduler;
 use crate::react::{react_loop, ContextManager, Critic, Planner, ReactEvent};
@@ -99,10 +99,41 @@ pub fn create_agent_components(
     }
 }
 
+/// 创建可共享的向量长期记忆（带快照路径，启动时加载、可定期 save_snapshot）；未启用或无法创建 embedder 时返回 None
+pub fn create_shared_vector_long_term(
+    workspace: &Path,
+    cfg: &AppConfig,
+) -> Option<Arc<InMemoryVectorLongTerm>> {
+    if !cfg.memory.vector_enabled {
+        return None;
+    }
+    let api_key = cfg
+        .memory
+        .embedding_api_key
+        .clone()
+        .or_else(|| std::env::var("OPENAI_API_KEY").ok());
+    let embedder = create_embedder_from_config(
+        cfg.memory.embedding_base_url.as_deref().or(cfg.llm.base_url.as_deref()),
+        &cfg.memory.embedding_model,
+        api_key.as_deref(),
+    )?;
+    let root = memory_root(workspace);
+    let snapshot_path = vector_snapshot_path(&root);
+    Some(Arc::new(InMemoryVectorLongTerm::new_with_persistence(
+        embedder,
+        2000,
+        Some(snapshot_path),
+    )))
+}
+
 /// 创建带长期记忆的 ContextManager。
 /// 若 workspace 提供，则使用 Markdown 文件长期记忆（memory/long-term.md + BM25 检索），
-/// 或当 [memory].vector_enabled 时使用嵌入 API + 内存向量检索；否则使用 InMemoryLongTerm。
-pub fn create_context_with_long_term(max_turns: usize, workspace: Option<&Path>) -> ContextManager {
+/// 或当 [memory].vector_enabled 时使用嵌入 API + 内存向量检索（可传入 shared_vector 以共享并持久化）；否则使用 InMemoryLongTerm。
+pub fn create_context_with_long_term(
+    max_turns: usize,
+    workspace: Option<&Path>,
+    shared_vector_long_term: Option<Arc<InMemoryVectorLongTerm>>,
+) -> ContextManager {
     let cfg = load_config(None).unwrap_or_else(|_| AppConfig::default());
     let (long_term, lessons_path_opt, procedural_path_opt, preferences_path_opt): (
         Arc<dyn crate::memory::LongTermMemory>,
@@ -116,16 +147,31 @@ pub fn create_context_with_long_term(max_turns: usize, workspace: Option<&Path>)
             let procedural = Some(procedural_path(&root));
             let preferences = Some(preferences_path(&root));
             let lt: Arc<dyn crate::memory::LongTermMemory> = if cfg.memory.vector_enabled {
-                if let Some(embedder) = create_embedder_from_config(
-                    cfg.llm.base_url.as_deref(),
-                    &cfg.memory.embedding_model,
-                    std::env::var("OPENAI_API_KEY").ok().as_deref(),
-                ) {
-                    tracing::info!("long-term memory: vector (embedding model {})", cfg.memory.embedding_model);
-                    Arc::new(InMemoryVectorLongTerm::new(embedder, 2000))
+                if let Some(shared) = shared_vector_long_term {
+                    tracing::info!("long-term memory: vector (shared with snapshot)");
+                    shared
                 } else {
-                    let path = long_term_path(&root);
-                    Arc::new(FileLongTerm::new(path, 2000))
+                    let api_key = cfg
+                        .memory
+                        .embedding_api_key
+                        .clone()
+                        .or_else(|| std::env::var("OPENAI_API_KEY").ok());
+                    if let Some(embedder) = create_embedder_from_config(
+                        cfg.memory.embedding_base_url.as_deref().or(cfg.llm.base_url.as_deref()),
+                        &cfg.memory.embedding_model,
+                        api_key.as_deref(),
+                    ) {
+                        tracing::info!("long-term memory: vector (embedding model {})", cfg.memory.embedding_model);
+                        let snapshot = vector_snapshot_path(&root);
+                        Arc::new(InMemoryVectorLongTerm::new_with_persistence(
+                            embedder,
+                            2000,
+                            Some(snapshot),
+                        ))
+                    } else {
+                        let path = long_term_path(&root);
+                        Arc::new(FileLongTerm::new(path, 2000))
+                    }
                 }
             } else {
                 let path = long_term_path(&root);

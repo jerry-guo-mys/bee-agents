@@ -13,7 +13,7 @@ cargo build --bin bee-web --features web
 ./target/debug/bee-web
 ```
 
-默认监听 **http://0.0.0.0:8080**，本机访问 http://127.0.0.1:8080 。
+默认监听 **http://0.0.0.0:8080**；端口可通过 `config/default.toml` 的 `[web].port` 或环境变量 `BEE_WEB_PORT` 修改。
 
 ## 环境变量
 
@@ -31,7 +31,7 @@ cargo build --bin bee-web --features web
 - **工具**：支持 cat、ls、shell、search、echo 等，与 TUI/WhatsApp 一致。
 - **会话**：同一浏览器会话内保持上下文（短期 + 中期 + 长期记忆）；会话按 `session_id` 持久化到 `workspace/sessions/*.json`，重启后可从磁盘恢复。
 - **健康检查**：GET `/api/health` 返回 `OK`。
-- **心跳**（可选）：若在 `config/default.toml` 中设置 `[heartbeat] enabled = true`，后台会按 `interval_secs` 定期执行一次自主「检查待办 / 反思」任务，结果仅写日志，不推送到前端。
+- **心跳**（可选）：若在 `config/default.toml` 中设置 `[heartbeat] enabled = true`，后台会按 `interval_secs` 定期执行自主「检查待办 / 反思」任务，结果写入 `workspace/memory/heartbeat_log.md` 并打日志。
 
 ## API
 
@@ -43,11 +43,23 @@ cargo build --bin bee-web --features web
   响应：`{ "reply": "Bee 回复", "session_id": "会话 ID" }`  
   首次请求可不带 `session_id`，响应中会返回新会话 ID，后续请求带上以保持上下文。
 
+- **POST /api/chat/stream**  
+  流式聊天（**前端默认使用**）：请求体同 `/api/chat`，响应为 NDJSON 流（首行 `session_id`，后续为 `thinking` / `tool_call` / `message_chunk` / `message_done` 等），适合长回复与实时展示。
+
 - **GET /api/health**  
   返回 `OK`（纯文本）。
 
 - **POST /api/config/reload**  
   重新加载配置并重建 Agent 组件（LLM/Planner 等），实现运行时多 LLM 后端切换；修改 `config/default.toml` 或环境变量后调用此接口即可生效，无需重启进程。
+
+- **POST /api/compact**  
+  请求体：`{ "session_id": "..." }`。对指定会话执行上下文压缩（摘要写入长期记忆、当前消息替换为摘要），避免 token 溢出。
+
+- **POST /api/memory/consolidate**  
+  将近期短期日志归纳写入长期记忆（非 LLM 摘要）。
+
+- **POST /api/memory/consolidate-llm**  
+  查询参数：`?since_days=7`。对近期每日日志调用 LLM 做摘要后写入长期记忆。
 
 ## 项目内文件
 
@@ -56,6 +68,6 @@ cargo build --bin bee-web --features web
 
 ## 与 TUI 的区别
 
-- 无流式输出：Web 端一次请求得到完整回复（另有 `/api/chat/stream` 可做流式，按需使用）。
+- **流式**：前端默认使用 `/api/chat/stream`，长回复可边生成边展示；`/api/chat` 仍可用于一次取完整回复。
 - 会话以 `session_id` 区分，存在服务端内存中，并会持久化到 `workspace/sessions/<session_id>.json`，重启后自动从磁盘加载已有会话。
-- 端口固定为 8080（如需修改可改 `src/bin/web.rs` 中的 `addr`）。
+- 端口由 `[web].port` 或 `BEE_WEB_PORT` 配置，默认 8080。

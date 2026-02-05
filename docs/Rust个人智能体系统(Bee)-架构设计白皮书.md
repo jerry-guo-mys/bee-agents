@@ -389,11 +389,11 @@ bee/
 | **Phase 5 多 LLM 后端切换** | 运行时切换后端 | ✅ 已实现 | Web 层 `components` 置于 `RwLock`，`POST /api/config/reload` 调用 `reload_config()` 并重建 `AgentComponents`（新 LLM/Planner/Critic 等）后替换，后续请求即使用新后端 |
 | **心跳机制** | 后台自主循环（思考现状 → 检查待办 → 反思） | ✅ 已实现 | `config/default.toml` 中 `[heartbeat] enabled / interval_secs`；bee-web 启动时若启用则 spawn 定时任务，按间隔调用 `process_message(HEARTBEAT_PROMPT)`，结果打日志 |
 | **技能插件** | Agent 动态注册新工具 | ✅ 已实现 | `config/default.toml` 中 `[[tools.plugins]]`：name、description、program、args（模板含 `{{workspace}}`、`{{key}}`）；`PluginTool` 无 shell 直接 exec，TUI/Web/WhatsApp 均注册 |
-| **向量检索** | 长期记忆 + 向量库（如 qdrant） | 扩展点已就绪 | `config [memory].vector_enabled`、`qdrant_url` 已预留；`LongTermMemory` 可接入 qdrant-client + 嵌入 API 实现，见 `memory/long_term.rs` |
+| **向量检索** | 长期记忆 + 向量库（如 qdrant） | ✅ 已实现 | `[memory].vector_enabled`、`embedding_model`；`InMemoryVectorLongTerm`（嵌入 API + 余弦相似度）；qdrant 为可选扩展 |
 
-**上述项均已实现或扩展点已就绪**。InternalState/MemoryManager/ToolBox 命名在 `core` 中与白皮书一致；多 LLM 运行时切换通过 `POST /api/config/reload` 生效；工具调用 JSON Schema 由 `schemars` 生成并注入 system prompt（`tools::schema::tool_call_schema_json`）。
+**上述项均已实现**。InternalState/MemoryManager/ToolBox 命名在 `core` 中与白皮书一致；多 LLM 运行时切换通过 `POST /api/config/reload` 生效；工具调用 JSON Schema 由 `schemars` 生成并注入 system prompt（`tools::schema::tool_call_schema_json`）。
 
-**预留**（可选实现）：向量检索的完整实现（嵌入 API + qdrant-client 写入/检索）。参见 `docs/EVOLUTION.md`。
+**预留**（可选）：接入 qdrant 等外部向量库（当前为内存向量存储）。参见 `docs/EVOLUTION.md`。
 
 ---
 
@@ -437,7 +437,7 @@ bee/
 
 - **目标**：向 Agent Runtime 演进
 - **任务**：
-  - 三层记忆 + 长期记忆（**已实现**：`FileLongTerm` + BM25；向量检索预留扩展）
+  - 三层记忆 + 长期记忆（**已实现**：`FileLongTerm` + BM25；向量检索：嵌入 API + 内存向量，qdrant 可选扩展）
   - Headless 模式（**已实现**：`bee-web`、HTTP API、流式 NDJSON）
   - 自我进化（**已实现**：Lessons、程序记忆、Context Compaction；参见 `docs/EVOLUTION.md`）
   - Task Scheduler + 用户 Cancel（**已实现**：工具执行前 `acquire_tool`，CancellationToken 取消）
@@ -470,3 +470,27 @@ Bee 的自我进化设计通过**记忆、反馈与规则积累**让后续行为
 5. **可演进性**：目录与模块划分可支撑至 Phase 5（本地 Agent OS、任务队列、定时触发、心跳与技能插件）
 
 > 这不是「写个 Agent 玩玩」的设计，而是 **一个 Rust 原生 Agent Runtime 的蓝图**。当前实现状态见各 Phase 任务列表及 `docs/` 下 EVOLUTION、MEMORY、WEBUI 等文档。
+
+---
+
+## 9. 未实现项与可改进项
+
+### 9.1 未实现（可选扩展）
+
+| 项 | 说明 |
+|----|------|
+| **qdrant 等外部向量库** | 当前长期记忆向量为内存存储，进程重启后丢失；可接入 qdrant-client，使用 `[memory].qdrant_url` 持久化向量。 |
+
+白皮书中列出的**核心能力均已实现**，以上为可选扩展。
+
+### 9.2 可改进方向
+
+| 方向 | 说明 |
+|------|------|
+| **向量持久化** | `InMemoryVectorLongTerm` 不落盘，可增加「启动时从文件/向量库加载」或「定期快照」以跨进程保留。 |
+| **Web 端口与流式** | 端口 8080 写死在代码中，可改为 `config` 或环境变量；前端可默认使用 `/api/chat/stream` 以提升长回复体验。 |
+| **技能插件** | 可为插件单独配置超时、工作目录；执行失败时返回更结构化的错误（退出码、stderr 摘要）。 |
+| **心跳结果沉淀** | 心跳 tick 的结果目前仅打日志，可写入 `memory/` 或简单待办结构，供下次心跳或用户查看。 |
+| **嵌入与 LLM 解耦** | 嵌入 API 与 LLM 共用 base_url/API Key；若嵌入服务独立部署，可增加 `[memory].embedding_base_url`。 |
+| **测试与文档** | 增加单元测试/集成测试；MEMORY.md 补充向量检索用法；WEBUI 文档可列出 `/api/compact`、`/api/memory/consolidate-llm` 等。 |
+| **安全与审计** | 插件执行可进一步限制（如可执行文件白名单、禁止继承部分环境变量）；审计日志可输出结构化（如 JSON）便于检索。 |

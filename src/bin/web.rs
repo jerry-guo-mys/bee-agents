@@ -26,12 +26,13 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use bee::agent::{
     consolidate_memory_with_llm, create_agent_components, create_context_with_long_term,
-    process_message, process_message_stream, AgentComponents,
+    create_shared_vector_long_term, process_message, process_message_stream, AgentComponents,
 };
+use bee::memory::InMemoryVectorLongTerm;
 use bee::config::{load_config, AppConfig};
 use bee::memory::{
-    append_daily_log, consolidate_memory, lessons_path, preferences_path, procedural_path,
-    ConversationMemory, memory_root,
+    append_daily_log, append_heartbeat_log, consolidate_memory, lessons_path, preferences_path,
+    procedural_path, ConversationMemory, memory_root,
 };
 use bee::react::{compact_context, ContextManager, ReactEvent};
 
@@ -57,6 +58,8 @@ struct AppState {
     workspace: PathBuf,
     /// 启动时加载的 system prompt，重载组件时复用
     system_prompt: String,
+    /// 向量长期记忆共享实例（启用时带快照路径，定期保存避免重启丢失）
+    shared_vector_long_term: Option<Arc<InMemoryVectorLongTerm>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,6 +154,10 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&sessions_dir).ok();
     std::fs::create_dir_all(&memory_root).ok();
 
+    let app_config = load_config(None).unwrap_or_else(|_| AppConfig::default());
+    let shared_vector_long_term =
+        create_shared_vector_long_term(&workspace, &app_config);
+
     let components = Arc::new(create_agent_components(&workspace, &system_prompt));
     let state = Arc::new(AppState {
         components: Arc::new(RwLock::new(components)),
@@ -159,6 +166,7 @@ async fn main() -> anyhow::Result<()> {
         memory_root: memory_root.clone(),
         workspace: workspace.clone(),
         system_prompt: system_prompt.clone(),
+        shared_vector_long_term,
     });
 
     let app = Router::new()
@@ -194,8 +202,22 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    // 向量快照定期保存（每 5 分钟）
+    if state.shared_vector_long_term.is_some() {
+        let vec_ref = state.shared_vector_long_term.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+            interval.tick().await;
+            loop {
+                interval.tick().await;
+                if let Some(v) = vec_ref.as_ref() {
+                    v.save_snapshot();
+                }
+            }
+        });
+    }
+
     // 心跳：若配置启用了 heartbeat，后台定期让 Agent 自主检查待办与反思
-    let app_config = load_config(None).unwrap_or_else(|_| AppConfig::default());
     if app_config.heartbeat.enabled {
         let heartbeat_state = Arc::clone(&state);
         let interval_secs = app_config.heartbeat.interval_secs;
@@ -204,19 +226,36 @@ async fn main() -> anyhow::Result<()> {
             interval.tick().await; // 跳过启动后立即执行
             loop {
                 interval.tick().await;
-                let mut context =
-                    create_context_with_long_term(DEFAULT_MAX_TURNS, Some(&heartbeat_state.workspace));
+                let shared_vec = heartbeat_state.shared_vector_long_term.clone();
+                let mut context = create_context_with_long_term(
+                    DEFAULT_MAX_TURNS,
+                    Some(&heartbeat_state.workspace),
+                    shared_vec,
+                );
                 let guard = heartbeat_state.components.read().await;
                 match process_message(&**guard, &mut context, HEARTBEAT_PROMPT).await {
-                    Ok(reply) => tracing::info!("heartbeat ok: {}", reply.trim()),
-                    Err(e) => tracing::warn!("heartbeat error: {:?}", e),
+                    Ok(reply) => {
+                        tracing::info!("heartbeat ok: {}", reply.trim());
+                        append_heartbeat_log(&heartbeat_state.memory_root, &reply);
+                    }
+                    Err(e) => {
+                        tracing::warn!("heartbeat error: {:?}", e);
+                        append_heartbeat_log(
+                            &heartbeat_state.memory_root,
+                            &format!("[heartbeat error] {:?}", e),
+                        );
+                    }
                 }
             }
         });
         tracing::info!("heartbeat enabled, interval {}s", interval_secs);
     }
 
-    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 8080));
+    let port = std::env::var("BEE_WEB_PORT")
+        .ok()
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(app_config.web.port);
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("Bee Web UI: http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -360,8 +399,13 @@ async fn api_compact(
         .await
         .remove(&session_id)
         .unwrap_or_else(|| {
-            load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root)
-                .unwrap_or_else(|| create_context_with_long_term(DEFAULT_MAX_TURNS, Some(&state.workspace)))
+            load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root).unwrap_or_else(|| {
+                create_context_with_long_term(
+                    DEFAULT_MAX_TURNS,
+                    Some(&state.workspace),
+                    state.shared_vector_long_term.clone(),
+                )
+            })
         });
     let components = state.components.read().await;
     match compact_context(&components.planner, &mut context).await {
@@ -546,8 +590,13 @@ async fn api_chat(
     let mut context = {
         let mut sessions = state.sessions.write().await;
         sessions.remove(&session_id).unwrap_or_else(|| {
-            load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root)
-                .unwrap_or_else(|| create_context_with_long_term(DEFAULT_MAX_TURNS, Some(&state.workspace)))
+            load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root).unwrap_or_else(|| {
+                create_context_with_long_term(
+                    DEFAULT_MAX_TURNS,
+                    Some(&state.workspace),
+                    state.shared_vector_long_term.clone(),
+                )
+            })
         })
     };
 
@@ -586,8 +635,13 @@ async fn api_chat_stream(
     let context = {
         let mut sessions = state.sessions.write().await;
         sessions.remove(&session_id).unwrap_or_else(|| {
-            load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root)
-                .unwrap_or_else(|| create_context_with_long_term(DEFAULT_MAX_TURNS, Some(&state.workspace)))
+            load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root).unwrap_or_else(|| {
+                create_context_with_long_term(
+                    DEFAULT_MAX_TURNS,
+                    Some(&state.workspace),
+                    state.shared_vector_long_term.clone(),
+                )
+            })
         })
     };
 

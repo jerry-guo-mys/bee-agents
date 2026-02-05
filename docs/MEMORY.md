@@ -8,11 +8,12 @@ Bee 使用**简单透明的纯文本（Markdown）文件**存储短期与长期�
 
 ```
 memory/
-├── logs/              # 短期记忆：按日期组织的对话日志
+├── logs/                  # 短期记忆：按日期组织的对话日志
 │   ├── 2025-02-01.md
-│   ├── 2025-02-02.md
 │   └── ...
-└── long-term.md       # 长期记忆：持久知识、用户偏好等跨会话信息
+├── long-term.md           # 长期记忆（BM25 模式）：持久知识、用户偏好
+├── vector_snapshot.json   # 向量长期记忆快照（启用 [memory].vector_enabled 时）
+└── heartbeat_log.md       # 心跳结果沉淀（bee-web 启用心跳时）
 ```
 
 ## 短期记忆（日志）
@@ -42,7 +43,7 @@ memory/
 
 ## 长期记忆（持久文件）
 
-- **路径**：`memory/long-term.md`
+- **路径**：`memory/long-term.md`（或启用向量时为内存向量 + `memory/vector_snapshot.json` 快照）
 - **用途**：存储跨会话的持久知识、用户偏好等，供 ReAct 检索后注入 Prompt。
 - **格式**：按块追加，每块带时间戳标题。
 
@@ -61,17 +62,21 @@ memory/
 - **写入时机**：ReAct 循环在最终回复后调用 `push_to_long_term` 时。
 - **检索**：当前实现为 **BM25 风格关键词检索**（按块切分、词重叠 + 文档长度归一化），启动时从文件加载到内存索引。
 
+## 向量长期记忆（可选）
+
+当 `config [memory].vector_enabled = true` 时，长期记忆使用**嵌入 API + 内存向量**（`InMemoryVectorLongTerm`）：
+
+- **写入**：每次 `push_to_long_term` 时调用 OpenAI 兼容的 `/embeddings` 将文本转为向量并存入内存。
+- **检索**：对用户输入做嵌入，按**余弦相似度**返回 top-k 文本片段，拼入 Prompt。
+- **持久化**：向量会定期（每 5 分钟）保存到 `memory/vector_snapshot.json`，启动时自动加载，避免重启丢失。bee-web 使用共享向量实例并负责快照保存。
+- **配置**：`[memory].embedding_model`（默认 `text-embedding-3-small`）；可选 `embedding_base_url`、`embedding_api_key` 以与 LLM 解耦。
+
+未启用或未配置 API Key 时回退为 `FileLongTerm`（BM25）。
+
 ## 检索与扩展（向量 + BM25）
 
-长期记忆的检索策略设计为可扩展：
-
-1. **当前**：纯 BM25 风格关键词检索（`FileLongTerm`），无需外部服务。
-2. **后续可扩展**：
-   - **记忆碎片化与向量化**：对 `long-term.md` 的块（或更细的 chunk）做 Embedding，写入向量库（如 ChromaDB、LanceDB、Qdrant）。
-   - **混合检索**：向量相似度 + BM25 关键词多路召回，再按 Recency / Relevance / Importance 加权排序。
-   - **记忆注入**：检索结果作为「Relevant Past Knowledge」注入 system prompt，与现有 `long_term_section` 一致。
-
-实现上可在 `memory/markdown_store.rs` 中增加「向量索引」层，或新增 `HybridLongTerm`，在不改变 `LongTermMemory` trait 的前提下接入向量库与 BM25。
+1. **当前**：BM25（`FileLongTerm`）或向量（`InMemoryVectorLongTerm`，见上），二选一。
+2. **可选扩展**：接入 qdrant 等外部向量库（`[memory].qdrant_url` 已预留）；混合检索（向量 + BM25）等。
 
 ## 配置与位置
 
