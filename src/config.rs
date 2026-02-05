@@ -69,14 +69,21 @@ fn default_heartbeat_interval_secs() -> u64 {
     300
 }
 
-/// [memory] 段：长期记忆后端（白皮书：向量检索与 qdrant 结合为预留扩展）
+/// [memory] 段：长期记忆后端（向量检索：嵌入 API + 内存向量存储）
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct MemorySection {
-    /// 是否启用向量长期记忆（需 feature "vector"；未实现时忽略）
+    /// 是否启用向量长期记忆（嵌入 API 写入/检索，与 FileLongTerm 二选一）
     #[serde(default)]
     pub vector_enabled: bool,
-    /// 向量库 URL（如 http://localhost:6333），预留
+    /// 嵌入模型名（如 text-embedding-3-small），与 LLM 共用 base_url / OPENAI_API_KEY
+    #[serde(default = "default_embedding_model")]
+    pub embedding_model: String,
+    /// 向量库 URL（如 http://localhost:6333），预留供 qdrant 扩展
     pub qdrant_url: Option<String>,
+}
+
+fn default_embedding_model() -> String {
+    "text-embedding-3-small".to_string()
 }
 
 /// [llm] 段：后端选择与超时

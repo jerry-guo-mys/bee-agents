@@ -1,7 +1,7 @@
 //! 长期记忆：向量化知识、用户偏好，跨会话检索
 //!
-//! 支持 add(text) 与 search(query, k)。当前实现：FileLongTerm（BM25 风格）、InMemoryLongTerm（关键词重叠）。
-//! 向量检索扩展：config [memory].vector_enabled、qdrant_url 已预留；可在此接入 qdrant-client + 嵌入 API 实现 VectorLongTerm。
+//! 支持 add(text) 与 search(query, k)。实现：FileLongTerm（BM25）、InMemoryLongTerm（词重叠）、
+//! InMemoryVectorLongTerm（嵌入 API + 余弦相似度，config [memory].vector_enabled 启用）。
 
 use std::sync::Arc;
 
@@ -103,5 +103,75 @@ impl LongTermMemory for InMemoryLongTerm {
 impl Default for InMemoryLongTerm {
     fn default() -> Self {
         Self::new(1000)
+    }
+}
+
+/// 向量长期记忆：调用嵌入 API 将文本转为向量，检索时按余弦相似度返回 top-k
+pub struct InMemoryVectorLongTerm {
+    store: Arc<std::sync::RwLock<Vec<(String, Vec<f32>)>>>,
+    embedder: Arc<dyn crate::llm::EmbeddingProvider>,
+    max_entries: usize,
+}
+
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    if a.is_empty() || b.is_empty() || a.len() != b.len() {
+        return 0.0;
+    }
+    let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm_a == 0.0 || norm_b == 0.0 {
+        return 0.0;
+    }
+    dot / (norm_a * norm_b)
+}
+
+impl InMemoryVectorLongTerm {
+    pub fn new(embedder: Arc<dyn crate::llm::EmbeddingProvider>, max_entries: usize) -> Self {
+        Self {
+            store: Arc::new(std::sync::RwLock::new(Vec::new())),
+            embedder,
+            max_entries,
+        }
+    }
+}
+
+impl LongTermMemory for InMemoryVectorLongTerm {
+    fn add(&self, text: &str) {
+        let text = text.trim();
+        if text.is_empty() {
+            return;
+        }
+        match self.embedder.embed_sync(text) {
+            Ok(vec) if !vec.is_empty() => {
+                let mut store = self.store.write().unwrap();
+                store.push((text.to_string(), vec));
+                let n = store.len();
+                if n > self.max_entries {
+                    store.drain(0..n - self.max_entries);
+                }
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!("vector long-term embed failed: {}", e),
+        }
+    }
+
+    fn search(&self, query: &str, k: usize) -> Vec<String> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Vec::new();
+        }
+        let query_vec = match self.embedder.embed_sync(query) {
+            Ok(v) if !v.is_empty() => v,
+            _ => return Vec::new(),
+        };
+        let store = self.store.read().unwrap();
+        let mut scored: Vec<(f32, String)> = store
+            .iter()
+            .map(|(text, vec)| (cosine_similarity(&query_vec, vec), text.clone()))
+            .filter(|(s, _)| *s > 0.0)
+            .collect();
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        scored.into_iter().take(k).map(|(_, t)| t).collect()
     }
 }

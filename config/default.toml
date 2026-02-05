@@ -49,10 +49,12 @@ allowed_domains = [
 # program = "python"
 # args = ["{{workspace}}/scripts/run.py", "{{query}}"]
 
-# 长期记忆后端（向量检索为预留扩展，参见白皮书）
+# 长期记忆后端（向量检索：嵌入 API + 内存向量存储，与 FileLongTerm 二选一）
 [memory]
-# 启用向量长期记忆（需实现 feature "vector" 或接入 qdrant；当前未实现时忽略）
+# 启用向量长期记忆（调用 OpenAI 兼容 /embeddings，与 LLM 共用 base_url、OPENAI_API_KEY）
 vector_enabled = false
+# 嵌入模型名（如 text-embedding-3-small）
+embedding_model = "text-embedding-3-small"
 # qdrant_url = "http://localhost:6333"
 
 # 自我进化（参见 docs/EVOLUTION.md）

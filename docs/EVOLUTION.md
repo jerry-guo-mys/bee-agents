@@ -168,7 +168,9 @@
 
 ---
 
-## 16. 向量检索扩展点（预留）
+## 16. 已实现：向量检索（长期记忆 + 嵌入 API）
 
-- **配置**：`config [memory].vector_enabled`、`qdrant_url` 已预留；当前未实现真实向量写入/检索时，该配置被忽略，仍使用 FileLongTerm（BM25）或 InMemoryLongTerm。
-- **扩展**：在 `memory/long_term.rs` 中可实现 `VectorLongTerm`（实现 `LongTermMemory`），接入 qdrant-client 与嵌入 API（如 OpenAI embeddings），并在 `create_context_with_long_term` 中当 `cfg.memory.vector_enabled` 时选用该实现。
+- **机制**：当 `config [memory].vector_enabled = true` 时，长期记忆使用 `InMemoryVectorLongTerm`：写入时调用 OpenAI 兼容的 `/embeddings` 将文本转为向量并存入内存，检索时对 query 做嵌入并按余弦相似度返回 top-k 文本片段。与 LLM 共用 `base_url`、`OPENAI_API_KEY`；嵌入模型由 `[memory].embedding_model` 指定（默认 `text-embedding-3-small`）。
+- **配置**：`config/default.toml` 中 `[memory]`：`vector_enabled`、`embedding_model`、`qdrant_url`（预留）。
+- **代码**：`src/llm/embedding.rs`（`EmbeddingProvider`、`OpenAiEmbedder`、`create_embedder_from_config`）；`src/memory/long_term.rs`（`InMemoryVectorLongTerm`、余弦相似度）；`create_context_with_long_term` 在 `vector_enabled` 且可创建 embedder 时选用向量后端，否则回退 FileLongTerm。
+- **预留**：`qdrant_url` 与 qdrant-client 接入为可选扩展，当前为纯内存向量存储。

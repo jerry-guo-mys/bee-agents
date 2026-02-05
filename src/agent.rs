@@ -10,9 +10,11 @@ use std::sync::Arc;
 
 use crate::config::{load_config, AppConfig};
 use crate::core::{AgentError, RecoveryEngine};
+use crate::llm::create_embedder_from_config;
 use crate::memory::{
-    ConsolidateResult, FileLongTerm, InMemoryLongTerm, list_daily_logs_for_llm, lessons_path,
-    long_term_path, memory_root, preferences_path, procedural_path, LongTermMemory, Message,
+    ConsolidateResult, FileLongTerm, InMemoryLongTerm, InMemoryVectorLongTerm, list_daily_logs_for_llm,
+    lessons_path, long_term_path, memory_root, preferences_path, procedural_path, LongTermMemory,
+    Message,
 };
 use crate::core::TaskScheduler;
 use crate::react::{react_loop, ContextManager, Critic, Planner, ReactEvent};
@@ -98,8 +100,8 @@ pub fn create_agent_components(
 }
 
 /// 创建带长期记忆的 ContextManager。
-/// 若 workspace 提供，则使用 Markdown 文件长期记忆（memory/long-term.md + BM25 检索）；
-/// 否则使用内存实现（与 TUI 一致）。会读取 config [evolution].auto_lesson_on_hallucination。
+/// 若 workspace 提供，则使用 Markdown 文件长期记忆（memory/long-term.md + BM25 检索），
+/// 或当 [memory].vector_enabled 时使用嵌入 API + 内存向量检索；否则使用 InMemoryLongTerm。
 pub fn create_context_with_long_term(max_turns: usize, workspace: Option<&Path>) -> ContextManager {
     let cfg = load_config(None).unwrap_or_else(|_| AppConfig::default());
     let (long_term, lessons_path_opt, procedural_path_opt, preferences_path_opt): (
@@ -110,11 +112,25 @@ pub fn create_context_with_long_term(max_turns: usize, workspace: Option<&Path>)
     ) = match workspace {
         Some(w) => {
             let root = memory_root(w);
-            let path = long_term_path(&root);
-            let lt = Arc::new(FileLongTerm::new(path, 2000));
             let lessons = Some(lessons_path(&root));
             let procedural = Some(procedural_path(&root));
             let preferences = Some(preferences_path(&root));
+            let lt: Arc<dyn crate::memory::LongTermMemory> = if cfg.memory.vector_enabled {
+                if let Some(embedder) = create_embedder_from_config(
+                    cfg.llm.base_url.as_deref(),
+                    &cfg.memory.embedding_model,
+                    std::env::var("OPENAI_API_KEY").ok().as_deref(),
+                ) {
+                    tracing::info!("long-term memory: vector (embedding model {})", cfg.memory.embedding_model);
+                    Arc::new(InMemoryVectorLongTerm::new(embedder, 2000))
+                } else {
+                    let path = long_term_path(&root);
+                    Arc::new(FileLongTerm::new(path, 2000))
+                }
+            } else {
+                let path = long_term_path(&root);
+                Arc::new(FileLongTerm::new(path, 2000))
+            };
             (lt, lessons, procedural, preferences)
         }
         None => (Arc::new(InMemoryLongTerm::default()), None, None, None),
