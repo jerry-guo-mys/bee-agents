@@ -6,11 +6,14 @@
   <title>Bee - 个人智能体</title>
   <meta name="theme-color" content="#ffffff" />
   <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="/js/marked.min.js"></script>
   <link rel="stylesheet" href="/css/github-dark.min.css" id="hljs-theme">
   <script src="/js/highlight.min.js"></script>
   <style>
-    /* Harmonious color scheme: cool slate grays with teal accent */
+    /* OpenCode-inspired: clean, spacious, modern */
     :root {
       --background-base: #0f172a;
       --bg-primary: #1e293b;
@@ -20,13 +23,13 @@
       --text-primary: #f1f5f9;
       --text-secondary: #cbd5e1;
       --text-muted: #94a3b8;
-      --accent: #0d9488;
-      --accent-hover: #14b8a6;
+      --accent: #5e7a8c;
+      --accent-hover: #6d8a9c;
       --success: #4ade80;
       --warning: #f59e0b;
       --link-color: #63b3ed;
-      --send-btn-bg: #3b82f6;
-      --send-btn-hover: #60a5fa;
+      --send-btn-bg: var(--accent);
+      --send-btn-hover: var(--accent-hover);
       --border: rgba(255,255,255,0.08);
       --sidebar-width: 260px;
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
@@ -44,24 +47,24 @@
       --text-primary: #0f172a;
       --text-secondary: #475569;
       --text-muted: #64748b;
-      --accent: #0d9488;
-      --accent-hover: #0f766e;
+      --accent: #4a6172;
+      --accent-hover: #5a7182;
       --success: #16a34a;
       --warning: #d97706;
       --link-color: #2563eb;
-      --send-btn-bg: #2563eb;
-      --send-btn-hover: #3b82f6;
+      --send-btn-bg: var(--accent);
+      --send-btn-hover: var(--accent-hover);
       --border: rgba(0,0,0,0.08);
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
       --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
       --input-bg: #f8fafc;
       --divider: rgba(0,0,0,0.08);
-      --steps-label-color: rgba(13,148,136,0.1);
+      --steps-label-color: #4a6172;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--background-base);
       color: var(--text-primary);
       min-height: 100vh;
@@ -69,6 +72,8 @@
       display: flex;
       transition: background 0.3s, color 0.3s;
       -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      letter-spacing: -0.01em;
       overflow-x: hidden;
     }
 
@@ -98,6 +103,7 @@
     .sidebar-header .logo {
       font-size: 1.25rem;
       font-weight: 700;
+      letter-spacing: -0.02em;
     }
     .sidebar-header .logo span { color: var(--accent); }
     .sidebar-toolbar {
@@ -183,6 +189,15 @@
       color: var(--text-muted);
       font-size: 0.85rem;
     }
+    .session-list-empty {
+      padding: 24px 16px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    .session-list-empty .icon { font-size: 2rem; margin-bottom: 10px; display: block; }
+    .session-list-empty .hint { margin-top: 8px; font-size: 0.8rem; }
     .search-stats {
       padding: 8px 12px;
       font-size: 0.75rem;
@@ -192,20 +207,25 @@
     .new-chat-btn {
       width: calc(100% - 32px);
       margin: 8px 16px;
-      padding: 10px 14px;
+      padding: 12px 16px;
       border: none;
-      border-radius: 8px;
-      background: var(--bg-tertiary);
-      color: var(--text-primary);
+      border-radius: 12px;
+      background: var(--accent);
+      color: #fff;
       font-size: 0.9rem;
+      font-weight: 500;
       cursor: pointer;
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 8px;
-      transition: background 0.2s;
+      transition: background 0.2s, transform 0.15s;
+      box-shadow: 0 2px 8px rgba(94,122,140,0.25);
     }
     .new-chat-btn:hover {
-      background: var(--bg-secondary);
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(94,122,140,0.3);
     }
     .session-list {
       flex: 1;
@@ -214,13 +234,14 @@
     }
     .session-item {
       padding: 10px 12px;
-      border-radius: 8px;
+      border-radius: 10px;
       cursor: pointer;
       margin-bottom: 2px;
       transition: background 0.2s;
       display: flex;
       align-items: flex-start;
       gap: 10px;
+      border-left: 3px solid transparent;
     }
     .session-item-icon {
       width: 24px;
@@ -240,7 +261,12 @@
     }
     .session-item-content { flex: 1; min-width: 0; }
     .session-item:hover { background: var(--bg-tertiary); }
-    .session-item.active { background: var(--bg-tertiary); }
+    .session-item.active {
+      background: var(--bg-tertiary);
+      border-left: 3px;
+      margin-left: -3px;
+      padding-left: 9px;
+    }
     .session-item .title {
       font-size: 0.85rem;
       color: var(--text-primary);
@@ -268,7 +294,7 @@
       transition: opacity 0.2s, background 0.2s;
     }
     .session-item:hover .delete-btn { opacity: 1; }
-    .session-item .delete-btn:hover { color: var(--bg-code); background: rgba(13,148,136,0.2); }
+    .session-item .delete-btn:hover { color: var(--bg-code); background: rgba(94,122,140,0.2); }
     .session-group-title {
       font-size: 0.7rem;
       font-weight: 600;
@@ -288,7 +314,6 @@
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--accent) 0%, #0a7c6f 100%);
       color: #fff;
       font-size: 0.8rem;
       font-weight: 600;
@@ -332,12 +357,13 @@
     .sidebar.collapsed + .main { margin-left: 0; }
     
     .header {
-      padding: 12px 24px;
+      padding: 14px 24px;
       background: var(--bg-primary);
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 16px;
+      border-bottom: 1px solid var(--divider);
     }
     .header-left {
       display: flex;
@@ -404,11 +430,11 @@
       background: var(--bg-primary);
     }
     .messages {
-      padding: 28px 48px 32px;
+      padding: 32px 48px 40px;
       display: flex;
       flex-direction: column;
-      gap: 28px;
-      width: 900px;
+      gap: 24px;
+      width: 820px;
       max-width: 100%;
     }
     /* Message row, 不显示两侧头像 */
@@ -426,11 +452,11 @@
       width: 100%;
       max-width: 100%;
       min-width: 0;
-      padding: 14px 20px;
+      padding: 16px 22px;
       padding-right: 48px;
-      border-radius: 14px;
+      border-radius: 16px;
       line-height: 1.7;
-      font-size: 0.95rem;
+      font-size: 0.9375rem;
       animation: msgEnter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     @keyframes msgEnter {
@@ -446,9 +472,10 @@
     .msg.user {
       background: var(--bg-code);
       color: var(--text-primary);
-      border-radius: 14px 14px 6px 14px;
+      border-radius: 16px 16px 6px 16px;
       white-space: pre-wrap;
       word-break: break-word;
+      border: 1px solid var(--border);
     }
     .msg.user .file-preview {
       margin-top: 8px;
@@ -467,8 +494,9 @@
     }
     .msg.assistant {
       background: var(--bg-secondary);
-      border-radius: 14px 14px 14px 6px;
+      border-radius: 16px 16px 16px 6px;
     }
+    [data-theme="light"] .msg.assistant { background: #ffffff; }
     .msg.assistant .content { color: var(--text-primary); font-size: 0.95rem; }
     /* 打字阶段：保留换行与空格，避免代码块等格式乱成一团 */
     .msg.assistant .content.streaming {
@@ -628,8 +656,8 @@
       justify-content: center;
     }
     .input-area {
-      padding: 24px 48px 32px;
-      width: 900px;
+      padding: 24px 48px 36px;
+      width: 820px;
       max-width: 100%;
     }
     .input-container {
@@ -642,13 +670,16 @@
       display: flex;
       align-items: flex-end;
       gap: 0;
-      border-radius: 14px;
+      border-radius: 24px;
       background: var(--input-bg);
       border: 1px solid var(--divider);
-      transition: background 0.2s, border-color 0.2s;
+      transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     }
+    [data-theme="light"] .input-inner { box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
     .input-inner:focus-within {
       background: var(--bg-primary);
+      border-color: var(--accent);
     }
     .input-loading {
       position: absolute;
@@ -663,14 +694,15 @@
     }
     .input-container textarea {
       flex: 1;
-      min-height: 50px;
+      min-height: 52px;
       max-height: 200px;
-      padding: 12px 16px 12px 16px;
+      padding: 14px 20px 14px 20px;
       border: none;
-      border-radius: 14px 0 0 14px;
+      border-radius: 24px 0 0 24px;
       background: transparent;
       color: var(--text-primary);
       font: inherit;
+      font-size: 0.95rem;
       resize: none;
     }
     .input-container textarea:focus { outline: none; }
@@ -680,9 +712,9 @@
       height: 44px;
       min-width: 44px;
       min-height: 44px;
-      margin: 6px 8px 6px 0;
+      margin: 6px 6px 6px 0;
       border: none;
-      border-radius: 10px;
+      border-radius: 14px;
       background: var(--send-btn-bg);
       color: #fff;
       font-size: 1.15rem;
@@ -690,9 +722,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.2s, transform 0.15s;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 2px 8px rgba(94,122,140,0.35);
     }
-    .input-send:hover:not(:disabled) { background: var(--send-btn-hover); transform: translateY(-1px); }
+    .input-send:hover:not(:disabled) {
+      background: var(--send-btn-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(94,122,140,0.4);
+    }
     .input-send:disabled { opacity: 0.6; cursor: not-allowed; }
     .input-toolbar {
       display: flex;
@@ -742,7 +779,7 @@
       cursor: pointer;
       transition: background 0.2s;
     }
-    .input-stop:hover { background: rgba(13,148,136,0.2); }
+    .input-stop:hover { background: rgba(94,122,140,0.2); }
     .spinner {
       width: 20px;
       height: 20px;
@@ -754,12 +791,13 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .error {
-      color: var(--accent);
-      padding: 8px 12px;
-      margin-top: 8px;
-      border-radius: 8px;
-      background: rgba(13, 148, 136, 0.1);
+      color: var(--warning);
+      padding: 5px 12px;
+      margin-top: 4px;
+      border-radius: 6px;
+      background: rgba(217, 119, 6, 0.12);
       font-size: 0.85rem;
+      line-height: 1.35;
     }
 
     /* 步骤 + 回复合并为一篇文章块，步骤第一行可显示/隐藏 */
@@ -812,9 +850,10 @@
     .response-steps .step {
       margin: 6px 0 0;
       padding: 0;
-      border-radius: 6px;
+      border-radius: 10px;
       background: var(--bg-tertiary);
       overflow: hidden;
+      border: 1px solid var(--border);
     }
     .response-steps .step:first-child { margin-top: 0; }
     .response-steps .step-header {
@@ -912,88 +951,99 @@
       .main { height: 100dvh; }
     }
 
-    /* Welcome screen - OpenCode style: sessions + see servers */
+    /* Welcome screen - OpenCode style: hero + clear CTAs */
     .welcome {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 48px 32px;
+      padding: 56px 32px;
       text-align: center;
       color: var(--text-secondary);
-      min-height: 60vh;
-      max-width: 560px;
+      min-height: 65vh;
+      max-width: 520px;
       margin: 0 auto;
     }
-    .welcome h1 { 
-      font-size: 2rem; 
-      margin-bottom: 8px; 
+    .welcome h1 {
+      font-size: 2.25rem;
+      margin-bottom: 12px;
       color: var(--text-primary);
-      font-weight: 600;
-      letter-spacing: -0.02em;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
     }
-    .welcome h1 span { 
+    .welcome h1 span {
       color: var(--accent);
     }
-    .welcome .tagline { 
-      font-size: 0.95rem; 
-      max-width: 420px; 
-      line-height: 1.6;
+    .welcome .tagline {
+      font-size: 1rem;
+      max-width: 400px;
+      line-height: 1.65;
       color: var(--text-muted);
-      margin-bottom: 32px;
+      margin-bottom: 36px;
+      font-weight: 400;
     }
     .welcome .actions {
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
+      flex-wrap: wrap;
       gap: 12px;
+      justify-content: center;
       width: 100%;
-      max-width: 280px;
+      max-width: 360px;
     }
     .welcome .btn-primary {
-      padding: 12px 20px;
-      border-radius: 8px;
+      padding: 14px 24px;
+      border-radius: 12px;
       border: none;
       background: var(--accent);
       color: #fff;
       font-size: 0.95rem;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 2px 12px rgba(94,122,140,0.3);
     }
-    .welcome .btn-primary:hover { background: var(--accent-hover); }
+    .welcome .btn-primary:hover {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(94,122,140,0.35);
+    }
     .welcome .btn-secondary {
-      padding: 10px 18px;
-      border-radius: 8px;
+      padding: 14px 24px;
+      border-radius: 12px;
       border: 1px solid var(--border);
       background: var(--bg-secondary);
       color: var(--text-secondary);
-      font-size: 0.9rem;
+      font-size: 0.95rem;
+      font-weight: 500;
       cursor: pointer;
       transition: all 0.2s;
     }
-    .welcome .btn-secondary:hover { 
-      background: var(--bg-tertiary); 
+    .welcome .btn-secondary:hover {
+      background: var(--bg-tertiary);
       color: var(--text-primary);
+      border-color: var(--text-muted);
     }
     .welcome .suggestions {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 28px;
+      gap: 12px;
+      margin-top: 36px;
       justify-content: center;
     }
     .welcome .suggestion {
-      padding: 10px 16px;
+      padding: 12px 18px;
       border: 1px solid var(--border);
-      border-radius: 20px;
+      border-radius: 24px;
       background: var(--bg-secondary);
       color: var(--text-secondary);
-      font-size: 0.85rem;
+      font-size: 0.875rem;
       cursor: pointer;
       transition: all 0.2s;
     }
-    .welcome .suggestion:hover { 
-      background: var(--bg-tertiary); 
+    .welcome .suggestion:hover {
+      background: var(--bg-tertiary);
       border-color: var(--accent);
       color: var(--text-primary);
     }
@@ -1207,15 +1257,13 @@
       font-family: monospace;
     }
 
-    /* Message timestamp */
+    /* Message timestamp - inline right after text */
     .msg-timestamp {
+      display: inline;
+      margin-left: 0.35em;
       font-size: 0.7rem;
       color: var(--text-muted);
-      margin-top: 4px;
-      opacity: 0.7;
-    }
-    .msg-row.user .msg-timestamp {
-      text-align: right;
+      opacity: 0.8;
     }
 
     /* Connection status indicator */
@@ -1417,8 +1465,8 @@
       position: fixed;
       bottom: 100px;
       right: 32px;
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
       border: none;
       border-radius: 50%;
       background: var(--accent);
@@ -1427,15 +1475,40 @@
       cursor: pointer;
       opacity: 0;
       transform: translateY(10px);
-      transition: opacity 0.3s, transform 0.3s, background 0.2s;
+      transition: opacity 0.3s, transform 0.3s, background 0.2s, box-shadow 0.2s;
       z-index: 50;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      box-shadow: 0 4px 14px rgba(94,122,140,0.35);
     }
     .scroll-bottom.visible {
       opacity: 1;
       transform: translateY(0);
     }
-    .scroll-bottom:hover { background: var(--accent-hover); }
+    .scroll-bottom:hover {
+      background: var(--accent-hover);
+      box-shadow: 0 6px 18px rgba(94,122,140,0.4);
+    }
+    .scroll-bottom:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    @media (max-height: 640px) {
+      .scroll-bottom { bottom: 88px; }
+    }
+
+    /* Focus visible for keyboard / a11y */
+    button:focus-visible,
+    .input-send:focus-visible,
+    .input-icon:focus-visible,
+    .session-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+    .response-steps-bar:focus-visible,
+    .thinking .step-header:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* Respect reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      .msg, .toast, .scroll-bottom, .thinking .step-body, .response-steps { animation: none !important; transition-duration: 0.01ms !important; }
+      .skeleton { animation: none; }
+    }
 
     /* Keyboard shortcuts hint */
     .kbd-hint {
@@ -1468,10 +1541,6 @@
       <span>+</span> 新对话
     </button>
     <div class="session-list" id="sessionList"></div>
-    <div class="sidebar-user">
-      <div class="sidebar-user-avatar" id="userAvatar">👤</div>
-      <span class="sidebar-user-name">用户</span>
-    </div>
     <div class="sidebar-footer">
       <button id="shortcutsBtn" title="键盘快捷键 (?)">⌨️ 快捷键</button>
       <button id="helpBtn" title="帮助">❓ 帮助</button>
@@ -1528,7 +1597,7 @@
       <div class="input-area">
         <div class="input-container">
           <div class="input-inner">
-            <textarea id="input" placeholder="Ask anything" rows="1"></textarea>
+            <textarea id="input" placeholder="输入消息..." rows="1"></textarea>
             <button type="button" class="input-send" id="sendBtn" title="发送 (Enter)" aria-label="发送">↗</button>
           </div>
           <div id="inputLoading" class="input-loading" style="display:none"></div>
@@ -1969,7 +2038,16 @@
 
         sessionListEl.innerHTML = '';
 
-        // Show no results message
+        // Empty state when no sessions at all
+        if (filtered.length === 0 && !q) {
+          const empty = document.createElement('div');
+          empty.className = 'session-list-empty';
+          empty.innerHTML = '<span class="icon">💬</span><div>暂无对话</div><div class="hint">点击上方「新对话」开始</div>';
+          sessionListEl.appendChild(empty);
+          return;
+        }
+
+        // Show no results message when search has no matches
         if (filtered.length === 0 && q) {
           const noResults = document.createElement('div');
           noResults.className = 'no-results';
@@ -2251,11 +2329,18 @@
       }
       addMsgCopyIcon(msg, content);
       
-      // Add timestamp
-      const timeEl = document.createElement('div');
+      // Add timestamp right after content (inline with text)
+      const contentDiv = msg.querySelector('.content');
+      const timeEl = document.createElement('span');
       timeEl.className = 'msg-timestamp';
       timeEl.textContent = formatTimestamp(msg.dataset.timestamp);
-      msg.appendChild(timeEl);
+      let insertTarget = contentDiv;
+      const last = contentDiv.lastElementChild;
+      if (last && !['PRE', 'CODE'].includes(last.tagName) && last.className !== 'code-block-wrapper') {
+        insertTarget = last;
+      }
+      insertTarget.appendChild(document.createTextNode('\u00A0'));
+      insertTarget.appendChild(timeEl);
       
       // Add message actions for assistant messages
       if (role === 'assistant') {
@@ -2432,13 +2517,15 @@
         article = document.createElement('div');
         article.id = 'response-article';
         article.className = 'response-article' + (collapseThinking ? ' steps-collapsed' : '');
-        article.innerHTML = '<div class="response-steps-bar"><div class="response-steps-bar-left"><span class="thinking-label">' + (collapseThinking ? '显示步骤' : 'Bee 思考完成') + '</span><span class="thinking-duration"></span></div><span class="thinking-arrow">›</span></div><div class="response-steps"></div><div class="response-content"></div>';
-        article.querySelector('.response-steps-bar').onclick = () => {
+        article.innerHTML = '<div class="response-steps-bar" role="button" tabindex="0"><div class="response-steps-bar-left"><span class="thinking-label">' + (collapseThinking ? '显示步骤' : 'Bee 思考完成') + '</span><span class="thinking-duration"></span></div><span class="thinking-arrow">›</span></div><div class="response-steps"></div><div class="response-content"></div>';
+        const stepsBarEl = article.querySelector('.response-steps-bar');
+        stepsBarEl.onclick = () => {
           article.classList.toggle('steps-collapsed');
           collapseThinking = article.classList.contains('steps-collapsed');
           localStorage.setItem(COLLAPSE_KEY, collapseThinking);
           updateThinkingBoxLabel(article);
         };
+        stepsBarEl.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); stepsBarEl.click(); } };
         messagesEl.appendChild(article);
       }
       return article;
