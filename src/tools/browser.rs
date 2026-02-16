@@ -3,8 +3,6 @@
 //! 需启用 feature "browser" 且系统已安装 Chrome/Chromium。
 //! 访问 URL、执行 JS 渲染后提取可读文本（适用于 Search 无法处理的动态页面）。
 
-#![cfg(feature = "browser")]
-
 use std::collections::HashSet;
 
 use async_trait::async_trait;

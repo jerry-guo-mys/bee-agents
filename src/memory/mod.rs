@@ -21,5 +21,5 @@ pub use learnings::{
     agents_path, learnings_root, promote_to_agents, promote_to_soul, promote_to_tools,
     record_error, record_feature_request, record_learning, soul_path, tools_guide_path,
 };
-pub use persistence::ConversationPersistence;
+pub use persistence::{ConversationPersistence, SqlitePersistence};
 pub use working::WorkingMemory;

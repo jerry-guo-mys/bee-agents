@@ -3,19 +3,18 @@
 //! 通过 Webhook 接收消息，调用 Agent 处理后发送回复。
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::{
     extract::{Query, State},
     http::StatusCode,
-    routing::{get, post},
+    routing::get,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::agent::{create_agent_components, create_context_with_long_term, process_message, AgentComponents};
+use crate::agent::{create_context_with_long_term, process_message, AgentComponents};
 use crate::react::ContextManager;
 
 /// 会话存储：user_id -> ContextManager

@@ -11,7 +11,8 @@ use tokio::sync::{broadcast, mpsc, watch};
 use crate::config::{load_config, AppConfig};
 use crate::core::{AgentPhase, RecoveryEngine, SessionSupervisor, TaskScheduler, UiState};
 use crate::llm::{create_deepseek_client, LlmClient, OpenAiClient};
-use crate::memory::InMemoryLongTerm;
+use crate::memory::{InMemoryLongTerm, SqlitePersistence};
+use std::sync::Mutex;
 use crate::react::{react_loop, ContextManager, Critic, Planner};
 use crate::tools::{
     tool_call_schema_json, CatTool, EchoTool, LsTool, PluginTool, SearchTool, ShellTool,
@@ -164,12 +165,48 @@ pub async fn create_agent(
     let long_term = Arc::new(InMemoryLongTerm::default());
     let mut context = ContextManager::new(cfg.app.max_context_turns).with_long_term(long_term);
 
+    // 初始化 SQLite 持久化
+    let sqlite_db_path = workspace.join(".bee/conversations.db");
+    if let Some(parent) = sqlite_db_path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    let sqlite_persistence = Arc::new(Mutex::new(
+        SqlitePersistence::new(&sqlite_db_path).ok()
+    ));
+
+    // 生成 session_id
+    let session_id = uuid::Uuid::new_v4().to_string();
+    if let Ok(persistence) = sqlite_persistence.lock() {
+        if let Some(ref p) = *persistence {
+            let _ = p.create_session(&session_id, Some("New Conversation"));
+            // 尝试加载之前的消息
+            if let Ok(messages) = p.load_messages(&session_id) {
+                for msg in messages {
+                    context.conversation.push(msg);
+                }
+            }
+        }
+    }
+
+    let sqlite_persistence_clone = sqlite_persistence.clone();
+    let session_id_clone = session_id.clone();
+
     tokio::spawn(async move {
         loop {
             tokio::select! {
                 Some(cmd) = cmd_rx.recv() => {
                     match cmd {
                         Command::Submit(input) => {
+                            // 保存用户消息到 SQLite
+                            if let Ok(persistence) = sqlite_persistence_clone.lock() {
+                                if let Some(ref p) = *persistence {
+                                    let _ = p.save_message(&session_id_clone, &crate::memory::Message {
+                                        role: crate::memory::Role::User,
+                                        content: input.clone(),
+                                    });
+                                }
+                            }
+
                             // 先更新为 Thinking，再跑 ReAct
                             let _ = state_tx.send(UiState {
                                 phase: AgentPhase::Thinking,
@@ -194,6 +231,17 @@ pub async fn create_agent(
 
                             match result {
                                 Ok(react_result) => {
+                                    // 保存助手消息到 SQLite
+                                    if let Some(last_msg) = react_result.messages.last() {
+                                        if last_msg.role == crate::memory::Role::Assistant {
+                                            if let Ok(persistence) = sqlite_persistence_clone.lock() {
+                                                if let Some(ref p) = *persistence {
+                                                    let _ = p.save_message(&session_id_clone, last_msg);
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     let _ = state_tx.send(UiState {
                                         phase: AgentPhase::Idle,
                                         history: react_result.messages,

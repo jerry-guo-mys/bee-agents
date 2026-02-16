@@ -345,22 +345,27 @@ impl Tool for CodeEditTool {
 mod tests {
     use super::*;
     use std::io::Write;
-    use tempfile::NamedTempFile;
+
+    fn create_test_file(dir: &Path, name: &str, content: &str) -> std::path::PathBuf {
+        let path = dir.join(name);
+        let mut file = std::fs::File::create(&path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+        path
+    }
 
     #[test]
     fn test_exact_match() {
-        let mut temp_file = NamedTempFile::new().unwrap();
-        writeln!(temp_file, "fn main() {{").unwrap();
-        writeln!(temp_file, "    println!(\"Hello\");").unwrap();
-        writeln!(temp_file, "}}").unwrap();
+        let test_dir = std::path::PathBuf::from("./target/test_code_edit");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        
+        let file_path = create_test_file(&test_dir, "test1.rs", "fn main() {\n    println!(\"Hello\");\n}\n");
 
-        let tool = CodeEditTool::new(".").with_backup(false);
-        let path = temp_file.path();
+        let tool = CodeEditTool::new(&test_dir).with_backup(false);
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let args = serde_json::json!({
-                "file_path": path.to_str().unwrap(),
+                "file_path": "test1.rs",
                 "old_string": "    println!(\"Hello\");",
                 "new_string": "    println!(\"World\");"
             });
@@ -369,25 +374,25 @@ mod tests {
             assert!(result.is_ok(), "{:?}", result);
         });
 
-        let content = std::fs::read_to_string(path).unwrap();
+        let content = std::fs::read_to_string(&file_path).unwrap();
         assert!(content.contains("println!(\"World\")"));
+        
+        std::fs::remove_dir_all(&test_dir).ok();
     }
 
     #[test]
     fn test_indentation_tolerance() {
-        let mut temp_file = NamedTempFile::new().unwrap();
-        writeln!(temp_file, "fn main() {{").unwrap();
-        writeln!(temp_file, "    println!(\"Hello\");").unwrap();
-        writeln!(temp_file, "}}").unwrap();
+        let test_dir = std::path::PathBuf::from("./target/test_code_edit2");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        
+        let file_path = create_test_file(&test_dir, "test2.rs", "fn main() {\n    println!(\"Hello\");\n}\n");
 
-        let tool = CodeEditTool::new(".").with_backup(false);
-        let path = temp_file.path();
+        let tool = CodeEditTool::new(&test_dir).with_backup(false);
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            // 使用不同的缩进
             let args = serde_json::json!({
-                "file_path": path.to_str().unwrap(),
+                "file_path": "test2.rs",
                 "old_string": "println!(\"Hello\");",
                 "new_string": "println!(\"World\");"
             });
@@ -396,7 +401,9 @@ mod tests {
             assert!(result.is_ok(), "{:?}", result);
         });
 
-        let content = std::fs::read_to_string(path).unwrap();
+        let content = std::fs::read_to_string(&file_path).unwrap();
         assert!(content.contains("println!(\"World\")"));
+        
+        std::fs::remove_dir_all(&test_dir).ok();
     }
 }

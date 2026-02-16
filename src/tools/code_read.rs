@@ -188,7 +188,13 @@ mod tests {
 
     #[test]
     fn test_validate_path_security() {
-        let tool = CodeReadTool::new("/home/user/project");
+        let test_dir = std::path::PathBuf::from("./target/test_code_read");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        std::fs::create_dir_all(test_dir.join("src")).unwrap();
+        std::fs::write(test_dir.join("Cargo.toml"), "").unwrap();
+        std::fs::write(test_dir.join("src/main.rs"), "fn main() {}").unwrap();
+        
+        let tool = CodeReadTool::new(&test_dir);
         
         // 正常路径
         assert!(tool.validate_path("src/main.rs").is_ok());
@@ -197,6 +203,8 @@ mod tests {
         // 路径穿越攻击应该被阻止
         assert!(tool.validate_path("../../../etc/passwd").is_err());
         assert!(tool.validate_path("src/../../../etc/passwd").is_err());
+        
+        std::fs::remove_dir_all(&test_dir).ok();
     }
 
     #[test]
