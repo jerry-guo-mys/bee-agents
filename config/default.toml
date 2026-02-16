@@ -21,8 +21,10 @@ model = "deepseek-reasoner"
 model = "gpt-4o-mini"
 
 [llm.timeouts]
-request = 60
-stream = 120
+# 单次非流式请求超时（秒）
+request = 120
+# 流式请求：整体允许的最长时间（复杂推理/多步 ReAct 可能较久）
+stream = 600
 
 [tools]
 filesystem_root = "./workspace"

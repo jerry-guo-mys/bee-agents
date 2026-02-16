@@ -415,6 +415,12 @@
       border-radius: 14px 14px 14px 6px;
     }
     .msg.assistant .content { color: var(--text-primary); font-size: 0.95rem; }
+    /* 打字阶段：保留换行与空格，避免代码块等格式乱成一团 */
+    .msg.assistant .content.streaming {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: inherit;
+    }
     .msg.assistant .content.plain { white-space: pre-wrap; word-break: break-word; }
     .msg.assistant .content p { margin: 0.5em 0; }
     .msg.assistant .content p:first-child { margin-top: 0; }
@@ -1696,18 +1702,24 @@
       if (sendBtn) sendBtn.disabled = true;
       inputLoadingEl.style.display = 'block';
       stopBtn.style.display = 'inline-block';
+      if (inputHintEl) inputHintEl.textContent = '复杂任务可能需要数分钟，请耐心等待';
       loading = true;
       abortController = new AbortController();
       var abortedByTimeout = false;
 
-      // 请求超时（2 分钟），避免一直加载
-      const REQUEST_TIMEOUT_MS = 120000;
-      const timeoutId = setTimeout(function() {
-        if (loading && abortController) {
-          abortedByTimeout = true;
-          abortController.abort();
-        }
-      }, REQUEST_TIMEOUT_MS);
+      // 空闲超时：仅当「连续一段时间未收到任何流数据」时判定超时，收到任意事件则重置
+      const IDLE_TIMEOUT_MS = 180000;  // 3 分钟无数据则超时
+      let timeoutId = null;
+      function resetIdleTimeout() {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(function() {
+          if (loading && abortController) {
+            abortedByTimeout = true;
+            abortController.abort();
+          }
+        }, IDLE_TIMEOUT_MS);
+      }
+      resetIdleTimeout();
 
       let assistantBubble = null;
       let contentEl = null;
@@ -1769,6 +1781,7 @@
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
+          resetIdleTimeout();
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
@@ -1777,6 +1790,7 @@
             if (!line.trim()) continue;
             try {
               const ev = JSON.parse(line);
+              resetIdleTimeout();
               if (ev.type === 'session_id') { saveSessionId(ev.session_id); continue; }
               if (ev.type === 'thinking') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('thinking'); continue; }
               if (ev.type === 'thinking_content') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('thinking_content', ev.text); continue; }
@@ -1806,6 +1820,7 @@
                   assistantBubble = document.createElement('div');
                   assistantBubble.className = 'msg assistant';
                   contentEl = document.createElement('span');
+                  contentEl.className = 'content streaming';
                   assistantBubble.appendChild(contentEl);
                   row.appendChild(assistantBubble);
                   contentWrap.appendChild(row);
@@ -1861,11 +1876,12 @@
         }
         removeThinkingBox();
       } finally {
-        clearTimeout(timeoutId);
+        if (timeoutId) clearTimeout(timeoutId);
         inputEl.disabled = false;
         if (sendBtn) sendBtn.disabled = false;
         inputLoadingEl.style.display = 'none';
         stopBtn.style.display = 'none';
+        if (inputHintEl) inputHintEl.textContent = 'Shift+Enter 换行';
         loading = false;
         abortController = null;
       }

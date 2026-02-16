@@ -32,7 +32,8 @@ use bee::memory::InMemoryVectorLongTerm;
 use bee::config::{load_config, AppConfig};
 use bee::memory::{
     append_daily_log, append_heartbeat_log, consolidate_memory, lessons_path, preferences_path,
-    procedural_path, ConversationMemory, memory_root,
+    procedural_path, record_error as learnings_record_error, record_learning as learnings_record_learning,
+    ConversationMemory, memory_root,
 };
 use bee::react::{compact_context, ContextManager, ReactEvent};
 
@@ -650,15 +651,25 @@ async fn api_chat_stream(
 
     let components = state.components.read().await.clone();
     let session_id_clone = session_id.clone();
+    let state_spawn = Arc::clone(&state);
     tokio::spawn(async move {
         let mut ctx = context;
         let _ = process_message_stream(components.as_ref(), &mut ctx, &message, event_tx).await;
-        let _ = context_tx.send(ctx);
+        // 无论流是否被客户端断开（超时/刷新），都持久化当前会话（含用户刚发的提问），刷新后历史不丢
+        save_session_to_disk(
+            &state_spawn.sessions_dir,
+            &state_spawn.memory_root,
+            &session_id_clone,
+            &ctx,
+        );
+        let mut sessions = state_spawn.sessions.write().await;
+        sessions.insert(session_id_clone.clone(), ctx);
+        let _ = context_tx.send(());
     });
 
     let first_line = serde_json::json!({
         "type": "session_id",
-        "session_id": session_id_clone
+        "session_id": session_id
     });
     let first_line = format!("{}\n", serde_json::to_string(&first_line).unwrap());
 
@@ -681,6 +692,21 @@ async fn api_chat_stream(
             }
             match event_rx.recv().await {
                 Some(ev) => {
+                    // 自我改进：工具失败 → ERRORS.md；Critic 纠正 → LEARNINGS.md (correction)
+                    match &ev {
+                        ReactEvent::ToolFailure { tool, reason } => {
+                            learnings_record_error(&state_reinsert.workspace, tool, reason);
+                        }
+                        ReactEvent::Recovery { action, detail } if action == "Critic" => {
+                            learnings_record_learning(
+                                &state_reinsert.workspace,
+                                "correction",
+                                detail,
+                                None,
+                            );
+                        }
+                        _ => {}
+                    }
                     let line = format!("{}\n", serde_json::to_string(&ev).unwrap());
                     Ok(Some((
                         Bytes::from(line),
@@ -688,11 +714,7 @@ async fn api_chat_stream(
                     )))
                 }
                 None => {
-                    if let Ok(ctx) = context_rx.await {
-                        save_session_to_disk(&state_reinsert.sessions_dir, &state_reinsert.memory_root, &session_id_reinsert, &ctx);
-                        let mut sessions = state_reinsert.sessions.write().await;
-                        sessions.insert(session_id_reinsert, ctx);
-                    }
+                    let _ = context_rx.await;
                     Ok(None)
                 }
             }
