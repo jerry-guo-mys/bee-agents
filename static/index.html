@@ -376,6 +376,17 @@
       border-radius: 14px;
       line-height: 1.7;
       font-size: 0.95rem;
+      animation: msgEnter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @keyframes msgEnter {
+      from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
     }
     .msg.user {
       background: var(--bg-code);
@@ -842,6 +853,158 @@
       color: var(--text-primary);
     }
 
+    /* Skeleton loading */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
+      background-size: 200% 100%;
+      animation: skeleton-loading 1.5s ease-in-out infinite;
+      border-radius: 4px;
+    }
+    @keyframes skeleton-loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .skeleton-text { height: 1em; margin: 0.5em 0; }
+    .skeleton-text.short { width: 60%; }
+    .skeleton-text.medium { width: 80%; }
+    .skeleton-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Toast notification system */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      min-width: 280px;
+      max-width: 400px;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.9rem;
+      color: var(--text-primary);
+      pointer-events: all;
+      animation: toastEnter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .toast.hide {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    @keyframes toastEnter {
+      from {
+        opacity: 0;
+        transform: translateX(100%);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+    .toast-icon { font-size: 1.1rem; flex-shrink: 0; }
+    .toast-success { border-left: 3px solid var(--success); }
+    .toast-error { border-left: 3px solid var(--accent); }
+    .toast-warning { border-left: 3px solid var(--warning); }
+    .toast-close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0 4px;
+      transition: color 0.2s;
+    }
+    .toast-close:hover { color: var(--text-primary); }
+
+    /* Drag and drop overlay */
+    .drag-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(13, 148, 136, 0.15);
+      backdrop-filter: blur(2px);
+      z-index: 999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .drag-overlay.active {
+      display: flex;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .drag-overlay-content {
+      background: var(--bg-secondary);
+      border: 2px dashed var(--accent);
+      border-radius: 16px;
+      padding: 40px 60px;
+      text-align: center;
+      color: var(--text-primary);
+      font-size: 1.1rem;
+      pointer-events: none;
+    }
+    .drag-overlay-icon {
+      font-size: 3rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    /* Message actions */
+    .msg-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .msg-row:hover .msg-actions { opacity: 1; }
+    .msg-action-btn {
+      padding: 4px 10px;
+      border: none;
+      border-radius: 6px;
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+    .msg-action-btn:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* Improved scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: var(--text-muted);
+      border-radius: 4px;
+      opacity: 0.3;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
     /* Scroll to bottom button */
     .scroll-bottom {
       position: fixed;
@@ -962,9 +1125,22 @@
     </div>
   </div>
 
+  <!-- Toast container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Drag and drop overlay -->
+  <div class="drag-overlay" id="dragOverlay">
+    <div class="drag-overlay-content">
+      <span class="drag-overlay-icon">📎</span>
+      <div>拖拽文件到此处上传</div>
+    </div>
+  </div>
+
   <script>
     // Elements
     const sidebar = document.getElementById('sidebar');
+    const toastContainer = document.getElementById('toastContainer');
+    const dragOverlay = document.getElementById('dragOverlay');
     const sessionListEl = document.getElementById('sessionList');
     const sessionSearchEl = document.getElementById('sessionSearch');
     const messagesEl = document.getElementById('messages');
@@ -1021,6 +1197,105 @@
       d.textContent = s;
       return d.innerHTML;
     }
+
+    // Toast notification system
+    function showToast(message, type = 'info', duration = 3000) {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+      toast.innerHTML = `
+        <span class="toast-icon">${icons[type] || icons.info}</span>
+        <span>${escapeHtml(message)}</span>
+        <button class="toast-close">✕</button>
+      `;
+      toast.querySelector('.toast-close').onclick = () => hideToast(toast);
+      toastContainer.appendChild(toast);
+      if (duration > 0) {
+        setTimeout(() => hideToast(toast), duration);
+      }
+      return toast;
+    }
+    function hideToast(toast) {
+      toast.classList.add('hide');
+      setTimeout(() => toast.remove(), 300);
+    }
+
+    // Drag and drop file upload
+    let dragCounter = 0;
+    document.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      if (e.dataTransfer.types.includes('Files')) {
+        dragOverlay.classList.add('active');
+      }
+    });
+    document.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter === 0) {
+        dragOverlay.classList.remove('active');
+      }
+    });
+    document.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      dragOverlay.classList.remove('active');
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        handleFiles(files);
+      }
+    });
+
+    async function handleFiles(files) {
+      for (const file of files) {
+        if (file.size > 10 * 1024 * 1024) {
+          showToast(`文件 ${file.name} 超过 10MB 限制`, 'warning');
+          continue;
+        }
+        try {
+          const text = await file.text();
+          hideWelcome();
+          const row = document.createElement('div');
+          row.className = 'msg-row user';
+          const avatar = document.createElement('div');
+          avatar.className = 'msg-avatar';
+          avatar.textContent = '👤';
+          row.appendChild(avatar);
+          const msg = document.createElement('div');
+          msg.className = 'msg user';
+          msg.innerHTML = `<div class="file-name">📄 ${escapeHtml(file.name)}</div>`;
+          if (text) {
+            const preview = document.createElement('div');
+            preview.className = 'file-preview';
+            preview.textContent = text.slice(0, 500) + (text.length > 500 ? '...' : '');
+            msg.appendChild(preview);
+          }
+          row.appendChild(msg);
+          messagesEl.appendChild(row);
+          showToast(`已上传: ${file.name}`, 'success');
+        } catch (err) {
+          showToast(`上传失败: ${file.name}`, 'error');
+        }
+      }
+      messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
+    }
+
+    // Paste image upload
+    inputEl.addEventListener('paste', (e) => {
+      const items = e.clipboardData.items;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            handleFiles([file]);
+            showToast('图片已粘贴', 'success');
+          }
+        }
+      }
+    });
 
     function formatTokens(n) {
       if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
@@ -1154,6 +1429,7 @@
       // Create row with avatar
       const row = document.createElement('div');
       row.className = 'msg-row ' + role;
+      row.dataset.role = role;
       
       const avatar = document.createElement('div');
       avatar.className = 'msg-avatar';
@@ -1162,6 +1438,7 @@
       
       const msg = document.createElement('div');
       msg.className = 'msg ' + role;
+      msg.dataset.rawContent = content;
       
       if (role === 'assistant' && isMarkdown) {
         try {
@@ -1187,9 +1464,44 @@
         msg.appendChild(document.createTextNode(content));
       }
       addMsgCopyIcon(msg, content);
+      
+      // Add message actions for assistant messages
+      if (role === 'assistant') {
+        const actions = document.createElement('div');
+        actions.className = 'msg-actions';
+        actions.innerHTML = `
+          <button class="msg-action-btn" data-action="copy">📋 复制</button>
+          <button class="msg-action-btn" data-action="regenerate">🔄 重新生成</button>
+        `;
+        actions.querySelector('[data-action="copy"]').onclick = () => {
+          navigator.clipboard.writeText(content).then(() => {
+            showToast('已复制到剪贴板', 'success');
+          });
+        };
+        actions.querySelector('[data-action="regenerate"]').onclick = () => {
+          // Find previous user message and regenerate
+          const allRows = Array.from(messagesEl.querySelectorAll('.msg-row'));
+          const currentIndex = allRows.indexOf(row);
+          let prevUserMsg = null;
+          for (let i = currentIndex - 1; i >= 0; i--) {
+            if (allRows[i].dataset.role === 'user') {
+              prevUserMsg = allRows[i].querySelector('.msg').dataset.rawContent;
+              break;
+            }
+          }
+          if (prevUserMsg) {
+            // Remove current assistant message and regenerate
+            row.remove();
+            inputEl.value = prevUserMsg;
+            send();
+          }
+        };
+        msg.appendChild(actions);
+      }
+      
       row.appendChild(msg);
       messagesEl.appendChild(row);
-      messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
+      smartScroll();
       return msg;
     }
 
@@ -1594,16 +1906,34 @@
       }
     }
 
+    // Smooth scroll to bottom
+    function smoothScrollToBottom() {
+      messagesWrapper.scrollTo({
+        top: messagesWrapper.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+
     // Scroll to bottom button
     function updateScrollButton() {
       const { scrollTop, scrollHeight, clientHeight } = messagesWrapper;
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
       scrollBottomBtn.classList.toggle('visible', !isNearBottom && messagesEl.children.length > 1);
     }
-    scrollBottomBtn.onclick = () => {
-      messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
-    };
+    scrollBottomBtn.onclick = smoothScrollToBottom;
     messagesWrapper.onscroll = updateScrollButton;
+
+    // Smart auto-scroll - only if user was already near bottom
+    let userWasNearBottom = true;
+    messagesWrapper.addEventListener('scroll', () => {
+      const { scrollTop, scrollHeight, clientHeight } = messagesWrapper;
+      userWasNearBottom = scrollHeight - scrollTop - clientHeight < 200;
+    });
+    function smartScroll() {
+      if (userWasNearBottom) {
+        smoothScrollToBottom();
+      }
+    }
 
     // Mobile keyboard handling
     if (visualViewport) {
@@ -1665,37 +1995,8 @@
     fileInput.onchange = async () => {
       const files = Array.from(fileInput.files);
       if (!files.length) return;
-      
-      for (const file of files) {
-        if (file.size > 10 * 1024 * 1024) {
-          alert(`文件 ${file.name} 超过 10MB 限制`);
-          continue;
-        }
-        const text = await file.text();
-        hideWelcome();
-        
-        // Create message with file preview
-        const row = document.createElement('div');
-        row.className = 'msg-row user';
-        const avatar = document.createElement('div');
-        avatar.className = 'msg-avatar';
-        avatar.textContent = '👤';
-        row.appendChild(avatar);
-        
-        const msg = document.createElement('div');
-        msg.className = 'msg user';
-        msg.innerHTML = `<div class="file-name">📄 ${escapeHtml(file.name)}</div>`;
-        if (text) {
-          const preview = document.createElement('div');
-          preview.className = 'file-preview';
-          preview.textContent = text.slice(0, 500) + (text.length > 500 ? '...' : '');
-          msg.appendChild(preview);
-        }
-        row.appendChild(msg);
-        messagesEl.appendChild(row);
-      }
+      await handleFiles(files);
       fileInput.value = '';
-      messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
     };
 
     // Welcome: 新会话 -> focus input
@@ -1713,9 +2014,13 @@
         const res = await fetch('/api/health');
         const ok = res.ok;
         const text = await res.text();
-        alert(ok ? '服务器状态: ' + (text || 'OK') : '服务器异常: ' + res.status);
+        if (ok) {
+          showToast('服务器状态: ' + (text || 'OK'), 'success');
+        } else {
+          showToast('服务器异常: ' + res.status, 'error');
+        }
       } catch (e) {
-        alert('无法连接服务器: ' + (e.message || '网络错误'));
+        showToast('无法连接服务器: ' + (e.message || '网络错误'), 'error');
       }
       btn.textContent = orig;
       btn.disabled = false;
