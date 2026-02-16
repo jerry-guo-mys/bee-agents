@@ -4,48 +4,66 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bee - 个人智能体</title>
+  <meta name="theme-color" content="#F8F7F7" />
+  <meta name="theme-color" content="#131010" media="(prefers-color-scheme: dark)" />
   <script src="/js/marked.min.js"></script>
   <link rel="stylesheet" href="/css/github-dark.min.css" id="hljs-theme">
   <script src="/js/highlight.min.js"></script>
   <style>
+    /* OpenCode-inspired: neutral base, clean contrast */
     :root {
-      --bg-primary: #1c1e2e;
-      --bg-secondary: #17192a;
-      --bg-tertiary: #222438;
-      --bg-code: #15182a;
-      --text-primary: #e8e8e8;
-      --text-secondary: #a0aec0;
-      --text-muted: #6b7280;
+      --background-base: #131010;
+      --bg-primary: #131010;
+      --bg-secondary: #1a1616;
+      --bg-tertiary: #252020;
+      --bg-code: #1a1616;
+      --text-primary: #f5f5f4;
+      --text-secondary: #a8a29e;
+      --text-muted: #78716c;
       --accent: #0d9488;
       --accent-hover: #14b8a6;
       --success: #4ade80;
       --warning: #f59e0b;
       --border: rgba(255,255,255,0.06);
       --sidebar-width: 260px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.25);
+      --input-bg: var(--bg-secondary);
+      --divider: var(--border);
+      --steps-label-color: var(--accent);
     }
     [data-theme="light"] {
-      --bg-primary: #f8f9fa;
-      --bg-secondary: #f0f2f5;
-      --bg-tertiary: #e8eaed;
+      --background-base: #ffffff;
+      --bg-primary: #ffffff;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f5f5f5;
       --bg-code: #f5f5f5;
-      --text-primary: #1a1a2e;
-      --text-secondary: #4a5568;
-      --text-muted: #9ca3af;
-      --accent: #0f766e;
-      --accent-hover: #0d9488;
-      --success: #22c55e;
-      --warning: #f59e0b;
-      --border: rgba(0,0,0,0.06);
+      --text-primary: #1c1917;
+      --text-secondary: #44403c;
+      --text-muted: #78716c;
+      --accent: #0d9488;
+      --accent-hover: #0f766e;
+      --success: #16a34a;
+      --warning: #d97706;
+      --border: transparent;
+      --shadow-sm: none;
+      --shadow-md: none;
+      --input-bg: #f6f8fa;
+      --divider: #f6f8fa;
+      --steps-label-color: #f6f8fa;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background: var(--bg-primary);
+      background: var(--background-base);
       color: var(--text-primary);
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       transition: background 0.3s, color 0.3s;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
 
     /* Sidebar */
@@ -60,6 +78,7 @@
       top: 0;
       z-index: 100;
       transition: transform 0.3s;
+      border-right: 1px solid var(--divider);
     }
     .sidebar.collapsed {
       transform: translateX(calc(-1 * var(--sidebar-width)));
@@ -194,7 +213,7 @@
       transition: opacity 0.2s, background 0.2s;
     }
     .session-item:hover .delete-btn { opacity: 1; }
-    .session-item .delete-btn:hover { color: var(--accent); background: rgba(13,148,136,0.2); }
+    .session-item .delete-btn:hover { color: var(--bg-code); background: rgba(13,148,136,0.2); }
     .session-group-title {
       font-size: 0.7rem;
       font-weight: 600;
@@ -214,7 +233,7 @@
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--accent) 0%, #764ba2 100%);
+      background: linear-gradient(135deg, var(--bg-code) 0%, #764ba2 100%);
       color: #fff;
       font-size: 0.8rem;
       font-weight: 600;
@@ -253,6 +272,7 @@
       height: 100vh;
       background: var(--bg-primary);
       transition: margin-left 0.3s;
+      border-left: 1px solid var(--divider);
     }
     .sidebar.collapsed + .main { margin-left: 0; }
     
@@ -285,7 +305,7 @@
       font-size: 1rem;
       color: var(--text-primary);
     }
-    .header-brand span { color: var(--accent); }
+    .header-brand span { color: var(--bg-code); }
     .header-title {
       font-weight: 400;
       font-size: 0.9rem;
@@ -329,58 +349,59 @@
       background: var(--bg-primary);
     }
     .messages {
-      padding: 24px 40px;
+      padding: 28px 48px 32px;
       display: flex;
       flex-direction: column;
-      gap: 24px;
-      width: 960px;
+      gap: 28px;
+      width: 900px;
       max-width: 100%;
     }
-    /* Message row with avatar */
+    /* Message row, 不显示两侧头像 */
     .msg-row {
       display: flex;
-      gap: 20px;
+      gap: 0;
       align-items: flex-start;
     }
     .msg-row.user { flex-direction: row-reverse; }
     .msg-row.user .msg { align-self: flex-end; }
     .msg-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1rem;
-      flex-shrink: 0;
-    }
-    .msg-row.user .msg-avatar {
-      background: var(--accent);
-      color: #fff;
-    }
-    .msg-row.assistant .msg-avatar {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #fff;
+      display: none;
     }
     .msg {
-      width: 86%;
+      width: 100%;
+      max-width: 100%;
       min-width: 0;
-      padding: 12px 18px;
-      padding-right: 44px;
-      border-radius: 12px;
-      line-height: 1.75;
+      padding: 14px 20px;
+      padding-right: 48px;
+      border-radius: 14px;
+      line-height: 1.7;
       font-size: 0.95rem;
     }
     .msg.user {
-      background: var(--accent);
-      color: #fff;
-      border-radius: 12px 12px 4px 12px;
+      background: var(--bg-code);
+      color: #333;
+      border-radius: 14px 14px 6px 14px;
       white-space: pre-wrap;
       word-break: break-word;
     }
+    .msg.user .file-preview {
+      margin-top: 8px;
+      padding: 8px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 6px;
+      font-size: 0.85em;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    .msg.user .file-name {
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
     .msg.assistant {
       background: var(--bg-secondary);
-      border-radius: 12px 12px 12px 4px;
+      border-radius: 14px 14px 14px 6px;
     }
     .msg.assistant .content { color: var(--text-primary); font-size: 0.95rem; }
     .msg.assistant .content.plain { white-space: pre-wrap; word-break: break-word; }
@@ -463,8 +484,8 @@
       justify-content: center;
     }
     .input-area {
-      padding: 20px 40px 28px;
-      width: 960px;
+      padding: 24px 48px 32px;
+      width: 900px;
       max-width: 100%;
     }
     .input-container {
@@ -472,14 +493,27 @@
       align-items: flex-end;
       position: relative;
     }
+    .input-inner {
+      flex: 1;
+      display: flex;
+      align-items: flex-end;
+      gap: 0;
+      border-radius: 14px;
+      background: var(--input-bg);
+      border: 1px solid var(--divider);
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .input-inner:focus-within {
+      background: var(--bg-primary);
+    }
     .input-loading {
       position: absolute;
-      right: 12px;
+      right: 56px;
       bottom: 14px;
       width: 18px;
       height: 18px;
       border: 2px solid var(--border);
-      border-top-color: var(--accent);
+      border-top-color: var(--bg-code);
       border-radius: 50%;
       animation: spin 0.6s linear infinite;
     }
@@ -487,17 +521,35 @@
       flex: 1;
       min-height: 50px;
       max-height: 200px;
-      padding: 12px 16px;
+      padding: 12px 16px 12px 16px;
       border: none;
-      border-radius: 12px;
-      background: var(--bg-secondary);
+      border-radius: 14px 0 0 14px;
+      background: transparent;
       color: var(--text-primary);
       font: inherit;
       resize: none;
-      transition: border-color 0.2s;
     }
-    .input-container textarea:focus { outline: none; box-shadow: 0 0 0 2px var(--accent); }
+    .input-container textarea:focus { outline: none; }
     .input-container textarea::placeholder { color: var(--text-muted); }
+    .input-send {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      min-height: 44px;
+      margin: 6px 8px 6px 0;
+      border: none;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 1.15rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .input-send:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
+    .input-send:disabled { opacity: 0.6; cursor: not-allowed; }
     .input-toolbar {
       display: flex;
       justify-content: space-between;
@@ -506,23 +558,23 @@
       padding: 0 4px;
     }
     .input-hint {
-      font-size: 0.72rem;
+      font-size: 0.75rem;
       color: var(--text-muted);
     }
-    .input-icons { display: flex; gap: 4px; }
+    .input-icons { display: flex; gap: 6px; }
     .input-icon {
-      width: 28px;
-      height: 28px;
+      width: 30px;
+      height: 30px;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       background: transparent;
-      color: var(--text-muted);
-      font-size: 0.9rem;
+      color: var(--text-secondary);
+      font-size: 0.95rem;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.2s;
+      transition: background 0.2s, color 0.2s;
     }
     .input-icon:hover { background: var(--bg-tertiary); color: var(--text-primary); }
     .input-stop {
@@ -554,39 +606,89 @@
       font-size: 0.85rem;
     }
 
-    /* Thinking box */
-    .thinking {
-      max-width: 100%;
-      padding: 12px 16px;
-      margin-left: 60px;
-      border-radius: 10px;
-      background: var(--bg-secondary);
-      font-size: 0.85rem;
+    /* 步骤 + 回复合并为一篇文章块，步骤第一行可显示/隐藏 */
+    .response-article {
+      margin-top: 20px;
+      background: var(--bg-primary);
+      font-size: 0.875rem;
       color: var(--text-secondary);
     }
-    .thinking .title {
-      font-weight: 600;
-      color: var(--accent);
-      margin-bottom: 8px;
+    .response-steps-bar {
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
+      padding: 10px 0 12px;
       cursor: pointer;
+      user-select: none;
+      transition: opacity 0.2s;
     }
-    .thinking .title:hover { color: var(--accent-hover); }
-    .thinking .toggle {
-      font-size: 0.9rem;
+    .response-steps-bar:hover { opacity: 0.85; }
+    .response-steps-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .response-steps-bar .thinking-label {
+      font-weight: 600;
+      color: #333;
+      white-space: nowrap;
+    }
+    .response-steps-bar .thinking-duration {
+      font-weight: 500;
+      color: var(--text-muted);
+      font-size: 0.8125rem;
+      white-space: nowrap;
+    }
+    .response-steps-bar .thinking-arrow {
+      font-size: 1rem;
       color: var(--text-muted);
       transition: transform 0.2s;
+      flex-shrink: 0;
+      margin-left: 8px;
     }
-    .thinking.collapsed .toggle { transform: rotate(-90deg); }
-    .thinking .steps { transition: max-height 0.3s ease-out, opacity 0.3s; overflow: hidden; }
-    .thinking.collapsed .steps { max-height: 0 !important; opacity: 0; }
-    .thinking .step { margin: 6px 0; padding: 6px 0; }
-    .thinking .step:last-child { border-bottom: none; }
-    .thinking .step .tool { color: #63b3ed; }
-    .thinking .step .preview { color: var(--text-muted); font-size: 0.8rem; }
-    .thinking .step .plan-preview {
+    .response-article.steps-collapsed .thinking-arrow { transform: rotate(-90deg); }
+    .response-steps {
+      transition: max-height 0.3s ease-out, opacity 0.25s;
+      overflow: hidden;
+    }
+    .response-article.steps-collapsed .response-steps { max-height: 0 !important; opacity: 0; }
+    .response-steps .step {
+      margin: 6px 0 0;
+      padding: 0;
+      border-radius: 6px;
+      background: var(--bg-tertiary);
+      overflow: hidden;
+    }
+    .response-steps .step:first-child { margin-top: 0; }
+    .response-steps .step-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.2s;
+    }
+    .response-steps .step-header:hover { background: var(--bg-secondary); }
+    .response-steps .step-header .step-summary { flex: 1; min-width: 0; font-size: 0.8125rem; }
+    .response-steps .step-toggle {
+      flex-shrink: 0;
+      margin-left: 8px;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      transition: transform 0.2s;
+    }
+    .response-steps .step.collapsed .step-toggle { transform: rotate(-90deg); }
+    .response-steps .step-body {
+      padding: 0 12px 12px;
+      overflow: hidden;
+      transition: max-height 0.25s ease-out, opacity 0.2s;
+    }
+    .response-steps .step.collapsed .step-body { max-height: 0 !important; padding: 0 12px; opacity: 0; }
+    .response-steps .step .tool { color: #63b3ed; }
+    .response-steps .step .preview { color: var(--text-muted); font-size: 0.8rem; }
+    .response-steps .step .plan-preview {
       margin: 8px 0 0;
       padding: 10px;
       background: var(--bg-primary);
@@ -598,6 +700,32 @@
       max-height: 200px;
       overflow-y: auto;
     }
+    .response-content {
+      padding-top: 4px;
+    }
+    .response-content .msg-row { margin: 0; }
+    .response-content .msg {
+      border-radius: 0;
+      border: none;
+      box-shadow: none;
+      background: transparent;
+      padding: 0 0 8px;
+    }
+    .response-content .msg.assistant .content h2,
+    .response-content .msg.assistant .content h3 {
+      margin-top: 1.25em;
+      margin-bottom: 0.5em;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .response-content .msg.assistant .content h2:first-child,
+    .response-content .msg.assistant .content h3:first-child { margin-top: 0; }
+    .response-content .msg.assistant .content ol,
+    .response-content .msg.assistant .content ul {
+      margin: 0.5em 0;
+      padding-left: 1.5em;
+    }
+    .response-content .msg.assistant .content li { margin: 0.25em 0; }
     .msg.assistant .cursor {
       display: inline-block;
       width: 2px;
@@ -616,59 +744,137 @@
       .main { margin-left: 0; }
       .messages { padding: 16px; width: 100%; }
       .msg { max-width: calc(100% - 60px); }
+      .input-area { padding: 12px 16px 20px; }
+      .input-wrapper { padding-bottom: env(safe-area-inset-bottom, 0); }
+      .kbd-hint { display: none; }
     }
 
-    /* Welcome screen */
+    /* Visual viewport for mobile keyboard */
+    @supports (height: 100dvh) {
+      body { min-height: 100dvh; }
+      .sidebar { height: 100dvh; }
+      .main { height: 100dvh; }
+    }
+
+    /* Welcome screen - OpenCode style: sessions + see servers */
     .welcome {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 60px 40px;
+      padding: 48px 32px;
       text-align: center;
       color: var(--text-secondary);
       min-height: 60vh;
+      max-width: 560px;
+      margin: 0 auto;
     }
     .welcome h1 { 
-      font-size: 2.5rem; 
-      margin-bottom: 12px; 
+      font-size: 2rem; 
+      margin-bottom: 8px; 
       color: var(--text-primary);
       font-weight: 600;
+      letter-spacing: -0.02em;
     }
     .welcome h1 span { 
-      background: linear-gradient(135deg, var(--accent) 0%, #764ba2 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--accent);
     }
-    .welcome p { 
-      font-size: 1.05rem; 
-      max-width: 480px; 
-      line-height: 1.7;
+    .welcome .tagline { 
+      font-size: 0.95rem; 
+      max-width: 420px; 
+      line-height: 1.6;
       color: var(--text-muted);
+      margin-bottom: 32px;
     }
-    .welcome .suggestions {
+    .welcome .actions {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
       gap: 12px;
-      margin-top: 32px;
-      justify-content: center;
+      width: 100%;
+      max-width: 280px;
     }
-    .welcome .suggestion {
+    .welcome .btn-primary {
       padding: 12px 20px;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .welcome .btn-primary:hover { background: var(--accent-hover); }
+    .welcome .btn-secondary {
+      padding: 10px 18px;
+      border-radius: 8px;
       border: 1px solid var(--border);
-      border-radius: 24px;
       background: var(--bg-secondary);
       color: var(--text-secondary);
       font-size: 0.9rem;
       cursor: pointer;
       transition: all 0.2s;
     }
+    .welcome .btn-secondary:hover { 
+      background: var(--bg-tertiary); 
+      color: var(--text-primary);
+    }
+    .welcome .suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+      justify-content: center;
+    }
+    .welcome .suggestion {
+      padding: 10px 16px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
     .welcome .suggestion:hover { 
       background: var(--bg-tertiary); 
       border-color: var(--accent);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(13, 148, 136, 0.15);
+      color: var(--text-primary);
+    }
+
+    /* Scroll to bottom button */
+    .scroll-bottom {
+      position: fixed;
+      bottom: 100px;
+      right: 32px;
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 1.1rem;
+      cursor: pointer;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.3s, transform 0.3s, background 0.2s;
+      z-index: 50;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .scroll-bottom.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .scroll-bottom:hover { background: var(--accent-hover); }
+
+    /* Keyboard shortcuts hint */
+    .kbd-hint {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      background: var(--bg-tertiary);
+      padding: 2px 5px;
+      border-radius: 3px;
+      margin-left: 6px;
     }
   </style>
 </head>
@@ -684,6 +890,7 @@
     </div>
     <div class="sidebar-search">
       <input type="text" id="sessionSearch" placeholder="搜索对话" autocomplete="off" />
+      <span class="kbd-hint">⌘K</span>
     </div>
     <button class="new-chat-btn" id="newChatBtn">
       <span>+</span> 新对话
@@ -714,29 +921,39 @@
     <div class="messages-wrapper">
       <div class="messages" id="messages">
         <div class="welcome" id="welcome">
-          <h1>你好，我是 <span>Bee</span></h1>
-          <p>我是你的个人智能体助手，可以帮你搜索信息、执行命令、分析文件等。试试问我一些问题吧！</p>
+          <h1><span>Bee</span> 个人智能体</h1>
+          <p class="tagline">从主页开始新会话，或查看服务器状态。</p>
+          <div class="actions">
+            <button type="button" class="btn-primary" id="welcomeNewChat">新会话</button>
+            <button type="button" class="btn-secondary" id="welcomeSeeServers">查看服务器</button>
+          </div>
           <div class="suggestions">
-            <div class="suggestion" data-prompt="帮我查看当前目录的文件">查看文件</div>
-            <div class="suggestion" data-prompt="今天天气怎么样">查天气</div>
-            <div class="suggestion" data-prompt="帮我在维基百科搜索人工智能">搜索维基</div>
-            <div class="suggestion" data-prompt="用 Python 写一个快速排序">写代码</div>
+            <span class="suggestion" data-prompt="帮我查看当前目录的文件">查看文件</span>
+            <span class="suggestion" data-prompt="今天天气怎么样">查天气</span>
+            <span class="suggestion" data-prompt="帮我在维基百科搜索人工智能">搜索维基</span>
+            <span class="suggestion" data-prompt="用 Python 写一个快速排序">写代码</span>
           </div>
         </div>
       </div>
     </div>
 
+    <button class="scroll-bottom" id="scrollBottom" title="滚动到底部">↓</button>
+
     <div class="input-wrapper">
       <div class="input-area">
         <div class="input-container">
-          <textarea id="input" placeholder="在这里输入消息，按下 Enter 发送" rows="1"></textarea>
+          <div class="input-inner">
+            <textarea id="input" placeholder="Ask anything" rows="1"></textarea>
+            <button type="button" class="input-send" id="sendBtn" title="发送 (Enter)" aria-label="发送">↗</button>
+          </div>
           <div id="inputLoading" class="input-loading" style="display:none"></div>
         </div>
         <div class="input-toolbar">
           <span class="input-hint" id="inputHint">Shift+Enter 换行</span>
           <button type="button" class="input-stop" id="stopBtn" style="display:none">停止</button>
           <div class="input-icons">
-            <button type="button" class="input-icon" title="附加">📎</button>
+            <input type="file" id="fileInput" accept="image/*,.txt,.md,.json,.js,.ts,.py,.html,.css,.xml,.yaml,.yml" multiple style="display:none" />
+            <button type="button" class="input-icon" id="attachBtn" title="附加文件">📎</button>
             <button type="button" class="input-icon" title="工具">🔧</button>
           </div>
         </div>
@@ -754,6 +971,7 @@
     const messagesWrapper = messagesEl.parentElement;
     const welcomeEl = document.getElementById('welcome');
     const inputEl = document.getElementById('input');
+    const sendBtn = document.getElementById('sendBtn');
     const inputLoadingEl = document.getElementById('inputLoading');
     const inputHintEl = document.getElementById('inputHint');
     const stopBtn = document.getElementById('stopBtn');
@@ -765,6 +983,9 @@
     const newChatIcon = document.getElementById('newChatIcon');
     const toggleSidebarBtn = document.getElementById('toggleSidebar');
     const themeToggleBtn = document.getElementById('themeToggle');
+    const scrollBottomBtn = document.getElementById('scrollBottom');
+    const fileInput = document.getElementById('fileInput');
+    const attachBtn = document.getElementById('attachBtn');
 
     // State
     const STORAGE_KEY = 'bee_session_id';
@@ -1006,66 +1227,116 @@
       msg.insertBefore(icon, msg.firstChild);
     }
 
-    // Thinking box
-    function ensureThinkingBox() {
-      let box = document.getElementById('stream-thinking');
-      if (!box) {
-        box = document.createElement('div');
-        box.id = 'stream-thinking';
-        box.className = 'thinking' + (collapseThinking ? ' collapsed' : '');
-        box.innerHTML = '<div class="title"><span class="title-text">ReAct 思考过程</span><span class="toggle">▼</span></div><div class="steps"></div>';
-        box.querySelector('.title').onclick = () => {
-          box.classList.toggle('collapsed');
-          collapseThinking = box.classList.contains('collapsed');
+    // 步骤+回复合并为一篇文章块 response-article
+    function ensureResponseArticle() {
+      let article = document.getElementById('response-article');
+      if (!article) {
+        article = document.createElement('div');
+        article.id = 'response-article';
+        article.className = 'response-article' + (collapseThinking ? ' steps-collapsed' : '');
+        article.innerHTML = '<div class="response-steps-bar"><div class="response-steps-bar-left"><span class="thinking-label">' + (collapseThinking ? '显示步骤' : 'Bee 思考完成') + '</span><span class="thinking-duration"></span></div><span class="thinking-arrow">›</span></div><div class="response-steps"></div><div class="response-content"></div>';
+        article.querySelector('.response-steps-bar').onclick = () => {
+          article.classList.toggle('steps-collapsed');
+          collapseThinking = article.classList.contains('steps-collapsed');
           localStorage.setItem(COLLAPSE_KEY, collapseThinking);
+          updateThinkingBoxLabel(article);
         };
-        messagesEl.appendChild(box);
+        messagesEl.appendChild(article);
       }
-      return box;
+      return article;
+    }
+
+    function ensureThinkingBox() {
+      return ensureResponseArticle();
+    }
+
+    function updateThinkingBoxLabel(box) {
+      if (!box) box = document.getElementById('response-article');
+      if (!box) return;
+      const label = box.querySelector('.thinking-label');
+      if (label) label.textContent = box.classList.contains('steps-collapsed') ? '显示步骤' : 'Bee 思考完成';
+    }
+
+    function updateThinkingBoxDuration(seconds) {
+      const box = document.getElementById('response-article');
+      if (!box) return;
+      const dur = box.querySelector('.thinking-duration');
+      if (dur) dur.textContent = seconds != null ? seconds + '秒' : '';
+      updateThinkingBoxLabel(box);
     }
 
     function addThinkingStep(type, text, tool, preview) {
-      const box = ensureThinkingBox();
-      const steps = box.querySelector('.steps');
+      const article = ensureThinkingBox();
+      const steps = article.querySelector('.response-steps');
       const step = document.createElement('div');
       step.className = 'step';
-      if (type === 'thinking') step.textContent = '思考中…';
-      else if (type === 'thinking_content') {
-        step.innerHTML = '<strong>Plan / 推理：</strong><pre class="plan-preview"></pre>';
-        step.querySelector('.plan-preview').textContent = text || '';
+
+      const header = document.createElement('div');
+      header.className = 'step-header';
+      const summary = document.createElement('span');
+      summary.className = 'step-summary';
+      const toggleSpan = document.createElement('span');
+      toggleSpan.className = 'step-toggle';
+      toggleSpan.textContent = '▼';
+
+      const body = document.createElement('div');
+      body.className = 'step-body';
+
+      if (type === 'thinking') {
+        summary.textContent = '思考中…';
+      } else if (type === 'thinking_content') {
+        summary.innerHTML = '<strong>Plan / 推理</strong>';
+        const pre = document.createElement('pre');
+        pre.className = 'plan-preview';
+        pre.textContent = text || '';
+        body.appendChild(pre);
+      } else if (type === 'memory_recovery') {
+        summary.innerHTML = '<strong>📚 使用长期记忆</strong>';
+        const span = document.createElement('span');
+        span.className = 'preview';
+        span.textContent = preview || '';
+        body.appendChild(span);
+      } else if (type === 'memory_consolidation') {
+        summary.innerHTML = '<strong>💾 整理到长期记忆</strong>';
+        const span = document.createElement('span');
+        span.className = 'preview';
+        span.textContent = preview || '';
+        body.appendChild(span);
+      } else if (type === 'tool_call') {
+        summary.innerHTML = '🔧 调用工具 <span class="tool"></span>';
+        summary.querySelector('.tool').textContent = tool || '';
+      } else if (type === 'observation') {
+        summary.innerHTML = '👁️ 观察 <span class="tool"></span>';
+        summary.querySelector('.tool').textContent = tool || '';
+        const span = document.createElement('span');
+        span.className = 'preview';
+        span.textContent = preview || '';
+        body.appendChild(span);
+      } else if (type === 'tool_failure') {
+        summary.innerHTML = '<strong style="color:var(--accent);">⚠️ 工具失败</strong> <span class="tool"></span>';
+        summary.querySelector('.tool').textContent = tool || '';
+      } else if (type === 'recovery') {
+        summary.innerHTML = '<strong style="color:var(--warning);">🔄 错误恢复</strong>';
+        const span = document.createElement('span');
+        span.className = 'preview';
+        span.textContent = preview || '';
+        body.appendChild(span);
+      } else {
+        summary.textContent = text || type;
       }
-      else if (type === 'memory_recovery') {
-        step.innerHTML = '<strong>📚 使用长期记忆</strong><br><span class="preview"></span>';
-        step.querySelector('.preview').textContent = preview || '';
-      }
-      else if (type === 'memory_consolidation') {
-        step.innerHTML = '<strong>💾 整理到长期记忆</strong><br><span class="preview"></span>';
-        step.querySelector('.preview').textContent = preview || '';
-      }
-      else if (type === 'tool_call') {
-        step.innerHTML = '🔧 调用工具 <span class="tool"></span>';
-        step.querySelector('.tool').textContent = tool || '';
-      }
-      else if (type === 'observation') {
-        step.innerHTML = '👁️ 观察 <span class="tool"></span>: <span class="preview"></span>';
-        step.querySelector('.tool').textContent = tool || '';
-        step.querySelector('.preview').textContent = preview || '';
-      }
-      else if (type === 'tool_failure') {
-        step.innerHTML = '<strong style="color:var(--accent);">⚠️ 工具失败</strong> <span class="tool"></span>';
-        step.querySelector('.tool').textContent = tool || '';
-      }
-      else if (type === 'recovery') {
-        step.innerHTML = '<strong style="color:var(--warning);">🔄 错误恢复</strong> <span class="preview"></span>';
-        step.querySelector('.preview').textContent = preview || '';
-      }
-      else step.textContent = text || type;
+
+      header.appendChild(summary);
+      header.appendChild(toggleSpan);
+      header.onclick = () => step.classList.toggle('collapsed');
+
+      step.appendChild(header);
+      step.appendChild(body);
       steps.appendChild(step);
       messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
     }
 
     function removeThinkingBox() {
-      const box = document.getElementById('stream-thinking');
+      const box = document.getElementById('response-article');
       if (box) box.remove();
     }
 
@@ -1110,6 +1381,7 @@
       headerTitleEl.textContent = text.length > 30 ? text.slice(0, 30) + '...' : text;
       
       inputEl.disabled = true;
+      if (sendBtn) sendBtn.disabled = true;
       inputLoadingEl.style.display = 'block';
       stopBtn.style.display = 'inline-block';
       loading = true;
@@ -1130,6 +1402,7 @@
       let pendingBuffer = '';
       let streamDone = false;
       let typingId = null;
+      let thinkingStartTime = null;
       const TYPING_MS = 20;
       const CHARS_PER_TICK = 2;
 
@@ -1160,7 +1433,6 @@
               }
               if (rawText) addMsgCopyIcon(assistantBubble, rawText);
             }
-            removeThinkingBox();
             loadSessionList();
           }
         }
@@ -1194,16 +1466,25 @@
             try {
               const ev = JSON.parse(line);
               if (ev.type === 'session_id') { saveSessionId(ev.session_id); continue; }
-              if (ev.type === 'thinking') { addThinkingStep('thinking'); continue; }
-              if (ev.type === 'thinking_content') { addThinkingStep('thinking_content', ev.text); continue; }
-              if (ev.type === 'memory_recovery') { addThinkingStep('memory_recovery', null, null, ev.preview); continue; }
-              if (ev.type === 'memory_consolidation') { addThinkingStep('memory_consolidation', null, null, ev.preview); continue; }
-              if (ev.type === 'tool_call') { addThinkingStep('tool_call', null, ev.tool); continue; }
-              if (ev.type === 'observation') { addThinkingStep('observation', null, ev.tool, ev.preview); continue; }
-              if (ev.type === 'tool_failure') { addThinkingStep('tool_failure', ev.reason, ev.tool); continue; }
-              if (ev.type === 'recovery') { addThinkingStep('recovery', ev.detail); continue; }
+              if (ev.type === 'thinking') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('thinking'); continue; }
+              if (ev.type === 'thinking_content') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('thinking_content', ev.text); continue; }
+              if (ev.type === 'memory_recovery') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('memory_recovery', null, null, ev.preview); continue; }
+              if (ev.type === 'memory_consolidation') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('memory_consolidation', null, null, ev.preview); continue; }
+              if (ev.type === 'tool_call') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('tool_call', null, ev.tool); continue; }
+              if (ev.type === 'observation') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('observation', null, ev.tool, ev.preview); continue; }
+              if (ev.type === 'tool_failure') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('tool_failure', ev.reason, ev.tool); continue; }
+              if (ev.type === 'recovery') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('recovery', ev.detail); continue; }
               if (ev.type === 'message_chunk') {
                 if (!assistantBubble) {
+                  let article = document.getElementById('response-article');
+                  if (!article) {
+                    article = document.createElement('div');
+                    article.id = 'response-article';
+                    article.className = 'response-article steps-collapsed';
+                    article.innerHTML = '<div class="response-steps-bar" style="display:none"></div><div class="response-steps"></div><div class="response-content"></div>';
+                    messagesEl.appendChild(article);
+                  }
+                  const contentWrap = article.querySelector('.response-content');
                   const row = document.createElement('div');
                   row.className = 'msg-row assistant';
                   const avatar = document.createElement('div');
@@ -1215,13 +1496,20 @@
                   contentEl = document.createElement('span');
                   assistantBubble.appendChild(contentEl);
                   row.appendChild(assistantBubble);
-                  messagesEl.appendChild(row);
+                  contentWrap.appendChild(row);
                   startTypingLoop();
                 }
                 pendingBuffer += ev.text || '';
                 continue;
               }
-              if (ev.type === 'message_done') { streamDone = true; continue; }
+              if (ev.type === 'message_done') {
+                streamDone = true;
+                if (thinkingStartTime != null) {
+                  const sec = Math.round((Date.now() - thinkingStartTime) / 1000);
+                  updateThinkingBoxDuration(sec);
+                }
+                continue;
+              }
               if (ev.type === 'token_usage') { updateTokenStats(ev.total_tokens || 0, ev.cumulative_total || 0); continue; }
               if (ev.type === 'error') { showError(ev.text || '错误'); }
             } catch (err) { console.warn('Parse error:', err); }
@@ -1248,7 +1536,6 @@
           addMsgCopyIcon(assistantBubble, rawText);
         }
         if (!typingId) {
-          removeThinkingBox();
           loadSessionList();
         }
       } catch (e) {
@@ -1264,6 +1551,7 @@
       } finally {
         clearTimeout(timeoutId);
         inputEl.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
         inputLoadingEl.style.display = 'none';
         stopBtn.style.display = 'none';
         loading = false;
@@ -1306,13 +1594,61 @@
       }
     }
 
+    // Scroll to bottom button
+    function updateScrollButton() {
+      const { scrollTop, scrollHeight, clientHeight } = messagesWrapper;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+      scrollBottomBtn.classList.toggle('visible', !isNearBottom && messagesEl.children.length > 1);
+    }
+    scrollBottomBtn.onclick = () => {
+      messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
+    };
+    messagesWrapper.onscroll = updateScrollButton;
+
+    // Mobile keyboard handling
+    if (visualViewport) {
+      visualViewport.addEventListener('resize', () => {
+        if (visualViewport.height < window.innerHeight * 0.8) {
+          document.body.style.height = visualViewport.height + 'px';
+          messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
+        } else {
+          document.body.style.height = '';
+        }
+      });
+    }
+
     // Event listeners
     stopBtn.onclick = () => { if (loading) stopGeneration(); };
+    if (sendBtn) sendBtn.onclick = () => { if (!loading) send(); };
     newChatBtn.onclick = newChat;
     newChatIcon.onclick = newChat;
     toggleSidebarBtn.onclick = toggleSidebar;
     themeToggleBtn.onclick = toggleTheme;
     sessionSearchEl.oninput = loadSessionList;
+    
+    // Keyboard shortcuts
+    document.onkeydown = (e) => {
+      // Ctrl/Cmd + K: Focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        sessionSearchEl.focus();
+      }
+      // Ctrl/Cmd + L: Clear current session
+      if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+        e.preventDefault();
+        if (!loading && sessionId) newChat();
+      }
+      // Escape: Close sidebar on mobile / blur input
+      if (e.key === 'Escape') {
+        if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
+          sidebar.classList.remove('open');
+        } else {
+          inputEl.blur();
+          sessionSearchEl.blur();
+        }
+      }
+    };
+    
     inputEl.onkeydown = (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -1322,6 +1658,67 @@
     inputEl.oninput = () => {
       inputEl.style.height = 'auto';
       inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + 'px';
+    };
+
+    // File upload
+    attachBtn.onclick = () => fileInput.click();
+    fileInput.onchange = async () => {
+      const files = Array.from(fileInput.files);
+      if (!files.length) return;
+      
+      for (const file of files) {
+        if (file.size > 10 * 1024 * 1024) {
+          alert(`文件 ${file.name} 超过 10MB 限制`);
+          continue;
+        }
+        const text = await file.text();
+        hideWelcome();
+        
+        // Create message with file preview
+        const row = document.createElement('div');
+        row.className = 'msg-row user';
+        const avatar = document.createElement('div');
+        avatar.className = 'msg-avatar';
+        avatar.textContent = '👤';
+        row.appendChild(avatar);
+        
+        const msg = document.createElement('div');
+        msg.className = 'msg user';
+        msg.innerHTML = `<div class="file-name">📄 ${escapeHtml(file.name)}</div>`;
+        if (text) {
+          const preview = document.createElement('div');
+          preview.className = 'file-preview';
+          preview.textContent = text.slice(0, 500) + (text.length > 500 ? '...' : '');
+          msg.appendChild(preview);
+        }
+        row.appendChild(msg);
+        messagesEl.appendChild(row);
+      }
+      fileInput.value = '';
+      messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
+    };
+
+    // Welcome: 新会话 -> focus input
+    document.getElementById('welcomeNewChat').onclick = () => {
+      inputEl.focus();
+    };
+
+    // Welcome: 查看服务器 -> show health status (OpenCode-style "See Servers")
+    document.getElementById('welcomeSeeServers').onclick = async () => {
+      const btn = document.getElementById('welcomeSeeServers');
+      const orig = btn.textContent;
+      btn.textContent = '检查中…';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/health');
+        const ok = res.ok;
+        const text = await res.text();
+        alert(ok ? '服务器状态: ' + (text || 'OK') : '服务器异常: ' + res.status);
+      } catch (e) {
+        alert('无法连接服务器: ' + (e.message || '网络错误'));
+      }
+      btn.textContent = orig;
+      btn.disabled = false;
     };
 
     // Suggestion clicks
