@@ -52,6 +52,9 @@ reqwest = { version = "0.12", features = ["json"] }
 chrono = "0.4"
 html2text = "0.16"
 
+# SQLite 持久化
+rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
+
 # 代码搜索与分析（自主迭代）
 regex = "1.10"
 glob = "0.3"
@@ -72,3 +75,6 @@ default = []
 whatsapp = ["dep:axum", "dep:tower"]
 web = ["dep:axum", "dep:tower", "dep:bytes"]
 browser = ["dep:headless_chrome"]
+
+[dev-dependencies]
+tempfile = "3.0"
