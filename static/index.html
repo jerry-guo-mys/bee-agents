@@ -261,6 +261,11 @@
     }
     .session-item-content { flex: 1; min-width: 0; }
     .session-item:hover { background: var(--bg-tertiary); }
+    .session-item:focus {
+      background: var(--bg-tertiary);
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
     .session-item.active {
       background: var(--bg-tertiary);
       border-left: 3px;
@@ -932,6 +937,51 @@
     }
     @keyframes blink { 50% { opacity: 0; } }
 
+    /* Typing indicator - enhanced animation */
+    .typing-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 12px 16px;
+      background: var(--bg-secondary);
+      border-radius: 16px 16px 16px 6px;
+      margin-bottom: 8px;
+    }
+    .typing-indicator span {
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: typingBounce 1.4s ease-in-out infinite;
+    }
+    .typing-indicator span:nth-child(1) { animation-delay: 0s; }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typingBounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-10px); }
+    }
+
+    /* Loading dots for thinking state */
+    .thinking-dots {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .thinking-dots span {
+      width: 6px;
+      height: 6px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      animation: thinkingPulse 1.5s ease-in-out infinite;
+    }
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes thinkingPulse {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+
     /* Mobile */
     @media (max-width: 768px) {
       .sidebar { transform: translateX(calc(-1 * var(--sidebar-width))); }
@@ -1519,6 +1569,132 @@
       border-radius: 3px;
       margin-left: 6px;
     }
+
+    /* Bookmark styles */
+    .msg-row.bookmarked .msg {
+      border-left: 3px solid var(--warning);
+      padding-left: 19px;
+    }
+    .msg-row.bookmarked .msg.assistant {
+      background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(245, 158, 11, 0.05) 100%);
+    }
+    [data-theme="light"] .msg-row.bookmarked .msg.assistant {
+      background: linear-gradient(135deg, #ffffff 0%, rgba(245, 158, 11, 0.03) 100%);
+    }
+
+    /* Bookmarks modal */
+    .bookmarks-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+      animation: fadeIn 0.2s ease;
+    }
+    .bookmarks-content {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-md);
+      animation: slideUp 0.2s ease;
+    }
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .bookmarks-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .bookmarks-title { font-size: 1.1rem; font-weight: 600; }
+    .bookmarks-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.5rem;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .bookmarks-close:hover { color: var(--text-primary); }
+    .bookmarks-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .bookmarks-empty {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .bookmarks-empty small {
+      display: block;
+      margin-top: 8px;
+      font-size: 0.8rem;
+    }
+    .bookmark-item {
+      padding: 16px;
+      background: var(--bg-primary);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      transition: border-color 0.2s;
+    }
+    .bookmark-item:hover {
+      border-color: var(--accent);
+    }
+    .bookmark-content {
+      font-size: 0.9rem;
+      color: var(--text-primary);
+      line-height: 1.5;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .bookmark-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .bookmark-delete {
+      padding: 4px 12px;
+      border: none;
+      border-radius: 4px;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .bookmark-delete:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* Pull to refresh indicator */
+    .pull-indicator {
+      text-align: center;
+      padding: 20px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      animation: slideDown 0.2s ease;
+    }
   </style>
 </head>
 <body>
@@ -1559,6 +1735,7 @@
           <span>本次: <span class="value" id="tokenCurrent">-</span></span>
           <span>累计: <span class="value" id="tokenTotal">-</span></span>
         </div>
+        <button id="importBtn" title="导入对话" style="padding: 6px 12px; border: none; border-radius: 6px; background: var(--bg-tertiary); color: var(--text-secondary); font-size: 0.85rem; cursor: pointer; transition: background 0.2s;">📤 导入</button>
         <button id="exportBtn" title="导出对话" style="padding: 6px 12px; border: none; border-radius: 6px; background: var(--bg-tertiary); color: var(--text-secondary); font-size: 0.85rem; cursor: pointer; transition: background 0.2s;">📥 导出</button>
       </div>
     </header>
@@ -1609,6 +1786,7 @@
           <div class="input-icons">
             <button type="button" class="input-icon" id="fontSizeBtn" title="调整字体">🔤</button>
             <input type="file" id="fileInput" accept="image/*,.txt,.md,.json,.js,.ts,.py,.html,.css,.xml,.yaml,.yml" multiple style="display:none" />
+    <input type="file" id="importFileInput" accept=".md,.json,.txt" style="display:none" />
             <button type="button" class="input-icon" id="attachBtn" title="附加文件">📎</button>
             <button type="button" class="input-icon" id="fullscreenBtn" title="全屏模式">⛶</button>
           </div>
@@ -1745,6 +1923,8 @@
     const shortcutsBtn = document.getElementById('shortcutsBtn');
     const helpBtn = document.getElementById('helpBtn');
     const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+    const importFileInput = document.getElementById('importFileInput');
     const connectionStatus = document.getElementById('connectionStatus');
     const imagePreviewModal = document.getElementById('imagePreviewModal');
     const previewImage = document.getElementById('previewImage');
@@ -2086,6 +2266,7 @@
               </div>
               <button class="delete-btn" data-id="${s.id}" title="删除">✕</button>
             `;
+            div.setAttribute('tabindex', '0');
             div.onclick = (e) => {
               if (e.target.classList.contains('delete-btn')) {
                 e.stopPropagation();
@@ -2094,6 +2275,12 @@
                 switchSession(s.id);
               }
             };
+            div.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                switchSession(s.id);
+              }
+            });
             // Double-click to rename
             const titleEl = div.querySelector('.title');
             titleEl.addEventListener('dblclick', (e) => {
@@ -2284,6 +2471,33 @@
       }
     }
 
+    // Typing indicator
+    let typingIndicatorEl = null;
+    function showTypingIndicator() {
+      if (typingIndicatorEl) return;
+      hideWelcome();
+      const row = document.createElement('div');
+      row.className = 'msg-row assistant typing-indicator-row';
+      row.dataset.role = 'assistant';
+      const avatar = document.createElement('div');
+      avatar.className = 'msg-avatar';
+      avatar.textContent = '🐝';
+      row.appendChild(avatar);
+      const indicator = document.createElement('div');
+      indicator.className = 'typing-indicator';
+      indicator.innerHTML = '<span></span><span></span><span></span>';
+      row.appendChild(indicator);
+      messagesEl.appendChild(row);
+      typingIndicatorEl = row;
+      smartScroll();
+    }
+    function hideTypingIndicator() {
+      if (typingIndicatorEl) {
+        typingIndicatorEl.remove();
+        typingIndicatorEl = null;
+      }
+    }
+
     function appendMessage(role, content, isMarkdown = false, timestamp = null) {
       hideWelcome();
       // Create row with avatar
@@ -2348,12 +2562,16 @@
         actions.className = 'msg-actions';
         actions.innerHTML = `
           <button class="msg-action-btn" data-action="copy">📋 复制</button>
+          <button class="msg-action-btn" data-action="bookmark">🔖 收藏</button>
           <button class="msg-action-btn" data-action="regenerate">🔄 重新生成</button>
         `;
         actions.querySelector('[data-action="copy"]').onclick = () => {
           navigator.clipboard.writeText(content).then(() => {
             showToast('已复制到剪贴板', 'success');
           });
+        };
+        actions.querySelector('[data-action="bookmark"]').onclick = () => {
+          toggleBookmark(row, msg.dataset.timestamp, content);
         };
         actions.querySelector('[data-action="regenerate"]').onclick = () => {
           // Find previous user message and regenerate
@@ -2672,6 +2890,9 @@
       if (inputHintEl) inputHintEl.textContent = '复杂任务可能需要数分钟，请耐心等待';
       loading = true;
       abortController = new AbortController();
+
+      // Show typing indicator
+      showTypingIndicator();
       var abortedByTimeout = false;
 
       // 空闲超时：仅当「连续一段时间未收到任何流数据」时判定超时，收到任意事件则重置
@@ -2768,6 +2989,8 @@
               if (ev.type === 'tool_failure') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('tool_failure', ev.reason, ev.tool); continue; }
               if (ev.type === 'recovery') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('recovery', ev.detail); continue; }
               if (ev.type === 'message_chunk') {
+                // Hide typing indicator when first chunk arrives
+                hideTypingIndicator();
                 if (!assistantBubble) {
                   let article = document.getElementById('response-article');
                   if (!article) {
@@ -2833,6 +3056,7 @@
           loadSessionList();
         }
       } catch (e) {
+        hideTypingIndicator();
         if (typingId) { clearTimeout(typingId); typingId = null; }
         if (e.name === 'AbortError') {
           showError(abortedByTimeout ? '请求超时，请重试' : '已停止生成');
@@ -2843,6 +3067,7 @@
         }
         removeThinkingBox();
       } finally {
+        hideTypingIndicator();
         if (timeoutId) clearTimeout(timeoutId);
         inputEl.disabled = false;
         if (sendBtn) sendBtn.disabled = false;
@@ -2945,6 +3170,84 @@
       });
     }
 
+    // Touch gestures for mobile
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    const SWIPE_THRESHOLD = 80;
+    const SWIPE_TIME_THRESHOLD = 300;
+
+    document.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+      const touchDuration = Date.now() - touchStartTime;
+      const deltaX = touchEndX - touchStartX;
+      const deltaY = touchEndY - touchStartY;
+
+      // Only handle horizontal swipes
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > SWIPE_THRESHOLD && touchDuration < SWIPE_TIME_THRESHOLD) {
+        // Swipe right to open sidebar (from left edge)
+        if (deltaX > 0 && touchStartX < 50) {
+          sidebar.classList.add('open');
+        }
+        // Swipe left to close sidebar
+        else if (deltaX < 0 && sidebar.classList.contains('open')) {
+          sidebar.classList.remove('open');
+        }
+      }
+    }, { passive: true });
+
+    // Pull to refresh (only when at top of messages)
+    let pullStartY = 0;
+    let isPulling = false;
+    messagesWrapper.addEventListener('touchstart', (e) => {
+      if (messagesWrapper.scrollTop === 0) {
+        pullStartY = e.touches[0].clientY;
+        isPulling = true;
+      }
+    }, { passive: true });
+
+    messagesWrapper.addEventListener('touchmove', (e) => {
+      if (!isPulling) return;
+      const pullDistance = e.touches[0].clientY - pullStartY;
+      if (pullDistance > 100 && pullDistance < 150) {
+        // Visual feedback for pull to refresh
+        if (!document.querySelector('.pull-indicator')) {
+          const indicator = document.createElement('div');
+          indicator.className = 'pull-indicator';
+          indicator.innerHTML = '<span>↓ 下拉刷新</span>';
+          messagesWrapper.prepend(indicator);
+        }
+      }
+    }, { passive: true });
+
+    messagesWrapper.addEventListener('touchend', (e) => {
+      if (!isPulling) return;
+      const pullDistance = e.changedTouches[0].clientY - pullStartY;
+      const indicator = document.querySelector('.pull-indicator');
+
+      if (pullDistance > 150) {
+        // Trigger refresh
+        if (indicator) {
+          indicator.innerHTML = '<span class="thinking-dots"><span></span><span></span><span></span></span>';
+        }
+        loadSessionList();
+        if (sessionId) loadHistory();
+        setTimeout(() => {
+          indicator?.remove();
+        }, 500);
+      } else {
+        indicator?.remove();
+      }
+      isPulling = false;
+    }, { passive: true });
+
     // Event listeners
     stopBtn.onclick = () => { if (loading) stopGeneration(); };
     if (sendBtn) sendBtn.onclick = () => { if (!loading) send(); };
@@ -2954,11 +3257,46 @@
     themeToggleBtn.onclick = toggleTheme;
     sessionSearchEl.oninput = loadSessionList;
     searchClearBtn.onclick = clearSearch;
+
+    // Keyboard navigation for session list
+    let focusedSessionIndex = -1;
+    sessionSearchEl.addEventListener('keydown', (e) => {
+      const sessionItems = sessionListEl.querySelectorAll('.session-item');
+      if (sessionItems.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedSessionIndex = Math.min(focusedSessionIndex + 1, sessionItems.length - 1);
+        sessionItems[focusedSessionIndex]?.focus();
+        sessionItems[focusedSessionIndex]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusedSessionIndex = Math.max(focusedSessionIndex - 1, 0);
+        sessionItems[focusedSessionIndex]?.focus();
+        sessionItems[focusedSessionIndex]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' && focusedSessionIndex >= 0) {
+        e.preventDefault();
+        sessionItems[focusedSessionIndex]?.click();
+        inputEl.focus();
+      }
+    });
+
+    // Reset focused index when search changes
+    sessionSearchEl.addEventListener('input', () => {
+      focusedSessionIndex = -1;
+    });
     shortcutsBtn.onclick = openShortcutsModal;
     helpBtn.onclick = () => {
       showToast('Bee 个人智能体 - 基于 Rust 的高性能 AI 助手', 'info', 5000);
     };
     exportBtn.onclick = exportConversation;
+    importBtn.onclick = importConversation;
+    importFileInput.onchange = async () => {
+      const file = importFileInput.files[0];
+      if (!file) return;
+      await handleImportFile(file);
+      importFileInput.value = '';
+    };
     
     // Keyboard shortcuts
     document.onkeydown = (e) => {
@@ -3272,21 +3610,21 @@
       const rows = messagesEl.querySelectorAll('.msg-row');
       let markdown = '# Bee 对话导出\n\n';
       markdown += `导出时间: ${new Date().toLocaleString('zh-CN')}\n\n`;
-      
+
       rows.forEach(row => {
         const role = row.dataset.role;
         const msg = row.querySelector('.msg');
         const content = msg.dataset.rawContent;
         const timestamp = msg.dataset.timestamp;
         const time = timestamp ? new Date(timestamp).toLocaleString('zh-CN') : '';
-        
+
         if (role === 'user') {
           markdown += `## 👤 用户 (${time})\n\n${content}\n\n`;
         } else if (role === 'assistant') {
           markdown += `## 🐝 助手 (${time})\n\n${content}\n\n`;
         }
       });
-      
+
       const blob = new Blob([markdown], { type: 'text/markdown' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -3296,8 +3634,288 @@
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       showToast('对话已导出', 'success');
+    }
+
+    // Import conversation
+    function importConversation() {
+      importFileInput.click();
+    }
+
+    async function handleImportFile(file) {
+      try {
+        const content = await file.text();
+        const extension = file.name.split('.').pop().toLowerCase();
+
+        let messages = [];
+
+        if (extension === 'json') {
+          // Parse JSON format
+          const data = JSON.parse(content);
+          if (Array.isArray(data.messages)) {
+            messages = data.messages;
+          } else if (Array.isArray(data)) {
+            messages = data;
+          } else {
+            throw new Error('无效的 JSON 格式');
+          }
+        } else {
+          // Parse Markdown format (default export format)
+          messages = parseMarkdownConversation(content);
+        }
+
+        if (messages.length === 0) {
+          showToast('未找到有效的对话内容', 'warning');
+          return;
+        }
+
+        // Create new session with imported messages
+        const importedTitle = file.name.replace(/\.[^/.]+$/, '');
+        await createSessionWithMessages(importedTitle, messages);
+
+        showToast(`成功导入 ${messages.length} 条消息`, 'success');
+      } catch (err) {
+        console.error('Import error:', err);
+        showToast('导入失败: ' + (err.message || '文件格式错误'), 'error');
+      }
+    }
+
+    function parseMarkdownConversation(markdown) {
+      const messages = [];
+      const lines = markdown.split('\n');
+      let currentRole = null;
+      let currentContent = [];
+      let currentTimestamp = null;
+
+      const saveCurrentMessage = () => {
+        if (currentRole && currentContent.length > 0) {
+          messages.push({
+            role: currentRole,
+            content: currentContent.join('\n').trim(),
+            timestamp: currentTimestamp || new Date().toISOString()
+          });
+        }
+        currentContent = [];
+      };
+
+      for (const line of lines) {
+        // Check for user message header
+        const userMatch = line.match(/^## 👤 用户 \(([^)]+)\)/);
+        if (userMatch) {
+          saveCurrentMessage();
+          currentRole = 'user';
+          currentTimestamp = new Date(userMatch[1]).toISOString();
+          continue;
+        }
+
+        // Check for assistant message header
+        const assistantMatch = line.match(/^## 🐝 助手 \(([^)]+)\)/);
+        if (assistantMatch) {
+          saveCurrentMessage();
+          currentRole = 'assistant';
+          currentTimestamp = new Date(assistantMatch[1]).toISOString();
+          continue;
+        }
+
+        // Skip export header lines
+        if (line.startsWith('# ') || line.startsWith('导出时间:')) {
+          continue;
+        }
+
+        // Skip empty lines between messages
+        if (!currentRole && line.trim() === '') {
+          continue;
+        }
+
+        // Accumulate content
+        if (currentRole) {
+          currentContent.push(line);
+        }
+      }
+
+      // Save last message
+      saveCurrentMessage();
+
+      return messages;
+    }
+
+    async function createSessionWithMessages(title, messages) {
+      try {
+        // Create new session
+        const res = await fetch('/api/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: messages[0]?.content || '导入的对话', session_id: undefined })
+        });
+
+        if (!res.ok) throw new Error('创建会话失败');
+
+        // Parse stream to get session ID
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let newSessionId = null;
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const ev = JSON.parse(line);
+              if (ev.type === 'session_id') {
+                newSessionId = ev.session_id;
+                break;
+              }
+            } catch (e) {}
+          }
+          if (newSessionId) break;
+        }
+
+        if (!newSessionId) throw new Error('无法获取会话 ID');
+
+        // Clear the initial message and add imported messages
+        await fetch('/api/session/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: newSessionId })
+        });
+
+        // Add all imported messages
+        for (const msg of messages) {
+          await fetch('/api/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_id: newSessionId,
+              role: msg.role,
+              content: msg.content,
+              timestamp: msg.timestamp
+            })
+          });
+        }
+
+        // Switch to new session
+        sessionId = newSessionId;
+        localStorage.setItem(STORAGE_KEY, newSessionId);
+        await loadHistory();
+        loadSessionList();
+
+      } catch (err) {
+        throw new Error('创建会话失败: ' + err.message);
+      }
+    }
+
+    // Bookmark functionality
+    const BOOKMARKS_KEY = 'bee_bookmarks';
+
+    function getBookmarks() {
+      try {
+        return JSON.parse(localStorage.getItem(BOOKMARKS_KEY)) || [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveBookmarks(bookmarks) {
+      localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bookmarks));
+    }
+
+    function toggleBookmark(msgRow, timestamp, content) {
+      const bookmarks = getBookmarks();
+      const existingIndex = bookmarks.findIndex(b => b.timestamp === timestamp);
+
+      if (existingIndex >= 0) {
+        // Remove bookmark
+        bookmarks.splice(existingIndex, 1);
+        saveBookmarks(bookmarks);
+        msgRow.classList.remove('bookmarked');
+        showToast('已取消收藏', 'success');
+      } else {
+        // Add bookmark
+        const bookmark = {
+          timestamp: timestamp,
+          content: content.slice(0, 200) + (content.length > 200 ? '...' : ''),
+          fullContent: content,
+          sessionId: sessionId,
+          createdAt: new Date().toISOString()
+        };
+        bookmarks.push(bookmark);
+        saveBookmarks(bookmarks);
+        msgRow.classList.add('bookmarked');
+        showToast('已添加到收藏', 'success');
+      }
+    }
+
+    function applyBookmarkStyles() {
+      const bookmarks = getBookmarks();
+      document.querySelectorAll('.msg-row').forEach(row => {
+        const msg = row.querySelector('.msg');
+        if (msg) {
+          const timestamp = msg.dataset.timestamp;
+          if (bookmarks.some(b => b.timestamp === timestamp)) {
+            row.classList.add('bookmarked');
+          }
+        }
+      });
+    }
+
+    // Add keyboard shortcut for bookmarks (Ctrl/Cmd + B)
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b' && !e.target.matches('input, textarea')) {
+        e.preventDefault();
+        openBookmarksModal();
+      }
+    });
+
+    function openBookmarksModal() {
+      const bookmarks = getBookmarks();
+      const modal = document.createElement('div');
+      modal.className = 'bookmarks-modal';
+      modal.innerHTML = `
+        <div class="bookmarks-content">
+          <div class="bookmarks-header">
+            <span class="bookmarks-title">🔖 收藏的消息</span>
+            <button class="bookmarks-close">✕</button>
+          </div>
+          <div class="bookmarks-list">
+            ${bookmarks.length === 0 ? '<div class="bookmarks-empty">暂无收藏消息<br><small>点击消息上的「收藏」按钮添加</small></div>' : ''}
+            ${bookmarks.map((b, i) => `
+              <div class="bookmark-item" data-index="${i}">
+                <div class="bookmark-content">${escapeHtml(b.content)}</div>
+                <div class="bookmark-meta">
+                  <span>${new Date(b.createdAt).toLocaleString('zh-CN')}</span>
+                  <button class="bookmark-delete" data-index="${i}">删除</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+      modal.querySelector('.bookmarks-close').onclick = () => modal.remove();
+      modal.onclick = (e) => {
+        if (e.target === modal) modal.remove();
+      };
+
+      modal.querySelectorAll('.bookmark-delete').forEach(btn => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const index = parseInt(btn.dataset.index);
+          bookmarks.splice(index, 1);
+          saveBookmarks(bookmarks);
+          modal.remove();
+          openBookmarksModal();
+          applyBookmarkStyles();
+        };
+      });
+
+      document.body.appendChild(modal);
     }
 
     // Init
