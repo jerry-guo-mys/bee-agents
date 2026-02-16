@@ -13,6 +13,7 @@
 pub mod agent;
 pub mod config;
 pub mod core;
+pub mod evolution;
 pub mod integrations;
 pub mod llm;
 pub mod memory;
@@ -20,3 +21,5 @@ pub mod observability;
 pub mod react;
 pub mod tools;
 pub mod ui;
+
+pub use evolution::{EvolutionLoop, EvolutionConfig};

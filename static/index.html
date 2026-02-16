@@ -4,30 +4,33 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bee - 个人智能体</title>
-  <meta name="theme-color" content="#F8F7F7" />
-  <meta name="theme-color" content="#131010" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
   <script src="/js/marked.min.js"></script>
   <link rel="stylesheet" href="/css/github-dark.min.css" id="hljs-theme">
   <script src="/js/highlight.min.js"></script>
   <style>
-    /* OpenCode-inspired: neutral base, clean contrast */
+    /* Harmonious color scheme: cool slate grays with teal accent */
     :root {
-      --background-base: #131010;
-      --bg-primary: #131010;
-      --bg-secondary: #1a1616;
-      --bg-tertiary: #252020;
-      --bg-code: #1a1616;
-      --text-primary: #f5f5f4;
-      --text-secondary: #a8a29e;
-      --text-muted: #78716c;
+      --background-base: #0f172a;
+      --bg-primary: #1e293b;
+      --bg-secondary: #334155;
+      --bg-tertiary: #475569;
+      --bg-code: #1e293b;
+      --text-primary: #f1f5f9;
+      --text-secondary: #cbd5e1;
+      --text-muted: #94a3b8;
       --accent: #0d9488;
       --accent-hover: #14b8a6;
       --success: #4ade80;
       --warning: #f59e0b;
-      --border: rgba(255,255,255,0.06);
+      --link-color: #63b3ed;
+      --send-btn-bg: #3b82f6;
+      --send-btn-hover: #60a5fa;
+      --border: rgba(255,255,255,0.08);
       --sidebar-width: 260px;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
-      --shadow-md: 0 4px 12px rgba(0,0,0,0.25);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.35);
       --input-bg: var(--bg-secondary);
       --divider: var(--border);
       --steps-label-color: var(--accent);
@@ -35,22 +38,25 @@
     [data-theme="light"] {
       --background-base: #ffffff;
       --bg-primary: #ffffff;
-      --bg-secondary: #ffffff;
-      --bg-tertiary: #f5f5f5;
-      --bg-code: #f5f5f5;
-      --text-primary: #1c1917;
-      --text-secondary: #44403c;
-      --text-muted: #78716c;
+      --bg-secondary: #f8fafc;
+      --bg-tertiary: #f1f5f9;
+      --bg-code: #f1f5f9;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
       --accent: #0d9488;
       --accent-hover: #0f766e;
       --success: #16a34a;
       --warning: #d97706;
-      --border: transparent;
-      --shadow-sm: none;
-      --shadow-md: none;
-      --input-bg: #f6f8fa;
-      --divider: #f6f8fa;
-      --steps-label-color: #f6f8fa;
+      --link-color: #2563eb;
+      --send-btn-bg: #2563eb;
+      --send-btn-hover: #3b82f6;
+      --border: rgba(0,0,0,0.08);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --input-bg: #f8fafc;
+      --divider: rgba(0,0,0,0.08);
+      --steps-label-color: rgba(13,148,136,0.1);
     }
     * { box-sizing: border-box; }
     body {
@@ -282,7 +288,7 @@
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--bg-code) 0%, #764ba2 100%);
+      background: linear-gradient(135deg, var(--accent) 0%, #0a7c6f 100%);
       color: #fff;
       font-size: 0.8rem;
       font-weight: 600;
@@ -439,7 +445,7 @@
     }
     .msg.user {
       background: var(--bg-code);
-      color: #333;
+      color: var(--text-primary);
       border-radius: 14px 14px 6px 14px;
       white-space: pre-wrap;
       word-break: break-word;
@@ -563,7 +569,7 @@
       font-size: 0.9em;
       font-family: 'SF Mono', 'Fira Code', monospace;
     }
-    .msg.assistant .content a { color: #63b3ed; text-decoration: none; }
+    .msg.assistant .content a { color: var(--link-color); text-decoration: none; }
     .msg.assistant .content a:hover { text-decoration: underline; }
     .msg.assistant .content blockquote {
       margin: 0.5em 0;
@@ -677,7 +683,7 @@
       margin: 6px 8px 6px 0;
       border: none;
       border-radius: 10px;
-      background: var(--accent);
+      background: var(--send-btn-bg);
       color: #fff;
       font-size: 1.15rem;
       cursor: pointer;
@@ -686,7 +692,7 @@
       justify-content: center;
       transition: background 0.2s, transform 0.15s;
     }
-    .input-send:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
+    .input-send:hover:not(:disabled) { background: var(--send-btn-hover); transform: translateY(-1px); }
     .input-send:disabled { opacity: 0.6; cursor: not-allowed; }
     .input-toolbar {
       display: flex;
@@ -740,10 +746,11 @@
     .spinner {
       width: 20px;
       height: 20px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: #fff;
+      border: 2px solid var(--text-muted);
+      border-top-color: var(--text-primary);
       border-radius: 50%;
       animation: spin 0.6s linear infinite;
+      opacity: 0.7;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .error {
@@ -780,7 +787,7 @@
     }
     .response-steps-bar .thinking-label {
       font-weight: 600;
-      color: #333;
+      color: var(--text-primary);
       white-space: nowrap;
     }
     .response-steps-bar .thinking-duration {
@@ -835,7 +842,7 @@
       transition: max-height 0.25s ease-out, opacity 0.2s;
     }
     .response-steps .step.collapsed .step-body { max-height: 0 !important; padding: 0 12px; opacity: 0; }
-    .response-steps .step .tool { color: #63b3ed; }
+    .response-steps .step .tool { color: var(--link-color); }
     .response-steps .step .preview { color: var(--text-muted); font-size: 0.8rem; }
     .response-steps .step .plan-preview {
       margin: 8px 0 0;
@@ -1476,7 +1483,6 @@
     <header class="header">
       <div class="header-left">
         <button class="toggle-sidebar" id="toggleSidebar" title="切换侧边栏">☰</button>
-        <span class="header-brand"><span>Bee</span> Chat ></span>
         <span class="header-title" id="headerTitle">新对话</span>
       </div>
       <div class="header-actions">

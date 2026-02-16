@@ -34,7 +34,7 @@ pub enum Command {
 }
 
 /// 根据配置与环境变量选择 LLM 后端（DeepSeek / OpenAI 兼容 / Mock）
-pub(crate) fn create_llm_from_config(cfg: &AppConfig) -> Arc<dyn LlmClient> {
+pub fn create_llm_from_config(cfg: &AppConfig) -> Arc<dyn LlmClient> {
     let provider = cfg.llm.provider.to_lowercase();
     // 有 DeepSeek Key 或（配置为 deepseek 且仅有 OpenAI Key 时也走 DeepSeek 兼容端点）
     let use_deepseek = std::env::var("DEEPSEEK_API_KEY").is_ok()

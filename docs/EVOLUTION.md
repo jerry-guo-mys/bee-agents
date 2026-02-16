@@ -173,4 +173,127 @@
 - **机制**：当 `config [memory].vector_enabled = true` 时，长期记忆使用 `InMemoryVectorLongTerm`：写入时调用 OpenAI 兼容的 `/embeddings` 将文本转为向量并存入内存，检索时对 query 做嵌入并按余弦相似度返回 top-k 文本片段。与 LLM 共用 `base_url`、`OPENAI_API_KEY`；嵌入模型由 `[memory].embedding_model` 指定（默认 `text-embedding-3-small`）。
 - **配置**：`config/default.toml` 中 `[memory]`：`vector_enabled`、`embedding_model`、`qdrant_url`（预留）。
 - **代码**：`src/llm/embedding.rs`（`EmbeddingProvider`、`OpenAiEmbedder`、`create_embedder_from_config`）；`src/memory/long_term.rs`（`InMemoryVectorLongTerm`、余弦相似度）；`create_context_with_long_term` 在 `vector_enabled` 且可创建 embedder 时选用向量后端，否则回退 FileLongTerm。
-- **预留**：`qdrant_url` 与 qdrant-client 接入为可选扩展，当前为纯内存向量存储。
+ - **预留**：`qdrant_url` 与 qdrant-client 接入为可选扩展，当前为纯内存向量存储。
+
+---
+
+## 17. 已实现：自主迭代系统（安全可控的自我改进）
+
+Bee 实现了完整的自主迭代系统，允许 Agent 分析自身代码、生成改进计划、执行修改并验证结果，同时提供全面的安全控制和人工干预机制。
+
+### 核心组件
+
+1. **分析器 (SelfAnalyzer)**: 扫描代码库，识别性能、可读性、文档、测试等方面的问题，生成质量评分
+2. **规划器 (ImprovementPlanner)**: 根据分析结果制定具体的改进步骤，确保步骤原子性、可验证性
+3. **执行引擎 (ExecutionEngine)**: 安全执行改进步骤，包含审批流程、安全验证、回滚机制
+4. **调度引擎 (EvolutionEngine)**: 控制迭代频率，支持手动、间隔、每日、每周调度
+5. **进化循环 (EvolutionLoop)**: 协调整个迭代过程，管理迭代周期和结果跟踪
+
+### 配置说明
+
+完整配置位于 `config/default.toml` 的 `[evolution]` 段：
+
+```toml
+[evolution]
+# 基础设置
+enabled = true                    # 是否启用自主迭代
+max_iterations = 10               # 单次运行最大迭代次数
+target_score_threshold = 0.8      # 目标质量分数阈值
+auto_commit = true                # 是否自动提交 Git
+require_approval = false          # 是否需要人工确认（向后兼容）
+focus_areas = ["performance", "readability", "documentation", "testing"]  # 重点改进领域
+
+# 调度控制
+schedule_type = "manual"          # manual, interval, daily, weekly
+schedule_interval_seconds = 86400 # 间隔调度秒数（默认24小时）
+schedule_time = "02:00"           # 每日/每周调度的具体时间（HH:MM）
+max_iterations_per_period = 3     # 每个周期最大迭代次数
+cooldown_seconds = 300            # 失败后的冷却时间（秒）
+
+# 审批控制
+approval_mode = "none"            # none, console, prompt, webhook
+approval_timeout_seconds = 3600   # 等待审批的超时时间（秒）
+# approval_webhook_url = "..."    # Webhook URL（用于外部审批系统）
+require_approval_for = ["critical"] # 需要审批的操作类型
+
+# 安全限制
+safe_mode = "strict"              # strict, balanced, permissive
+allowed_directories = ["./src"]   # 允许修改的目录白名单
+restricted_files = ["Cargo.toml", "src/main.rs"] # 禁止修改的关键文件
+max_file_size_kb = 1024           # 单次修改最大文件大小（KB）
+allowed_operation_types = ["add", "replace"] # 允许的操作类型
+rollback_enabled = true           # 失败时自动回滚
+backup_before_edit = true         # 编辑前创建备份
+```
+
+### 安全特性
+
+1. **目录白名单**: 只能修改 `allowed_directories` 中的文件
+2. **文件黑名单**: 禁止修改 `restricted_files` 中的关键文件
+3. **操作类型限制**: 仅允许 `allowed_operation_types` 中的操作（add/replace/remove/rename）
+4. **文件大小限制**: 防止修改过大文件（默认1MB）
+5. **审批工作流**: 支持控制台、带超时的提示、Webhook 三种审批模式
+6. **自动回滚**: 操作失败时自动恢复原始文件
+7. **备份机制**: 编辑前自动创建备份副本
+
+### 调度类型
+
+- **manual (手动)**: 仅通过 API 或命令行手动触发
+- **interval (间隔)**: 每 N 秒运行一次（默认24小时）
+- **daily (每日)**: 每天指定时间运行（默认02:00）
+- **weekly (每周)**: 每周指定时间运行（目前按7天间隔）
+
+### 审批模式
+
+- **none (无)**: 无需审批，自动执行
+- **console (控制台)**: 在控制台交互式询问用户是否批准
+- **prompt (提示超时)**: 在控制台询问，超时后自动拒绝（默认1小时）
+- **webhook (Webhook)**: 向指定 URL 发送审批请求，等待批准响应
+
+### 使用方式
+
+1. **命令行测试**:
+   ```bash
+   cargo run --bin bee-evolution
+   ```
+
+2. **集成到主程序**:
+   Bee 主程序已集成进化循环，可通过配置启用。
+
+3. **手动触发**:
+   ```rust
+   let mut evolution_loop = EvolutionLoop::new(llm, executor, config, project_root);
+   let results = evolution_loop.run().await?;
+   ```
+
+4. **目标迭代**:
+   ```rust
+   let result = evolution_loop.run_targeted_iteration(
+       vec!["src/lib.rs".to_string()],
+       "优化错误处理"
+   ).await?;
+   ```
+
+### 验证与质量保证
+
+1. **步骤验证**: 每个步骤执行后立即验证代码可编译
+2. **测试运行**: 迭代完成后运行完整测试套件
+3. **质量评估**: 计算改进后的代码质量评分
+4. **经验学习**: 记录成功和失败的教训，用于后续迭代优化
+
+### 监控与调试
+
+- 每个步骤都有详细日志输出
+- 迭代结果包含成功/失败状态、质量分数、测试结果
+- 失败时记录具体原因和教训
+- 支持通过配置调整日志详细程度
+
+### 设计原则
+
+1. **安全第一**: 所有修改都经过多层安全验证
+2. **渐进改进**: 小步快跑，每次迭代只做有限修改
+3. **人工可控**: 提供完整的审批和干预机制
+4. **可观测性**: 完整的日志和结果跟踪
+5. **可恢复性**: 失败时自动回滚，不影响系统稳定性
+
+该系统使 Bee 能够持续自我改进，同时确保安全性和可控性，满足企业级部署的要求。

@@ -1,8 +1,3 @@
-//! 工具箱：cat、ls、shell、search、echo 与注册表、执行器
-//!
-//! 所有工具实现 Tool trait；ToolRegistry 注册，ToolExecutor 带超时执行。
-//! 可选 browser 工具（feature "browser"）：Headless Chrome 控制浏览器提取内容。
-
 pub mod executor;
 pub mod filesystem;
 pub mod echo;
@@ -11,6 +6,13 @@ pub mod registry;
 pub mod schema;
 pub mod shell;
 pub mod search;
+pub mod code_read;
+pub mod code_grep;
+pub mod code_edit;
+pub mod code_write;
+pub mod test_run;
+pub mod test_check;
+pub mod git_commit;
 
 #[cfg(feature = "browser")]
 pub mod browser;
@@ -23,6 +25,13 @@ pub use registry::{Tool, ToolRegistry};
 pub use schema::tool_call_schema_json;
 pub use shell::ShellTool;
 pub use search::SearchTool;
+pub use code_read::CodeReadTool;
+pub use code_grep::CodeGrepTool;
+pub use code_edit::CodeEditTool;
+pub use code_write::CodeWriteTool;
+pub use test_run::TestRunTool;
+pub use test_check::TestCheckTool;
+pub use git_commit::GitCommitTool;
 
 #[cfg(feature = "browser")]
 pub use browser::BrowserTool;

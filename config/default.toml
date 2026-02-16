@@ -69,6 +69,58 @@ auto_lesson_on_hallucination = true
 # 是否将工具调用成功也写入 memory/procedural.md（§3.5 工具统计；默认 false 减少噪音）
 record_tool_success = false
 
+# 自主迭代核心配置
+# 是否启用自主迭代功能
+enabled = true
+# 单次运行最大迭代次数
+max_iterations = 10
+# 目标质量分数阈值
+target_score_threshold = 0.8
+# 是否自动提交 Git
+auto_commit = true
+# 是否需要人工确认（向后兼容）
+require_approval = false
+# 重点改进领域
+focus_areas = ["performance", "readability", "documentation", "testing"]
+
+# 调度控制
+# 调度类型: manual (仅手动), interval (间隔), daily (每日), weekly (每周)
+schedule_type = "manual"
+# 间隔调度时的秒数 (默认 24 小时)
+schedule_interval_seconds = 86400
+# 每日/每周调度的具体时间 (HH:MM)
+schedule_time = "02:00"
+# 每个周期最大迭代次数
+max_iterations_per_period = 3
+# 失败后的冷却时间（秒）
+cooldown_seconds = 300
+
+# 审批控制
+# 审批模式: none (无), console (控制台), prompt (提示超时), webhook (Webhook)
+approval_mode = "none"
+# 等待审批的超时时间（秒）
+approval_timeout_seconds = 3600
+# Webhook URL（用于外部审批系统）
+# approval_webhook_url = "http://example.com/approve"
+# 需要审批的操作类型
+require_approval_for = ["critical"]
+
+# 安全限制
+# 安全级别: strict (严格), balanced (平衡), permissive (宽松)
+safe_mode = "strict"
+# 允许修改的目录白名单
+allowed_directories = ["./src"]
+# 禁止修改的关键文件
+restricted_files = ["Cargo.toml", "src/main.rs"]
+# 单次修改最大文件大小（KB）
+max_file_size_kb = 1024
+# 允许的操作类型
+allowed_operation_types = ["add", "replace"]
+# 失败时自动回滚
+rollback_enabled = true
+# 编辑前创建备份
+backup_before_edit = true
+
 # bee-web 服务（端口可由环境变量 BEE_WEB_PORT 覆盖）
 [web]
 port = 8080

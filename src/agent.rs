@@ -21,7 +21,8 @@ use crate::react::{react_loop, ContextManager, Critic, Planner, ReactEvent};
 use tokio::sync::mpsc;
 use crate::tools::{
     tool_call_schema_json, CatTool, EchoTool, LsTool, PluginTool, SearchTool, ShellTool,
-    ToolExecutor, ToolRegistry,
+    ToolExecutor, ToolRegistry, CodeReadTool, CodeGrepTool, CodeEditTool, CodeWriteTool,
+    TestRunTool, TestCheckTool, GitCommitTool,
 };
 #[cfg(feature = "browser")]
 use crate::tools::BrowserTool;
@@ -80,6 +81,14 @@ pub fn create_agent_components(
     for entry in &cfg.tools.plugins {
         tools.register(PluginTool::new(entry, workspace, cfg.tools.tool_timeout_secs));
     }
+
+    tools.register(CodeReadTool::new(workspace));
+    tools.register(CodeGrepTool::new(workspace));
+    tools.register(CodeEditTool::new(workspace));
+    tools.register(CodeWriteTool::new(workspace));
+    tools.register(TestRunTool::new(workspace));
+    tools.register(TestCheckTool::new(workspace));
+    tools.register(GitCommitTool::new(workspace));
 
     let tool_schema = tool_call_schema_json();
     let full_system_prompt = if tool_schema.is_empty() {

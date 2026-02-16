@@ -60,6 +60,61 @@ fn default_max_context_turns() -> usize {
     20
 }
 
+/// 进化调度类型
+#[derive(Debug, Clone, Deserialize)]
+pub enum ScheduleType {
+    #[serde(rename = "manual")]
+    Manual,
+    #[serde(rename = "interval")]
+    Interval,
+    #[serde(rename = "daily")]
+    Daily,
+    #[serde(rename = "weekly")]
+    Weekly,
+}
+
+/// 审批模式
+#[derive(Debug, Clone, Deserialize)]
+pub enum ApprovalMode {
+    #[serde(rename = "none")]
+    None,
+    #[serde(rename = "console")]
+    Console,
+    #[serde(rename = "prompt")]
+    Prompt,
+    #[serde(rename = "webhook")]
+    Webhook,
+}
+
+/// 安全级别
+#[derive(Debug, Clone, Deserialize)]
+pub enum SafeMode {
+    #[serde(rename = "strict")]
+    Strict,
+    #[serde(rename = "balanced")]
+    Balanced,
+    #[serde(rename = "permissive")]
+    Permissive,
+}
+
+impl Default for ScheduleType {
+    fn default() -> Self {
+        ScheduleType::Manual
+    }
+}
+
+impl Default for ApprovalMode {
+    fn default() -> Self {
+        ApprovalMode::None
+    }
+}
+
+impl Default for SafeMode {
+    fn default() -> Self {
+        SafeMode::Strict
+    }
+}
+
 /// [evolution] 段：自我进化相关（参见 docs/EVOLUTION.md）
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct EvolutionSection {
@@ -69,9 +124,163 @@ pub struct EvolutionSection {
     /// 是否将工具调用成功也写入 procedural.md（EVOLUTION §3.5 工具统计；默认 false 减少噪音）
     #[serde(default)]
     pub record_tool_success: bool,
+    /// 是否启用自主迭代功能
+    #[serde(default = "default_evolution_enabled")]
+    pub enabled: bool,
+    /// 单次运行最大迭代次数
+    #[serde(default = "default_max_iterations")]
+    pub max_iterations: usize,
+    /// 目标质量分数阈值
+    #[serde(default = "default_target_score_threshold")]
+    pub target_score_threshold: f64,
+    /// 是否自动提交 Git
+    #[serde(default = "default_auto_commit")]
+    pub auto_commit: bool,
+    /// 是否需要人工确认（向后兼容）
+    #[serde(default = "default_require_approval")]
+    pub require_approval: bool,
+    /// 重点改进领域
+    #[serde(default = "default_focus_areas")]
+    pub focus_areas: Vec<String>,
+    /// 调度类型
+    #[serde(default = "default_schedule_type")]
+    pub schedule_type: ScheduleType,
+    /// 间隔调度时的秒数
+    #[serde(default = "default_schedule_interval_seconds")]
+    pub schedule_interval_seconds: u64,
+    /// 每日/每周调度的具体时间 (HH:MM)
+    #[serde(default = "default_schedule_time")]
+    pub schedule_time: String,
+    /// 每个周期最大迭代次数
+    #[serde(default = "default_max_iterations_per_period")]
+    pub max_iterations_per_period: usize,
+    /// 失败后的冷却时间（秒）
+    #[serde(default = "default_cooldown_seconds")]
+    pub cooldown_seconds: u64,
+    /// 审批模式
+    #[serde(default = "default_approval_mode")]
+    pub approval_mode: ApprovalMode,
+    /// 等待审批的超时时间（秒）
+    #[serde(default = "default_approval_timeout_seconds")]
+    pub approval_timeout_seconds: u64,
+    /// Webhook URL（用于外部审批系统）
+    pub approval_webhook_url: Option<String>,
+    /// 需要审批的操作类型
+    #[serde(default = "default_require_approval_for")]
+    pub require_approval_for: Vec<String>,
+    /// 安全级别
+    #[serde(default = "default_safe_mode")]
+    pub safe_mode: SafeMode,
+    /// 允许修改的目录白名单
+    #[serde(default = "default_allowed_directories")]
+    pub allowed_directories: Vec<String>,
+    /// 禁止修改的关键文件
+    #[serde(default = "default_restricted_files")]
+    pub restricted_files: Vec<String>,
+    /// 单次修改最大文件大小（KB）
+    #[serde(default = "default_max_file_size_kb")]
+    pub max_file_size_kb: usize,
+    /// 允许的操作类型
+    #[serde(default = "default_allowed_operation_types")]
+    pub allowed_operation_types: Vec<String>,
+    /// 失败时自动回滚
+    #[serde(default = "default_rollback_enabled")]
+    pub rollback_enabled: bool,
+    /// 编辑前创建备份
+    #[serde(default = "default_backup_before_edit")]
+    pub backup_before_edit: bool,
 }
 
 fn default_auto_lesson_on_hallucination() -> bool {
+    true
+}
+
+fn default_evolution_enabled() -> bool {
+    true
+}
+
+fn default_max_iterations() -> usize {
+    10
+}
+
+fn default_target_score_threshold() -> f64 {
+    0.8
+}
+
+fn default_auto_commit() -> bool {
+    true
+}
+
+fn default_require_approval() -> bool {
+    false
+}
+
+fn default_focus_areas() -> Vec<String> {
+    vec![
+        "performance".to_string(),
+        "readability".to_string(),
+        "documentation".to_string(),
+        "testing".to_string(),
+    ]
+}
+
+fn default_schedule_type() -> ScheduleType {
+    ScheduleType::Manual
+}
+
+fn default_schedule_interval_seconds() -> u64 {
+    86400 // 24 hours
+}
+
+fn default_schedule_time() -> String {
+    "02:00".to_string() // 2 AM
+}
+
+fn default_max_iterations_per_period() -> usize {
+    3
+}
+
+fn default_cooldown_seconds() -> u64 {
+    300 // 5 minutes
+}
+
+fn default_approval_mode() -> ApprovalMode {
+    ApprovalMode::None
+}
+
+fn default_approval_timeout_seconds() -> u64 {
+    3600 // 1 hour
+}
+
+fn default_require_approval_for() -> Vec<String> {
+    vec!["critical".to_string()]
+}
+
+fn default_safe_mode() -> SafeMode {
+    SafeMode::Strict
+}
+
+fn default_allowed_directories() -> Vec<String> {
+    vec!["./src".to_string()]
+}
+
+fn default_restricted_files() -> Vec<String> {
+    vec!["Cargo.toml".to_string(), "src/main.rs".to_string()]
+}
+
+fn default_max_file_size_kb() -> usize {
+    1024 // 1 MB
+}
+
+fn default_allowed_operation_types() -> Vec<String> {
+    vec!["add".to_string(), "replace".to_string()]
+}
+
+fn default_rollback_enabled() -> bool {
+    true
+}
+
+fn default_backup_before_edit() -> bool {
     true
 }
 
