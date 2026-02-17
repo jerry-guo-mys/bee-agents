@@ -1,0 +1,80 @@
+[
+  {
+    "timestamp": "2026-02-10T10:30:00",
+    "date": "2026-02-10",
+    "error_type": "意图误解",
+    "severity": "中",
+    "scenario": "用户说'计算2+2'，我理解为查看文件",
+    "operation": "使用了glob('*')列出目录",
+    "error_result": "显示文件列表而非计算结果",
+    "user_feedback": "我要的是计算结果，不是文件列表",
+    "root_cause": "没有建立'计算'到'bash'的直接映射",
+    "correction": "改用bash执行'echo 2+2 | bc'",
+    "prevention": "在工具选择速查表中添加计算任务的映射"
+  },
+  {
+    "timestamp": "2026-02-10T14:20:00",
+    "date": "2026-02-10",
+    "error_type": "工具误用",
+    "severity": "中",
+    "scenario": "用户要求查看CSS文件内容",
+    "operation": "使用了ls命令列出目录",
+    "error_result": "用户看到的是文件名而非内容",
+    "user_feedback": "我想看文件里写了什么",
+    "root_cause": "混淆了查看目录和查看内容的工具",
+    "correction": "使用read或cat命令查看文件内容",
+    "prevention": "明确区分ls(列表)和read(内容)的使用场景"
+  },
+  {
+    "timestamp": "2026-02-11T11:15:00",
+    "date": "2026-02-11",
+    "error_type": "路径错误",
+    "severity": "低",
+    "scenario": "尝试修改src/main.rs文件",
+    "operation": "直接尝试edit文件，未验证路径",
+    "error_result": "文件不存在，报错",
+    "user_feedback": "文件在src/bin/main.rs",
+    "root_cause": "假设了标准项目结构，未验证实际路径",
+    "correction": "先用glob找到实际路径再操作",
+    "prevention": "建立'文件操作前必须验证路径'的强制流程"
+  },
+  {
+    "timestamp": "2026-02-13T16:45:00",
+    "date": "2026-02-13",
+    "error_type": "工具误用",
+    "severity": "中",
+    "scenario": "需要批量修改多个文件中的函数名",
+    "operation": "逐个文件使用edit修改",
+    "error_result": "效率低，且可能遗漏",
+    "user_feedback": "有没有更快的方法？",
+    "root_cause": "不了解ast_grep_replace批量修改功能",
+    "correction": "使用ast_grep_replace进行批量重构",
+    "prevention": "在工具选择决策树中添加批量修改分支"
+  },
+  {
+    "timestamp": "2026-02-16T09:30:00",
+    "date": "2026-02-16",
+    "error_type": "意图误解",
+    "severity": "低",
+    "scenario": "用户说'继续'",
+    "operation": "自动触发了新的搜索",
+    "error_result": "偏离了之前的对话上下文",
+    "user_feedback": "我是说继续之前的任务",
+    "root_cause": "没有追溯对话上下文理解'继续'的含义",
+    "correction": "回顾对话历史，确认用户意图后再执行",
+    "prevention": "对模糊指令使用确认模板"
+  },
+  {
+    "timestamp": "2026-02-16T15:20:00",
+    "date": "2026-02-16",
+    "error_type": "输出不当",
+    "severity": "中",
+    "scenario": "用户询问如何实现Docker部署",
+    "operation": "仅提供了概念性描述",
+    "error_result": "用户不知道具体如何操作",
+    "user_feedback": "能给我具体的命令吗？",
+    "root_cause": "没有遵循实用指导四层模型",
+    "correction": "提供完整的Dockerfile示例和部署命令",
+    "prevention": "每次回答前检查是否包含可执行代码"
+  }
+]

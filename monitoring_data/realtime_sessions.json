@@ -1,0 +1,30 @@
+[
+  {
+    "session_id": "20260217_095508_4347612528",
+    "timestamp": "2026-02-17T09:55:08.677427",
+    "date": "2026-02-17",
+    "user_input": "帮我计算2+2",
+    "intent_understood": "数学计算请求",
+    "tools_used": [
+      {
+        "tool": "bash",
+        "params": {
+          "command": "echo '2+2' | bc"
+        },
+        "timestamp": "2026-02-17T09:55:08.778942"
+      }
+    ],
+    "files_accessed": [
+      {
+        "path": "/dev/null",
+        "operation": "read",
+        "timestamp": "2026-02-17T09:55:08.834004"
+      }
+    ],
+    "response_time_ms": 211,
+    "success": true,
+    "error_type": null,
+    "error_details": null,
+    "user_feedback": null
+  }
+]
