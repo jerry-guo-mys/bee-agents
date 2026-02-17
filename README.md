@@ -160,9 +160,20 @@ bee/
 
 ## 📚 文档
 
+### 项目文档
 - [📖 使用文档](docs/使用文档.md) - 详细使用指南
 - [🌐 Web UI 文档](docs/WEBUI.md) - Web 界面配置
 - [💬 WhatsApp 文档](docs/WHATSAPP.md) - WhatsApp 集成指南
+- [📑 文档导航](docs/README.md) - 完整文档索引
+
+### 🤖 AI 行为改进系统
+- [🎯 AI改进指南](AI_IMPROVEMENT_GUIDE.md) - **统一入口，从这里开始**
+- [⚡ 快速参考](ai-quick-reference.md) - 日常交互速查卡
+- [✅ 自检清单](ai-self-check-workflow.md) - 可执行检查清单
+- [📋 改进方案](ai-improvement-plan.md) - 6大领域完整设计
+- [📊 追踪记录](ai-improvement-tracking.md) - 效果验证表
+- [🔧 监控指南](MONITORING_GUIDE.md) - 数据记录和报告
+- [🚀 部署指南](DEPLOYMENT_GUIDE.md) - 生产级监控部署
 
 ---
 

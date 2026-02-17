@@ -1,5 +1,11 @@
 # AI行为改进监控系统 - 使用指南
 
+> 追踪AI助手行为改进效果的手动监控工具使用指南
+
+**📚 相关文档：** [改进指南](AI_IMPROVEMENT_GUIDE.md) | [追踪表](ai-improvement-tracking.md) | [部署指南](DEPLOYMENT_GUIDE.md)
+
+---
+
 ## 📦 系统组成
 
 | 文件 | 功能 |

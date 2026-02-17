@@ -1,5 +1,11 @@
 # AI行为改进实时监控系统 - 生产部署指南
 
+> 部署生产级实时监控系统的完整指南
+
+**📚 相关文档：** [改进指南](AI_IMPROVEMENT_GUIDE.md) | [监控指南](MONITORING_GUIDE.md) | [追踪表](ai-improvement-tracking.md)
+
+---
+
 ## 🎯 系统概述
 
 生产级实时监控系统包含三个核心组件：

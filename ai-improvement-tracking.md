@@ -1,5 +1,11 @@
 # AI行为改进实施追踪表
 
+> 记录改进过程、验证效果、持续优化
+
+**📚 相关文档：** [改进指南](AI_IMPROVEMENT_GUIDE.md) | [快速参考](ai-quick-reference.md) | [完整方案](ai-improvement-plan.md) | [自检清单](ai-self-check-workflow.md)
+
+---
+
 ## 实施概览
 
 | 阶段 | 状态 | 完成日期 |

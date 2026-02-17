@@ -1,5 +1,11 @@
 # AI助手自检工作流
 
+> 可执行的检查清单，每次响应前后对照执行
+
+**📚 相关文档：** [改进指南](AI_IMPROVEMENT_GUIDE.md) | [快速参考](ai-quick-reference.md) | [完整方案](ai-improvement-plan.md) | [追踪表](ai-improvement-tracking.md)
+
+---
+
 ## 每次交互前的自检清单
 
 ### ✅ 意图理解检查
