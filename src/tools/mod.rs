@@ -15,6 +15,10 @@ pub mod test_run;
 pub mod test_check;
 pub mod git_commit;
 pub mod git_diff;
+pub mod deep_search;
+pub mod source_validator;
+pub mod report_generator;
+pub mod knowledge_graph;
 
 #[cfg(feature = "browser")]
 pub mod browser;
@@ -36,6 +40,10 @@ pub use test_run::TestRunTool;
 pub use test_check::TestCheckTool;
 pub use git_commit::GitCommitTool;
 pub use git_diff::GitDiffTool;
+pub use deep_search::DeepSearchTool;
+pub use source_validator::SourceValidatorTool;
+pub use report_generator::ReportGeneratorTool;
+pub use knowledge_graph::KnowledgeGraphBuilder;
 
 #[cfg(feature = "browser")]
 pub use browser::BrowserTool;

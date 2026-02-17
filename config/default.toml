@@ -44,6 +44,14 @@ allowed_domains = [
   "news.google.com", "developer.mozilla.org", "arxiv.org"
 ]
 
+[tools.deep_research]
+max_rounds = 5
+max_results_per_round = 3
+trusted_domains = [
+  "wikipedia.org", "arxiv.org", "pubmed.gov", "scholar.google.com",
+  "github.com", "stackoverflow.com", "docs.rs", "developer.mozilla.org"
+]
+
 # 技能插件（白皮书：Agent 动态注册新工具）。每项运行「程序 + 参数模板」，{{workspace}} 替换为沙箱根路径，{{key}} 从 LLM 传入的 args 取 key
 # [[tools.plugins]]
 # name = "run_script"

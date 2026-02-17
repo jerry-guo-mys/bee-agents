@@ -22,7 +22,8 @@ use tokio::sync::mpsc;
 use crate::tools::{
     tool_call_schema_json, CatTool, EchoTool, LsTool, PluginTool, SearchTool, ShellTool,
     ToolExecutor, ToolRegistry, CodeReadTool, CodeGrepTool, CodeEditTool, CodeWriteTool,
-    TestRunTool, TestCheckTool, GitCommitTool,
+    TestRunTool, TestCheckTool, GitCommitTool, DeepSearchTool, SourceValidatorTool,
+    ReportGeneratorTool, KnowledgeGraphBuilder,
 };
 #[cfg(feature = "browser")]
 use crate::tools::BrowserTool;
@@ -89,6 +90,10 @@ pub fn create_agent_components(
     tools.register(TestRunTool::new(workspace));
     tools.register(TestCheckTool::new(workspace));
     tools.register(GitCommitTool::new(workspace));
+    tools.register(DeepSearchTool::new(&cfg));
+    tools.register(SourceValidatorTool::new(cfg.tools.search.allowed_domains.clone()));
+    tools.register(ReportGeneratorTool::new(&cfg));
+    tools.register(KnowledgeGraphBuilder::new(&cfg));
 
     let tool_schema = tool_call_schema_json();
     let full_system_prompt = if tool_schema.is_empty() {

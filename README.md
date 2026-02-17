@@ -13,11 +13,13 @@ Bee 是一个基于 ReAct 架构的智能体，支持多工具协作、分层记
 ## ✨ 功能特性
 
 - 🤖 **智能编排**: ReAct 循环 + Planner/Critic 双核心，自主规划与反思
-- 🧠 **分层记忆**: 短期对话 + 中期工作区 + 长期持久化记忆
+- 🧠 **分层记忆**: 短期对话 + 中期工作区 + 长期持久化记忆（支持向量检索）
 - 🛠️ **丰富工具**: 沙箱文件系统、Shell 白名单、Web 搜索、浏览器控制
+- 📚 **深度研究**: 多轮自主搜索、信息源验证、结构化报告生成、知识图谱构建
 - 💬 **多界面**: TUI 终端界面、Web 浏览器界面、WhatsApp 集成
 - 🔒 **安全沙箱**: 受限文件系统访问、Shell 命令白名单机制
 - 🔌 **多 LLM 支持**: DeepSeek/OpenAI 无缝切换，Mock 模式离线测试
+- 🔄 **自我进化**: 从失败中学习、用户偏好记忆、自主代码改进
 
 ---
 
@@ -149,7 +151,13 @@ bee/
 │   ├── llm/        # LLM 客户端 (OpenAI, DeepSeek, Mock)
 │   ├── memory/     # 短期/中期/长期记忆系统
 │   ├── react/      # Planner, Critic, ReAct 循环
-│   ├── tools/      # 工具箱 (cat, ls, shell, search, echo, browser)
+│   ├── tools/      # 工具箱
+│   │   ├── filesystem.rs   # 文件操作 (cat, ls)
+│   │   ├── search.rs       # Web 搜索
+│   │   ├── deep_search.rs  # 深度研究 (NEW!)
+│   │   ├── report_generator.rs  # 报告生成 (NEW!)
+│   │   ├── knowledge_graph.rs   # 知识图谱 (NEW!)
+│   │   └── ...
 │   └── ui/         # TUI 界面 (Ratatui)
 ├── static/         # Web UI 前端 (index.html)
 ├── config/         # 配置与 Prompt 模板
@@ -167,13 +175,20 @@ bee/
 - [📑 文档导航](docs/README.md) - 完整文档索引
 
 ### 🤖 AI 行为改进系统
-- [🎯 AI改进指南](AI_IMPROVEMENT_GUIDE.md) - **统一入口，从这里开始**
+- [🎯 AI 改进指南](AI_IMPROVEMENT_GUIDE.md) - **统一入口，从这里开始**
 - [⚡ 快速参考](ai-quick-reference.md) - 日常交互速查卡
 - [✅ 自检清单](ai-self-check-workflow.md) - 可执行检查清单
-- [📋 改进方案](ai-improvement-plan.md) - 6大领域完整设计
+- [📋 改进方案](ai-improvement-plan.md) - 6 大领域完整设计
 - [📊 追踪记录](ai-improvement-tracking.md) - 效果验证表
 - [🔧 监控指南](MONITORING_GUIDE.md) - 数据记录和报告
 - [🚀 部署指南](DEPLOYMENT_GUIDE.md) - 生产级监控部署
+
+### 📚 深度研究功能
+- [📖 深度研究文档](docs/DEEP_RESEARCH.md) - 完整使用指南
+- [🔍 deep_search](docs/DEEP_RESEARCH.md#1-deep_search---深度搜索) - 多轮自主研究
+- [✔️ validate_source](docs/DEEP_RESEARCH.md#2-validate_source---信息源验证) - 可信度评估
+- [📄 generate_report](docs/DEEP_RESEARCH.md#3-generate_report---报告生成) - 结构化报告
+- [🕸️ build_knowledge_graph](docs/DEEP_RESEARCH.md#4-build_knowledge_graph---知识图谱构建) - 知识图谱
 
 ---
 
