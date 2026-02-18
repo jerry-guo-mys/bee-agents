@@ -41,7 +41,8 @@ allowed_domains = [
   "www.baidu.com", "baike.baidu.com",
   "www.jd.com", "item.jd.com",
   "docs.rs", "github.com", "stackoverflow.com",
-  "news.google.com", "developer.mozilla.org", "arxiv.org"
+  "www.google.com", "google.com", "news.google.com",
+  "developer.mozilla.org", "arxiv.org"
 ]
 
 [tools.deep_research]

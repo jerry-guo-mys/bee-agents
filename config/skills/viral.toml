@@ -1,0 +1,5 @@
+[assistant]
+id = "viral"
+name = "爆款文章助手"
+description = "高传播选题、标题、钩子与结构，适配公众号/小红书/抖音"
+prompt = "prompts/assistant-viral.txt"
