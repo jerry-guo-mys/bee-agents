@@ -28,6 +28,7 @@ use bee::agent::{
     consolidate_memory_with_llm, create_agent_components, create_context_with_long_term,
     create_shared_vector_long_term, process_message, process_message_stream, AgentComponents,
 };
+use bee::tools::tool_call_schema_json;
 use bee::memory::InMemoryVectorLongTerm;
 use bee::config::{load_config, AppConfig};
 use bee::memory::{
@@ -61,6 +62,9 @@ struct AppState {
     system_prompt: String,
     /// 向量长期记忆共享实例（启用时带快照路径，定期保存避免重启丢失）
     shared_vector_long_term: Option<Arc<InMemoryVectorLongTerm>>,
+    /// 多助手：列表与 id -> 完整 system prompt（含 tool schema）
+    assistants: Vec<AssistantInfo>,
+    assistant_prompts: HashMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,6 +72,9 @@ struct ChatRequest {
     message: String,
     #[serde(default)]
     session_id: Option<String>,
+    /// 多助手：选用的助手 id，缺省为 "default"
+    #[serde(default)]
+    assistant_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -129,6 +136,94 @@ struct RenameSessionRequest {
     title: String,
 }
 
+/// 多助手：前端展示用
+#[derive(Debug, Clone, Serialize)]
+struct AssistantInfo {
+    id: String,
+    name: String,
+    description: String,
+}
+
+/// assistants.toml 中单条配置
+#[derive(Debug, Deserialize)]
+struct AssistantEntry {
+    id: String,
+    name: String,
+    description: String,
+    prompt: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AssistantsConfig {
+    assistants: Vec<AssistantEntry>,
+}
+
+/// 从 config/assistants.toml 加载助手列表与 prompt，prompt 路径相对 config 目录
+fn load_assistants(config_base: &std::path::Path) -> (Vec<AssistantInfo>, HashMap<String, String>) {
+    let toml_path = [
+        config_base.join("assistants.toml"),
+        std::path::Path::new("config/assistants.toml").to_path_buf(),
+        std::path::Path::new("../config/assistants.toml").to_path_buf(),
+    ]
+    .into_iter()
+    .find(|p| p.exists());
+
+    let entries: Vec<AssistantEntry> = match toml_path.and_then(|p| std::fs::read_to_string(p).ok()) {
+        Some(s) => toml::from_str::<AssistantsConfig>(&s)
+            .map(|c| c.assistants)
+            .unwrap_or_default(),
+        None => vec![
+            AssistantEntry {
+                id: "default".to_string(),
+                name: "通用助手".to_string(),
+                description: "全能型个人助手".to_string(),
+                prompt: "prompts/system.txt".to_string(),
+            },
+        ],
+    };
+
+    let tool_schema = tool_call_schema_json();
+    let list: Vec<AssistantInfo> = entries
+        .iter()
+        .map(|e| AssistantInfo {
+            id: e.id.clone(),
+            name: e.name.clone(),
+            description: e.description.clone(),
+        })
+        .collect();
+
+    let base = if config_base.is_absolute() {
+        config_base.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap_or_default().join(config_base)
+    };
+    let mut prompts = HashMap::new();
+    for e in &entries {
+        let prompt_path = [
+            base.join(&e.prompt),
+            std::path::Path::new("config").join(&e.prompt),
+            std::path::Path::new("../config").join(&e.prompt),
+        ]
+        .into_iter()
+        .find(|p| p.exists());
+
+        let content = prompt_path
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .unwrap_or_else(|| format!("You are {}, a helpful assistant.", e.name));
+
+        let full = if tool_schema.is_empty() {
+            content
+        } else {
+            format!(
+                "{}\n\n## Tool call JSON Schema (you must output valid JSON matching this)\n```json\n{}\n```",
+                content, tool_schema
+            )
+        };
+        prompts.insert(e.id.clone(), full);
+    }
+    (list, prompts)
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
@@ -142,13 +237,23 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|_| std::env::current_dir().unwrap().join("workspace"));
     std::fs::create_dir_all(&workspace).ok();
 
+    let config_base = std::path::Path::new("config");
     let system_prompt = [
-        "config/prompts/system.txt",
-        "../config/prompts/system.txt",
+        config_base.join("prompts/system.txt"),
+        std::path::Path::new("../config/prompts/system.txt").to_path_buf(),
     ]
     .into_iter()
-    .find_map(|p| std::fs::read_to_string(p).ok())
+    .find_map(|p| std::fs::read_to_string(&p).ok())
     .unwrap_or_else(|| "You are Bee, a helpful AI assistant. Use tools: cat, ls, echo, shell, search.".to_string());
+
+    let (assistants, mut assistant_prompts) = load_assistants(config_base);
+    if !assistant_prompts.contains_key("default") {
+        let fallback = assistants
+            .first()
+            .and_then(|a| assistant_prompts.get(&a.id).cloned())
+            .unwrap_or_else(|| system_prompt.clone());
+        assistant_prompts.insert("default".to_string(), fallback);
+    }
 
     let sessions_dir = workspace.join("sessions");
     let memory_root = memory_root(&workspace);
@@ -168,6 +273,8 @@ async fn main() -> anyhow::Result<()> {
         workspace: workspace.clone(),
         system_prompt: system_prompt.clone(),
         shared_vector_long_term,
+        assistants,
+        assistant_prompts,
     });
 
     let app = Router::new()
@@ -182,6 +289,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/session/clear", post(api_session_clear))
         .route("/api/compact", post(api_compact))
         .route("/api/session/rename", post(api_session_rename))
+        .route("/api/assistants", get(api_assistants_list))
         .route("/api/memory/consolidate", post(api_memory_consolidate))
         .route("/api/memory/consolidate-llm", post(api_memory_consolidate_llm))
         .route("/api/config/reload", post(api_config_reload))
@@ -520,6 +628,13 @@ async fn api_session_rename(
     Ok(StatusCode::OK)
 }
 
+/// GET /api/assistants：返回多助手列表（id、name、description），供前端选择
+async fn api_assistants_list(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<AssistantInfo>>, (StatusCode, String)> {
+    Ok(Json(state.assistants.clone()))
+}
+
 /// GET /api/history?session_id=...：返回该会话的对话列表，过滤掉 Tool call / Observation 等内部消息
 async fn api_history(
     State(state): State<Arc<AppState>>,
@@ -633,6 +748,9 @@ async fn api_chat_stream(
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
+    let assistant_id = req.assistant_id.as_deref().unwrap_or("default");
+    let system_prompt_override = state.assistant_prompts.get(assistant_id).cloned();
+
     let context = {
         let mut sessions = state.sessions.write().await;
         sessions.remove(&session_id).unwrap_or_else(|| {
@@ -654,7 +772,8 @@ async fn api_chat_stream(
     let state_spawn = Arc::clone(&state);
     tokio::spawn(async move {
         let mut ctx = context;
-        let _ = process_message_stream(components.as_ref(), &mut ctx, &message, event_tx).await;
+        let prompt_ref = system_prompt_override.as_deref();
+        let _ = process_message_stream(components.as_ref(), &mut ctx, &message, event_tx, prompt_ref).await;
         // 无论流是否被客户端断开（超时/刷新），都持久化当前会话（含用户刚发的提问），刷新后历史不丢
         save_session_to_disk(
             &state_spawn.sessions_dir,

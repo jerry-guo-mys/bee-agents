@@ -72,6 +72,7 @@ pub async fn compact_context(
 }
 
 /// 执行 ReAct 循环：用户输入 -> 拼 system(working+long_term) -> plan -> 解析输出 -> 若 ToolCall 则执行并写回 Observation（可选 Critic 校验）-> 若 Response 则返回并写入长期记忆
+/// 若提供 system_prompt_override，则用其替代 planner 的 base_system_prompt（用于多助手场景）。
 pub async fn react_loop(
     planner: &Planner,
     executor: &ToolExecutor,
@@ -83,6 +84,7 @@ pub async fn react_loop(
     cancel_token: tokio_util::sync::CancellationToken,
     critic: Option<&Critic>,
     task_scheduler: Option<&TaskScheduler>,
+    system_prompt_override: Option<&str>,
 ) -> Result<ReactResult, AgentError> {
     context.push_message(Message::user(user_input.to_string()));
     context.working.set_goal(user_input);
@@ -139,13 +141,14 @@ pub async fn react_loop(
             };
             send_event(&event_tx, ReactEvent::MemoryRecovery { preview });
         }
-        // 动态 system：基础 prompt + Working Memory + 长期记忆检索 + 行为约束/教训 + 程序记忆 + 用户偏好（自我进化）
+        // 动态 system：基础 prompt（或 override）+ Working Memory + 长期记忆检索 + 行为约束/教训 + 程序记忆 + 用户偏好（自我进化）
         let lessons_block = context.lessons_section();
         let procedural_block = context.procedural_section();
         let preferences_block = context.preferences_section();
+        let base_prompt = system_prompt_override.unwrap_or_else(|| planner.base_system_prompt());
         let system = format!(
             "{}\n\n{}\n\n{}{}{}{}",
-            planner.base_system_prompt(),
+            base_prompt,
             working_section,
             long_term_block,
             lessons_block,

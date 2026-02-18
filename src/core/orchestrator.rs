@@ -227,6 +227,7 @@ pub async fn create_agent(
                                 supervisor.cancel_token(),
                                 Some(&critic),
                                 Some(&task_scheduler),
+                                None,
                             ).await;
 
                             match result {

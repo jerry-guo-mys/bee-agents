@@ -1097,6 +1097,36 @@
       border-color: var(--accent);
       color: var(--text-primary);
     }
+    .welcome .assistant-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 28px;
+      max-width: 520px;
+    }
+    .welcome .assistant-card {
+      flex: 1 1 140px;
+      min-width: 120px;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+    .welcome .assistant-card:hover {
+      border-color: var(--accent);
+      background: var(--bg-tertiary);
+    }
+    .welcome .assistant-card.selected {
+      border-color: var(--accent);
+      background: rgba(94,122,140,0.15);
+    }
+    .welcome .assistant-card .name { font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; }
+    .welcome .assistant-card .desc { font-size: 0.75rem; color: var(--text-muted); line-height: 1.35; }
 
     /* Skeleton loading */
     .skeleton {
@@ -1753,7 +1783,8 @@
       <div class="messages" id="messages">
         <div class="welcome" id="welcome">
           <h1><span>Bee</span> 个人智能体</h1>
-          <p class="tagline">从主页开始新会话，或查看服务器状态。</p>
+          <p class="tagline">选择助手后开始新会话，或查看服务器状态。</p>
+          <div class="assistant-list" id="assistantList"></div>
           <div class="actions">
             <button type="button" class="btn-primary" id="welcomeNewChat">新会话</button>
             <button type="button" class="btn-secondary" id="welcomeSeeServers">查看服务器</button>
@@ -1934,7 +1965,9 @@
     const THEME_KEY = 'bee_theme';
     const COLLAPSE_KEY = 'bee_collapse_thinking';
     const FONT_SIZE_KEY = 'bee_font_size';
+    const ASSISTANT_KEY = 'bee_assistant_id';
     let sessionId = localStorage.getItem(STORAGE_KEY) || null;
+    let currentAssistantId = localStorage.getItem(ASSISTANT_KEY) || 'default';
     let loading = false;
     let abortController = null;
     let collapseThinking = localStorage.getItem(COLLAPSE_KEY) === 'true';
@@ -2179,6 +2212,30 @@
       sessionId = id;
       localStorage.setItem(STORAGE_KEY, id);
       loadSessionList();
+    }
+
+    async function loadAssistants() {
+      const listEl = document.getElementById('assistantList');
+      if (!listEl) return;
+      try {
+        const res = await fetch('/api/assistants');
+        if (!res.ok) return;
+        const assistants = await res.json();
+        listEl.innerHTML = '';
+        assistants.forEach(a => {
+          const card = document.createElement('div');
+          card.className = 'assistant-card' + (a.id === currentAssistantId ? ' selected' : '');
+          card.dataset.id = a.id;
+          card.innerHTML = '<div class="name">' + escapeHtml(a.name) + '</div><div class="desc">' + escapeHtml(a.description || '') + '</div>';
+          card.onclick = () => {
+            currentAssistantId = a.id;
+            localStorage.setItem(ASSISTANT_KEY, a.id);
+            listEl.querySelectorAll('.assistant-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+          };
+          listEl.appendChild(card);
+        });
+      } catch (e) { console.warn('Load assistants failed:', e); }
     }
 
     // Session groups: 今天、昨天、上周、更早
@@ -2957,7 +3014,7 @@
         const res = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text, session_id: sessionId || undefined }),
+          body: JSON.stringify({ message: text, session_id: sessionId || undefined, assistant_id: currentAssistantId }),
           signal: abortController.signal
         });
         if (!res.ok) throw new Error(await res.text() || res.statusText);
@@ -3746,7 +3803,7 @@
         const res = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: messages[0]?.content || '导入的对话', session_id: undefined })
+          body: JSON.stringify({ message: messages[0]?.content || '导入的对话', session_id: undefined, assistant_id: currentAssistantId })
         });
 
         if (!res.ok) throw new Error('创建会话失败');
@@ -3920,6 +3977,7 @@
 
     // Init
     startConnectionMonitoring();
+    loadAssistants();
     loadSessionList();
     if (sessionId) loadHistory();
     inputEl.focus();

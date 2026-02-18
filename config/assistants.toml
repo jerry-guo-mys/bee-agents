@@ -1,0 +1,24 @@
+# 多助手配置：id 用于 API，name/description 用于前端展示，prompt 为文件路径（相对 config 或绝对）
+[[assistants]]
+id = "default"
+name = "通用助手"
+description = "全能型个人助手，写代码、查资料、执行任务"
+prompt = "prompts/system.txt"
+
+[[assistants]]
+id = "media"
+name = "自媒体内容助手"
+description = "公众号、小红书、抖音文案与脚本，选题与爆款思路"
+prompt = "prompts/assistant-media.txt"
+
+[[assistants]]
+id = "student"
+name = "高中生提分助手"
+description = "各科知识点、解题思路、复习计划与学习习惯"
+prompt = "prompts/assistant-student.txt"
+
+[[assistants]]
+id = "money"
+name = "搞钱助手"
+description = "副业思路、兼职方向、理财入门与增收建议"
+prompt = "prompts/assistant-money.txt"
