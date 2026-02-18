@@ -158,7 +158,13 @@ struct AssistantsConfig {
     assistants: Vec<AssistantEntry>,
 }
 
-/// 从 config/assistants.toml 加载助手列表与 prompt，prompt 路径相对 config 目录
+/// 单文件技能：config/skills/xxx.toml 内为 [assistant] 表
+#[derive(Debug, Deserialize)]
+struct SingleSkillConfig {
+    assistant: AssistantEntry,
+}
+
+/// 从 config/assistants.toml 与 config/skills/*.toml 加载助手；后者与前者 id 冲突时以 skills 为准
 fn load_assistants(config_base: &std::path::Path) -> (Vec<AssistantInfo>, HashMap<String, String>) {
     let toml_path = [
         config_base.join("assistants.toml"),
@@ -168,7 +174,7 @@ fn load_assistants(config_base: &std::path::Path) -> (Vec<AssistantInfo>, HashMa
     .into_iter()
     .find(|p| p.exists());
 
-    let entries: Vec<AssistantEntry> = match toml_path.and_then(|p| std::fs::read_to_string(p).ok()) {
+    let mut entries: Vec<AssistantEntry> = match toml_path.and_then(|p| std::fs::read_to_string(p).ok()) {
         Some(s) => toml::from_str::<AssistantsConfig>(&s)
             .map(|c| c.assistants)
             .unwrap_or_default(),
@@ -181,6 +187,41 @@ fn load_assistants(config_base: &std::path::Path) -> (Vec<AssistantInfo>, HashMa
             },
         ],
     };
+
+    // 从 config/skills/*.toml 合并：每个文件一个 [assistant]，同 id 覆盖
+    let skills_dirs = [
+        config_base.join("skills"),
+        std::path::Path::new("config/skills").to_path_buf(),
+        std::path::Path::new("../config/skills").to_path_buf(),
+    ];
+    for skills_dir in skills_dirs {
+        if let Ok(rd) = std::fs::read_dir(&skills_dir) {
+            let mut skill_entries: Vec<AssistantEntry> = Vec::new();
+            for entry in rd.flatten() {
+                let path = entry.path();
+                let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if stem.starts_with('_') || stem.starts_with('.') {
+                    continue;
+                }
+                if path.extension().map_or(true, |e| e != "toml") {
+                    continue;
+                }
+                if let Ok(s) = std::fs::read_to_string(&path) {
+                    if let Ok(parsed) = toml::from_str::<SingleSkillConfig>(&s) {
+                        skill_entries.push(parsed.assistant);
+                    }
+                }
+            }
+            for e in skill_entries {
+                if let Some(old) = entries.iter_mut().find(|x| x.id == e.id) {
+                    *old = e;
+                } else {
+                    entries.push(e);
+                }
+            }
+            break;
+        }
+    }
 
     let tool_schema = tool_call_schema_json();
     let list: Vec<AssistantInfo> = entries
