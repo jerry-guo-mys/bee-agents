@@ -36,7 +36,7 @@ use bee::memory::{
     procedural_path, record_error as learnings_record_error, record_learning as learnings_record_learning,
     ConversationMemory, memory_root,
 };
-use bee::react::{compact_context, ContextManager, ReactEvent};
+use bee::react::{compact_context, ContextManager, Planner, ReactEvent};
 
 /// 会话快照：仅持久化对话消息，重启后恢复
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -65,6 +65,9 @@ struct AppState {
     /// 多助手：列表与 id -> 完整 system prompt（含 tool schema）
     assistants: Vec<AssistantInfo>,
     assistant_prompts: HashMap<String, String>,
+    /// 可切换模型：列表与 id -> 模型配置
+    models: Vec<ModelInfo>,
+    model_configs: HashMap<String, ModelEntry>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,6 +78,9 @@ struct ChatRequest {
     /// 多助手：选用的助手 id，缺省为 "default"
     #[serde(default)]
     assistant_id: Option<String>,
+    /// 可切换模型：选用的模型 id，缺省为 "default"（使用配置）
+    #[serde(default)]
+    model_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -142,6 +148,31 @@ struct AssistantInfo {
     id: String,
     name: String,
     description: String,
+}
+
+/// 可切换模型：前端展示用
+#[derive(Debug, Clone, Serialize)]
+struct ModelInfo {
+    id: String,
+    name: String,
+}
+
+/// models.toml 中单条配置
+#[derive(Debug, Clone, Deserialize)]
+struct ModelEntry {
+    id: String,
+    name: String,
+    #[serde(default)]
+    base_url: Option<String>,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    api_key_env: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ModelsConfig {
+    models: Vec<ModelEntry>,
 }
 
 /// assistants.toml 中单条配置
@@ -303,6 +334,63 @@ fn load_assistants(config_base: &std::path::Path) -> (Vec<AssistantInfo>, HashMa
     (list, prompts)
 }
 
+/// 从 config/models.toml 加载可切换模型
+fn load_models(config_base: &std::path::Path) -> (Vec<ModelInfo>, HashMap<String, ModelEntry>) {
+    let toml_path = [
+        config_base.join("models.toml"),
+        std::path::Path::new("config/models.toml").to_path_buf(),
+        std::path::Path::new("../config/models.toml").to_path_buf(),
+    ]
+    .into_iter()
+    .find(|p| p.exists());
+
+    let entries: Vec<ModelEntry> = match toml_path.and_then(|p| std::fs::read_to_string(p).ok()) {
+        Some(s) => toml::from_str::<ModelsConfig>(&s)
+            .map(|c| c.models)
+            .unwrap_or_default(),
+        None => vec![ModelEntry {
+            id: "default".to_string(),
+            name: "默认（配置）".to_string(),
+            base_url: None,
+            model: None,
+            api_key_env: None,
+        }],
+    };
+
+    let list: Vec<ModelInfo> = entries
+        .iter()
+        .map(|e| ModelInfo {
+            id: e.id.clone(),
+            name: e.name.clone(),
+        })
+        .collect();
+
+    let mut configs = HashMap::new();
+    for e in entries {
+        configs.insert(e.id.clone(), e);
+    }
+    (list, configs)
+}
+
+/// 根据模型配置创建 LlmClient（OpenAI 兼容）
+fn create_llm_for_model(entry: &ModelEntry) -> Arc<dyn bee::llm::LlmClient> {
+    let base_url = entry.base_url.as_deref();
+    let model = entry
+        .model
+        .as_deref()
+        .unwrap_or("gpt-4o-mini");
+    let api_key = entry
+        .api_key_env
+        .as_deref()
+        .and_then(|k| std::env::var(k).ok())
+        .or_else(|| std::env::var("OPENAI_API_KEY").ok());
+    Arc::new(bee::llm::OpenAiClient::new(
+        base_url,
+        model,
+        api_key.as_deref(),
+    ))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
@@ -324,6 +412,8 @@ async fn main() -> anyhow::Result<()> {
     .into_iter()
     .find_map(|p| std::fs::read_to_string(&p).ok())
     .unwrap_or_else(|| "You are Bee, a helpful AI assistant. Use tools: cat, ls, echo, shell, search.".to_string());
+
+    let (models, model_configs) = load_models(config_base);
 
     let (mut assistants, mut assistant_prompts) = load_assistants(config_base);
     if !assistant_prompts.contains_key("default") {
@@ -362,6 +452,8 @@ async fn main() -> anyhow::Result<()> {
         shared_vector_long_term,
         assistants,
         assistant_prompts,
+        models,
+        model_configs,
     });
 
     let app = Router::new()
@@ -377,6 +469,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/compact", post(api_compact))
         .route("/api/session/rename", post(api_session_rename))
         .route("/api/assistants", get(api_assistants_list))
+        .route("/api/models", get(api_models_list))
         .route("/api/memory/consolidate", post(api_memory_consolidate))
         .route("/api/memory/consolidate-llm", post(api_memory_consolidate_llm))
         .route("/api/config/reload", post(api_config_reload))
@@ -722,6 +815,13 @@ async fn api_assistants_list(
     Ok(Json(state.assistants.clone()))
 }
 
+/// GET /api/models：返回可切换模型列表（id、name）
+async fn api_models_list(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<ModelInfo>>, (StatusCode, String)> {
+    Ok(Json(state.models.clone()))
+}
+
 /// GET /api/history?session_id=...：返回该会话的对话列表，过滤掉 Tool call / Observation 等内部消息
 async fn api_history(
     State(state): State<Arc<AppState>>,
@@ -835,6 +935,7 @@ async fn api_chat_stream(
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
+    let model_id = req.model_id.as_deref().unwrap_or("default").to_string();
     let mut assistant_id = req.assistant_id.as_deref().unwrap_or("default").to_string();
     let mut dispatched_name: Option<String> = None;
     if assistant_id == "auto" {
@@ -870,10 +971,31 @@ async fn api_chat_stream(
     let components = state.components.read().await.clone();
     let session_id_clone = session_id.clone();
     let state_spawn = Arc::clone(&state);
+    let model_configs = state.model_configs.clone();
     tokio::spawn(async move {
         let mut ctx = context;
         let prompt_ref = system_prompt_override.as_deref();
-        let _ = process_message_stream(components.as_ref(), &mut ctx, &message, event_tx, prompt_ref).await;
+        let planner_override: Option<Arc<Planner>> = if model_id != "default" {
+            model_configs.get(&model_id).map(|entry| {
+                let llm = create_llm_for_model(entry);
+                let sys = prompt_ref
+                    .unwrap_or_else(|| components.planner.base_system_prompt())
+                    .to_string();
+                Arc::new(Planner::new(llm, sys))
+            })
+        } else {
+            None
+        };
+        let planner_ref = planner_override.as_deref();
+        let _ = process_message_stream(
+            components.as_ref(),
+            &mut ctx,
+            &message,
+            event_tx,
+            prompt_ref,
+            planner_ref,
+        )
+        .await;
         // 无论流是否被客户端断开（超时/刷新），都持久化当前会话（含用户刚发的提问），刷新后历史不丢
         save_session_to_disk(
             &state_spawn.sessions_dir,

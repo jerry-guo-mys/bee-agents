@@ -274,16 +274,19 @@ pub async fn process_message(
 
 /// 流式处理单条用户消息：通过 event_tx 推送 Thinking / ToolCall / Observation / MessageChunk / MessageDone
 /// system_prompt_override：多助手时传入该助手的完整 system prompt（含 tool schema），否则用 components 默认。
+/// planner_override：可切换模型时传入该模型的 Planner，否则用 components 默认。
 pub async fn process_message_stream(
     components: &AgentComponents,
     context: &mut ContextManager,
     user_input: &str,
     event_tx: mpsc::UnboundedSender<ReactEvent>,
     system_prompt_override: Option<&str>,
+    planner_override: Option<&Planner>,
 ) -> Result<String, AgentError> {
     let cancel_token = tokio_util::sync::CancellationToken::new();
+    let planner = planner_override.unwrap_or(&components.planner);
     let result = react_loop(
-        &components.planner,
+        planner,
         &components.executor,
         &components.recovery,
         context,

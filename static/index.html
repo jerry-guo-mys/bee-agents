@@ -743,6 +743,20 @@
       margin-top: 8px;
       padding: 0 4px;
     }
+    .model-select {
+      font-size: 0.75rem;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text-secondary);
+      cursor: pointer;
+      max-width: 140px;
+      outline: none;
+    }
+    .model-select:hover, .model-select:focus {
+      border-color: var(--accent);
+    }
     .input-hint {
       font-size: 0.75rem;
       color: var(--text-muted);
@@ -1834,6 +1848,7 @@
           <div id="inputLoading" class="input-loading" style="display:none"></div>
         </div>
         <div class="input-toolbar">
+          <select id="modelSelect" class="model-select" title="切换模型"></select>
           <span class="input-hint" id="inputHint">Shift+Enter 换行</span>
           <span class="char-counter" id="charCounter" style="display: none;">0 / 4000</span>
           <button type="button" class="input-stop" id="stopBtn" style="display:none">停止</button>
@@ -2005,8 +2020,10 @@
     const COLLAPSE_KEY = 'bee_collapse_thinking';
     const FONT_SIZE_KEY = 'bee_font_size';
     const ASSISTANT_KEY = 'bee_assistant_id';
+    const MODEL_KEY = 'bee_model_id';
     let sessionId = localStorage.getItem(STORAGE_KEY) || null;
     let currentAssistantId = localStorage.getItem(ASSISTANT_KEY) || 'default';
+    let currentModelId = localStorage.getItem(MODEL_KEY) || 'default';
     let loading = false;
     let abortController = null;
     let collapseThinking = localStorage.getItem(COLLAPSE_KEY) === 'true';
@@ -2275,6 +2292,28 @@
           listEl.appendChild(card);
         });
       } catch (e) { console.warn('Load assistants failed:', e); }
+    }
+
+    async function loadModels() {
+      const sel = document.getElementById('modelSelect');
+      if (!sel) return;
+      try {
+        const res = await fetch('/api/models');
+        if (!res.ok) return;
+        const models = await res.json();
+        sel.innerHTML = '';
+        models.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.name;
+          if (m.id === currentModelId) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        sel.onchange = () => {
+          currentModelId = sel.value;
+          localStorage.setItem(MODEL_KEY, currentModelId);
+        };
+      } catch (e) { console.warn('Load models failed:', e); }
     }
 
     // Session groups: 今天、昨天、上周、更早
@@ -3093,7 +3132,7 @@
         const res = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text, session_id: sessionId || undefined, assistant_id: currentAssistantId }),
+          body: JSON.stringify({ message: text, session_id: sessionId || undefined, assistant_id: currentAssistantId, model_id: currentModelId === 'default' ? undefined : currentModelId }),
           signal: abortController.signal
         });
         if (!res.ok) throw new Error(await res.text() || res.statusText);
@@ -4062,6 +4101,7 @@
     // Init
     startConnectionMonitoring();
     loadAssistants();
+    loadModels();
     loadSessionList();
     if (sessionId) loadHistory();
     inputEl.focus();
