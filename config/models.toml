@@ -7,19 +7,28 @@ id = "default"
 name = "默认（配置）"
 # 使用 config/default.toml 的 [llm] 段
 
+# ==================== DeepSeek ====================
+[[models]]
+id = "deepseek-chat"
+name = "DeepSeek Chat (V3.2)"
+base_url = "https://api.deepseek.com"
+model = "deepseek-chat"
+api_key_env = "DEEPSEEK_API_KEY"
+
 [[models]]
 id = "deepseek-reasoner"
-name = "DeepSeek R1"
+name = "DeepSeek R1 (推理)"
 base_url = "https://api.deepseek.com"
 model = "deepseek-reasoner"
 api_key_env = "DEEPSEEK_API_KEY"
 
+# ==================== OpenAI ====================
 [[models]]
-id = "deepseek-chat"
-name = "DeepSeek Chat"
-base_url = "https://api.deepseek.com"
-model = "deepseek-chat"
-api_key_env = "DEEPSEEK_API_KEY"
+id = "gpt-4o"
+name = "GPT-4o"
+base_url = "https://api.openai.com/v1"
+model = "gpt-4o"
+api_key_env = "OPENAI_API_KEY"
 
 [[models]]
 id = "gpt-4o-mini"
@@ -29,57 +38,139 @@ model = "gpt-4o-mini"
 api_key_env = "OPENAI_API_KEY"
 
 [[models]]
-id = "gpt-4o"
-name = "GPT-4o"
+id = "o3-mini"
+name = "o3-mini (推理)"
 base_url = "https://api.openai.com/v1"
-model = "gpt-4o"
+model = "o3-mini"
 api_key_env = "OPENAI_API_KEY"
+
+[[models]]
+id = "o4-mini"
+name = "o4-mini (推理)"
+base_url = "https://api.openai.com/v1"
+model = "o4-mini"
+api_key_env = "OPENAI_API_KEY"
+
+# ==================== Anthropic Claude ====================
+[[models]]
+id = "claude-opus-4"
+name = "Claude Opus 4"
+base_url = "https://api.anthropic.com/v1"
+model = "claude-opus-4"
+api_key_env = "ANTHROPIC_API_KEY"
+
+[[models]]
+id = "claude-sonnet-4"
+name = "Claude Sonnet 4"
+base_url = "https://api.anthropic.com/v1"
+model = "claude-sonnet-4"
+api_key_env = "ANTHROPIC_API_KEY"
+
+[[models]]
+id = "claude-3-7-sonnet"
+name = "Claude 3.7 Sonnet"
+base_url = "https://api.anthropic.com/v1"
+model = "claude-3-7-sonnet"
+api_key_env = "ANTHROPIC_API_KEY"
 
 [[models]]
 id = "claude-3-5-sonnet"
 name = "Claude 3.5 Sonnet"
-base_url = "https://openrouter.ai/api/v1"
-model = "anthropic/claude-3.5-sonnet"
-api_key_env = "OPENROUTER_API_KEY"
+base_url = "https://api.anthropic.com/v1"
+model = "claude-3-5-sonnet"
+api_key_env = "ANTHROPIC_API_KEY"
+
+# ==================== Google Gemini ====================
+[[models]]
+id = "gemini-2.5-pro"
+name = "Gemini 2.5 Pro"
+base_url = "https://generativelanguage.googleapis.com/v1beta"
+model = "gemini-2.5-pro"
+api_key_env = "GOOGLE_API_KEY"
 
 [[models]]
-id = "gemini-pro"
-name = "Gemini Pro"
-base_url = "https://openrouter.ai/api/v1"
-model = "google/gemini-pro"
-api_key_env = "OPENROUTER_API_KEY"
+id = "gemini-2.5-flash"
+name = "Gemini 2.5 Flash"
+base_url = "https://generativelanguage.googleapis.com/v1beta"
+model = "gemini-2.5-flash"
+api_key_env = "GOOGLE_API_KEY"
+
+[[models]]
+id = "gemini-2.0-pro"
+name = "Gemini 2.0 Pro"
+base_url = "https://generativelanguage.googleapis.com/v1beta"
+model = "gemini-2.0-pro"
+api_key_env = "GOOGLE_API_KEY"
+
+[[models]]
+id = "gemini-2.0-flash"
+name = "Gemini 2.0 Flash"
+base_url = "https://generativelanguage.googleapis.com/v1beta"
+model = "gemini-2.0-flash"
+api_key_env = "GOOGLE_API_KEY"
+
+# ==================== 阿里云通义千问 ====================
+[[models]]
+id = "qwen-max"
+name = "通义千问 Max"
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+model = "qwen-max"
+api_key_env = "DASHSCOPE_API_KEY"
 
 [[models]]
 id = "qwen-plus"
-name = "千问 Plus"
+name = "通义千问 Plus"
 base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 model = "qwen-plus"
 api_key_env = "DASHSCOPE_API_KEY"
 
 [[models]]
 id = "qwen-turbo"
-name = "千问 Turbo"
+name = "通义千问 Turbo"
 base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 model = "qwen-turbo"
 api_key_env = "DASHSCOPE_API_KEY"
 
+# ==================== Moonshot Kimi ====================
 [[models]]
-id = "moonshot-v1"
-name = "Kimi Moonshot"
+id = "moonshot-v1-8k"
+name = "Kimi Moonshot (8K)"
 base_url = "https://api.moonshot.cn/v1"
 model = "moonshot-v1-8k"
 api_key_env = "MOONSHOT_API_KEY"
+
+[[models]]
+id = "moonshot-v1-32k"
+name = "Kimi Moonshot (32K)"
+base_url = "https://api.moonshot.cn/v1"
+model = "moonshot-v1-32k"
+api_key_env = "MOONSHOT_API_KEY"
+
+[[models]]
+id = "moonshot-v1-128k"
+name = "Kimi Moonshot (128K)"
+base_url = "https://api.moonshot.cn/v1"
+model = "moonshot-v1-128k"
+api_key_env = "MOONSHOT_API_KEY"
+
+# ==================== 智谱 GLM ====================
+[[models]]
+id = "glm-4"
+name = "GLM-4"
+base_url = "https://open.bigmodel.cn/api/paas/v4"
+model = "glm-4"
+api_key_env = "ZHIPU_API_KEY"
+
+[[models]]
+id = "glm-4-plus"
+name = "GLM-4 Plus"
+base_url = "https://open.bigmodel.cn/api/paas/v4"
+model = "glm-4-plus"
+api_key_env = "ZHIPU_API_KEY"
 
 [[models]]
 id = "glm-4-flash"
 name = "GLM-4 Flash"
 base_url = "https://open.bigmodel.cn/api/paas/v4"
 model = "glm-4-flash"
-api_key_env = "ZHIPU_API_KEY"
-
-[[models]]
-id = "glm-4"
-name = "GLM-4"
-base_url = "https://open.bigmodel.cn/api/paas/v4"
-model = "glm-4"
 api_key_env = "ZHIPU_API_KEY"
