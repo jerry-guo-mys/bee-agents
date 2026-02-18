@@ -42,6 +42,7 @@ allowed_domains = [
   "www.jd.com", "item.jd.com",
   "docs.rs", "github.com", "stackoverflow.com",
   "www.google.com", "google.com", "news.google.com",
+  "www.bing.com", "bing.com",
   "developer.mozilla.org", "arxiv.org"
 ]
 

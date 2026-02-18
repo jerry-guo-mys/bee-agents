@@ -164,6 +164,44 @@ struct SingleSkillConfig {
     assistant: AssistantEntry,
 }
 
+/// 自动分派：根据用户提问调用 LLM 选择最合适的助手，返回 assistant_id
+async fn dispatch_assistant(
+    state: &AppState,
+    message: &str,
+) -> Result<String, String> {
+    let candidates: Vec<&AssistantInfo> = state.assistants.iter().filter(|a| a.id != "auto").collect();
+    if candidates.is_empty() {
+        return Ok("default".to_string());
+    }
+    let list_text = candidates
+        .iter()
+        .map(|a| format!("- {} (id={}): {}", a.name, a.id, a.description))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let system = format!(
+        "You are a router. Given the user's question and the list of assistants below, choose the most suitable one.\n\
+         Reply with ONLY the assistant id (e.g. default, media, student, money, viral). No explanation, no punctuation.\n\n\
+         Available assistants:\n{}",
+        list_text
+    );
+    let user_msg = format!("User question:\n{}", message);
+    let messages = vec![Message::user(user_msg)];
+    let components = state.components.read().await;
+    let output = components
+        .planner
+        .plan_with_system(&messages, &system)
+        .await
+        .map_err(|e| e.to_string())?;
+    let id = output
+        .trim()
+        .split(|c: char| c.is_whitespace() || c == '.' || c == '。')
+        .next()
+        .unwrap_or("default")
+        .to_lowercase();
+    let valid = candidates.iter().any(|a| a.id == id);
+    Ok(if valid { id } else { "default".to_string() })
+}
+
 /// 从 config/assistants.toml 与 config/skills/*.toml 加载助手；后者与前者 id 冲突时以 skills 为准
 fn load_assistants(config_base: &std::path::Path) -> (Vec<AssistantInfo>, HashMap<String, String>) {
     let toml_path = [
@@ -287,7 +325,7 @@ async fn main() -> anyhow::Result<()> {
     .find_map(|p| std::fs::read_to_string(&p).ok())
     .unwrap_or_else(|| "You are Bee, a helpful AI assistant. Use tools: cat, ls, echo, shell, search.".to_string());
 
-    let (assistants, mut assistant_prompts) = load_assistants(config_base);
+    let (mut assistants, mut assistant_prompts) = load_assistants(config_base);
     if !assistant_prompts.contains_key("default") {
         let fallback = assistants
             .first()
@@ -295,6 +333,14 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|| system_prompt.clone());
         assistant_prompts.insert("default".to_string(), fallback);
     }
+    assistants.insert(
+        0,
+        AssistantInfo {
+            id: "auto".to_string(),
+            name: "自动分派助手".to_string(),
+            description: "根据提问自动选择最合适的助手".to_string(),
+        },
+    );
 
     let sessions_dir = workspace.join("sessions");
     let memory_root = memory_root(&workspace);
@@ -789,8 +835,21 @@ async fn api_chat_stream(
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-    let assistant_id = req.assistant_id.as_deref().unwrap_or("default");
-    let system_prompt_override = state.assistant_prompts.get(assistant_id).cloned();
+    let mut assistant_id = req.assistant_id.as_deref().unwrap_or("default").to_string();
+    let mut dispatched_name: Option<String> = None;
+    if assistant_id == "auto" {
+        match dispatch_assistant(&state, &message).await {
+            Ok(id) => {
+                assistant_id = id.clone();
+                dispatched_name = state.assistants.iter().find(|a| a.id == id).map(|a| a.name.clone());
+            }
+            Err(e) => {
+                tracing::warn!("Auto dispatch failed: {}, using default", e);
+                assistant_id = "default".to_string();
+            }
+        }
+    }
+    let system_prompt_override = state.assistant_prompts.get(&assistant_id).cloned();
 
     let context = {
         let mut sessions = state.sessions.write().await;
@@ -827,11 +886,27 @@ async fn api_chat_stream(
         let _ = context_tx.send(());
     });
 
-    let first_line = serde_json::json!({
-        "type": "session_id",
-        "session_id": session_id
-    });
-    let first_line = format!("{}\n", serde_json::to_string(&first_line).unwrap());
+    let mut first_line = format!(
+        "{}\n",
+        serde_json::to_string(&serde_json::json!({
+            "type": "session_id",
+            "session_id": session_id
+        }))
+        .unwrap()
+    );
+    if let Some(ref name) = dispatched_name {
+        first_line.push_str(
+            &format!(
+                "{}\n",
+                serde_json::to_string(&serde_json::json!({
+                    "type": "assistant_dispatched",
+                    "assistant_id": assistant_id,
+                    "assistant_name": name
+                }))
+                .unwrap()
+            ),
+        );
+    }
 
     let state_reinsert = Arc::clone(&state);
     let session_id_reinsert = session_id.clone();

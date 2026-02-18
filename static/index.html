@@ -3116,6 +3116,7 @@
               const ev = JSON.parse(line);
               resetIdleTimeout();
               if (ev.type === 'session_id') { saveSessionId(ev.session_id); continue; }
+              if (ev.type === 'assistant_dispatched') { showToast('已自动分派至：' + (ev.assistant_name || ev.assistant_id), 'info'); continue; }
               if (ev.type === 'thinking') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('thinking'); continue; }
               if (ev.type === 'thinking_content') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('thinking_content', ev.text); continue; }
               if (ev.type === 'memory_recovery') { if (thinkingStartTime == null) thinkingStartTime = Date.now(); addThinkingStep('memory_recovery', null, null, ev.preview); continue; }
