@@ -1,176 +1,116 @@
+# ====================================================
+# 最新模型配置 (更新于 2026年2月19日)
+# ====================================================
+
 # 可切换模型配置：id 用于 API，name 用于前端展示
 # api_key_env：环境变量名，未设置时默认 OPENAI_API_KEY
-# 配置后需设置对应环境变量才能使用
 
 [[models]]
 id = "default"
 name = "默认（配置）"
 # 使用 config/default.toml 的 [llm] 段
 
-# ==================== DeepSeek ====================
+# ==================== OpenAI (GPT-5 时代) ====================
 [[models]]
-id = "deepseek-chat"
-name = "DeepSeek Chat (V3.2)"
+id = "gpt-5.2-instant"
+name = "GPT-5.2 Instant (旗舰)"
+base_url = "https://api.openai.com/v1"
+model = "gpt-5.2-instant"
+api_key_env = "OPENAI_API_KEY"
+
+[[models]]
+id = "gpt-5.2-thinking"
+name = "GPT-5.2 Thinking (推理)"
+base_url = "https://api.openai.com/v1"
+model = "gpt-5.2-thinking"
+api_key_env = "OPENAI_API_KEY"
+
+[[models]]
+id = "gpt-5.3-codex"
+name = "GPT-5.3 Codex (专家编程)"
+base_url = "https://api.openai.com/v1"
+model = "gpt-5.3-codex"
+api_key_env = "OPENAI_API_KEY"
+
+# ==================== DeepSeek (V3.2 系列) ====================
+[[models]]
+id = "deepseek-v3.2"
+name = "DeepSeek V3.2 (通用)"
 base_url = "https://api.deepseek.com"
 model = "deepseek-chat"
 api_key_env = "DEEPSEEK_API_KEY"
 
 [[models]]
-id = "deepseek-reasoner"
-name = "DeepSeek R1 (推理)"
+id = "deepseek-r1-pro"
+name = "DeepSeek R1 Pro (深度推理)"
 base_url = "https://api.deepseek.com"
 model = "deepseek-reasoner"
 api_key_env = "DEEPSEEK_API_KEY"
 
-# ==================== OpenAI ====================
+# ==================== Anthropic (Claude 4.6 系列) ====================
 [[models]]
-id = "gpt-4o"
-name = "GPT-4o"
-base_url = "https://api.openai.com/v1"
-model = "gpt-4o"
-api_key_env = "OPENAI_API_KEY"
-
-[[models]]
-id = "gpt-4o-mini"
-name = "GPT-4o Mini"
-base_url = "https://api.openai.com/v1"
-model = "gpt-4o-mini"
-api_key_env = "OPENAI_API_KEY"
-
-[[models]]
-id = "o3-mini"
-name = "o3-mini (推理)"
-base_url = "https://api.openai.com/v1"
-model = "o3-mini"
-api_key_env = "OPENAI_API_KEY"
-
-[[models]]
-id = "o4-mini"
-name = "o4-mini (推理)"
-base_url = "https://api.openai.com/v1"
-model = "o4-mini"
-api_key_env = "OPENAI_API_KEY"
-
-# ==================== Anthropic Claude ====================
-[[models]]
-id = "claude-opus-4"
-name = "Claude Opus 4"
+id = "claude-4-6-opus"
+name = "Claude 4.6 Opus (最强逻辑)"
 base_url = "https://api.anthropic.com/v1"
-model = "claude-opus-4"
+model = "claude-4-6-opus"
 api_key_env = "ANTHROPIC_API_KEY"
 
 [[models]]
-id = "claude-sonnet-4"
-name = "Claude Sonnet 4"
+id = "claude-4-6-sonnet"
+name = "Claude 4.6 Sonnet (平衡型)"
 base_url = "https://api.anthropic.com/v1"
-model = "claude-sonnet-4"
+model = "claude-4-6-sonnet"
 api_key_env = "ANTHROPIC_API_KEY"
 
+# ==================== Google Gemini (Gemini 3 时代) ====================
 [[models]]
-id = "claude-3-7-sonnet"
-name = "Claude 3.7 Sonnet"
-base_url = "https://api.anthropic.com/v1"
-model = "claude-3-7-sonnet"
-api_key_env = "ANTHROPIC_API_KEY"
-
-[[models]]
-id = "claude-3-5-sonnet"
-name = "Claude 3.5 Sonnet"
-base_url = "https://api.anthropic.com/v1"
-model = "claude-3-5-sonnet"
-api_key_env = "ANTHROPIC_API_KEY"
-
-# ==================== Google Gemini ====================
-[[models]]
-id = "gemini-2.5-pro"
-name = "Gemini 2.5 Pro"
+id = "gemini-3-pro"
+name = "Gemini 3 Pro"
 base_url = "https://generativelanguage.googleapis.com/v1beta"
-model = "gemini-2.5-pro"
+model = "gemini-3-pro"
 api_key_env = "GOOGLE_API_KEY"
 
 [[models]]
-id = "gemini-2.5-flash"
-name = "Gemini 2.5 Flash"
+id = "gemini-3-flash"
+name = "Gemini 3 Flash (极速)"
 base_url = "https://generativelanguage.googleapis.com/v1beta"
-model = "gemini-2.5-flash"
+model = "gemini-3-flash"
 api_key_env = "GOOGLE_API_KEY"
 
 [[models]]
-id = "gemini-2.0-pro"
-name = "Gemini 2.0 Pro"
+id = "gemini-3-deepthink"
+name = "Gemini 3 Deep Think (科研)"
 base_url = "https://generativelanguage.googleapis.com/v1beta"
-model = "gemini-2.0-pro"
+model = "gemini-3-deepthink"
 api_key_env = "GOOGLE_API_KEY"
 
+# ==================== 阿里云通义千问 (Qwen 3.5) ====================
 [[models]]
-id = "gemini-2.0-flash"
-name = "Gemini 2.0 Flash"
-base_url = "https://generativelanguage.googleapis.com/v1beta"
-model = "gemini-2.0-flash"
-api_key_env = "GOOGLE_API_KEY"
-
-# ==================== 阿里云通义千问 ====================
-[[models]]
-id = "qwen-max"
-name = "通义千问 Max"
+id = "qwen-3.5-max"
+name = "Qwen 3.5 Max"
 base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-model = "qwen-max"
+model = "qwen-3.5-max"
 api_key_env = "DASHSCOPE_API_KEY"
 
 [[models]]
-id = "qwen-plus"
-name = "通义千问 Plus"
+id = "qwen-3.5-omni"
+name = "Qwen 3.5 Omni (多模态)"
 base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-model = "qwen-plus"
+model = "qwen-3.5-omni"
 api_key_env = "DASHSCOPE_API_KEY"
 
+# ==================== Moonshot Kimi (K2.5 系列) ====================
 [[models]]
-id = "qwen-turbo"
-name = "通义千问 Turbo"
-base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-model = "qwen-turbo"
-api_key_env = "DASHSCOPE_API_KEY"
-
-# ==================== Moonshot Kimi ====================
-[[models]]
-id = "moonshot-v1-8k"
-name = "Kimi Moonshot (8K)"
+id = "kimi-k2.5"
+name = "Kimi K2.5 (Agent Swarm)"
 base_url = "https://api.moonshot.cn/v1"
-model = "moonshot-v1-8k"
+model = "kimi-k2.5"
 api_key_env = "MOONSHOT_API_KEY"
 
+# ==================== 智谱 GLM (GLM-5 时代) ====================
 [[models]]
-id = "moonshot-v1-32k"
-name = "Kimi Moonshot (32K)"
-base_url = "https://api.moonshot.cn/v1"
-model = "moonshot-v1-32k"
-api_key_env = "MOONSHOT_API_KEY"
-
-[[models]]
-id = "moonshot-v1-128k"
-name = "Kimi Moonshot (128K)"
-base_url = "https://api.moonshot.cn/v1"
-model = "moonshot-v1-128k"
-api_key_env = "MOONSHOT_API_KEY"
-
-# ==================== 智谱 GLM ====================
-[[models]]
-id = "glm-4"
-name = "GLM-4"
+id = "glm-5"
+name = "GLM-5 (智能体工程)"
 base_url = "https://open.bigmodel.cn/api/paas/v4"
-model = "glm-4"
-api_key_env = "ZHIPU_API_KEY"
-
-[[models]]
-id = "glm-4-plus"
-name = "GLM-4 Plus"
-base_url = "https://open.bigmodel.cn/api/paas/v4"
-model = "glm-4-plus"
-api_key_env = "ZHIPU_API_KEY"
-
-[[models]]
-id = "glm-4-flash"
-name = "GLM-4 Flash"
-base_url = "https://open.bigmodel.cn/api/paas/v4"
-model = "glm-4-flash"
+model = "glm-5"
 api_key_env = "ZHIPU_API_KEY"
