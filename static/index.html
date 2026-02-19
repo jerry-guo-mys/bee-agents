@@ -32,6 +32,7 @@
       --send-btn-hover: var(--accent-hover);
       --border: rgba(255,255,255,0.08);
       --sidebar-width: 260px;
+      --sidebar-collapsed-width: 56px;
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
       --shadow-md: 0 4px 12px rgba(0,0,0,0.35);
       --input-bg: var(--bg-secondary);
@@ -88,17 +89,73 @@
       left: 0;
       top: 0;
       z-index: 100;
-      transition: transform 0.3s;
+      transition: width 0.3s, transform 0.3s;
       border-right: 1px solid var(--divider);
     }
-    .sidebar.collapsed {
-      transform: translateX(calc(-1 * var(--sidebar-width)));
+    .sidebar-icon-bar {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      gap: 12px;
     }
-    .sidebar-header {
-      padding: 16px 20px;
+    .sidebar-icon-bar button {
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 1.15rem;
+      cursor: pointer;
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
+      transition: background 0.2s, color 0.2s;
+    }
+    .sidebar-icon-bar button:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+    .sidebar-main {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+    }
+    @media (min-width: 769px) {
+      .sidebar.collapsed {
+        width: var(--sidebar-collapsed-width);
+        border-bottom-left-radius: 12px;
+      }
+      .sidebar.collapsed .sidebar-main { display: none; }
+      .sidebar.collapsed .sidebar-icon-bar { display: flex; }
+    }
+    .sidebar-header {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .sidebar-header .logo { flex: 1; min-width: 0; }
+    .sidebar-header-toggle {
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 8px;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.2s, color 0.2s;
+    }
+    .sidebar-header-toggle:hover {
+      background: var(--bg-primary);
+      color: var(--text-primary);
     }
     .sidebar-header .logo {
       font-size: 1.25rem;
@@ -127,11 +184,29 @@
       transition: background 0.2s;
     }
     .sidebar-toolbar button:hover { background: var(--bg-secondary); color: var(--text-primary); }
-    .sidebar-search {
-      padding: 8px 12px;
+    .sidebar-search-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 8px;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, color 0.2s;
+    }
+    .sidebar-search-btn:hover {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+    }
+    .sidebar-search-wrap {
+      padding: 0 12px 8px;
       position: relative;
     }
-    .sidebar-search input {
+    .sidebar-search-wrap input {
       width: 100%;
       padding: 10px 32px 10px 36px;
       border: none;
@@ -145,14 +220,14 @@
       background-position: 12px 50%;
       transition: all 0.2s;
     }
-    .sidebar-search input:focus {
+    .sidebar-search-wrap input:focus {
       outline: none;
       box-shadow: 0 0 0 2px var(--accent);
     }
-    .sidebar-search input::placeholder { color: var(--text-muted); }
+    .sidebar-search-wrap input::placeholder { color: var(--text-muted); }
     .search-clear-btn {
       position: absolute;
-      right: 18px;
+      right: 10px;
       top: 50%;
       transform: translateY(-50%);
       width: 18px;
@@ -174,6 +249,40 @@
     }
     .search-clear-btn.visible {
       display: flex;
+    }
+    .new-chat-item {
+      padding: 10px 12px;
+      margin: 0 8px 8px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-left: 3px solid transparent;
+      transition: background 0.2s;
+    }
+    .new-chat-item:hover {
+      background: var(--bg-tertiary);
+    }
+    .new-chat-item .session-item-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .new-chat-item:hover .session-item-icon {
+      background: var(--accent);
+      color: #fff;
+    }
+    .new-chat-item .session-item-content .title {
+      font-size: 0.85rem;
+      color: var(--text-primary);
     }
     /* Search highlight styles */
     .search-highlight {
@@ -203,29 +312,6 @@
       font-size: 0.75rem;
       color: var(--text-muted);
       border-bottom: 1px solid var(--divider);
-    }
-    .new-chat-btn {
-      width: calc(100% - 32px);
-      margin: 8px 16px;
-      padding: 12px 16px;
-      border: none;
-      border-radius: 12px;
-      background: var(--accent);
-      color: #fff;
-      font-size: 0.9rem;
-      font-weight: 500;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      transition: background 0.2s, transform 0.15s;
-      box-shadow: 0 2px 8px rgba(94,122,140,0.25);
-    }
-    .new-chat-btn:hover {
-      background: var(--accent-hover);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(94,122,140,0.3);
     }
     .session-list {
       flex: 1;
@@ -359,7 +445,12 @@
       transition: margin-left 0.3s;
       border-left: 1px solid var(--divider);
     }
-    .sidebar.collapsed + .main { margin-left: 0; }
+    @media (min-width: 769px) {
+      .sidebar.collapsed + .main { margin-left: var(--sidebar-collapsed-width); }
+    }
+    @media (max-width: 768px) {
+      .sidebar.collapsed + .main { margin-left: 0; }
+    }
     
     .header {
       padding: 14px 24px;
@@ -375,7 +466,8 @@
       align-items: center;
       gap: 12px;
     }
-    .toggle-sidebar {
+    .toggle-sidebar-mobile {
+      display: none;
       background: none;
       border: none;
       color: var(--text-secondary);
@@ -385,7 +477,10 @@
       border-radius: 4px;
       transition: background 0.2s;
     }
-    .toggle-sidebar:hover { background: var(--bg-tertiary); }
+    .toggle-sidebar-mobile:hover { background: var(--bg-tertiary); }
+    @media (max-width: 768px) {
+      .toggle-sidebar-mobile { display: flex; align-items: center; justify-content: center; }
+    }
     .header-brand {
       font-weight: 600;
       font-size: 1rem;
@@ -1024,6 +1119,8 @@
     @media (max-width: 768px) {
       .sidebar { transform: translateX(calc(-1 * var(--sidebar-width))); }
       .sidebar.open { transform: translateX(0); }
+      .sidebar.collapsed .sidebar-icon-bar { display: none; }
+      .sidebar .sidebar-main { display: flex; }
       .main { margin-left: 0; }
       .messages { padding: 16px; width: 100%; }
       .msg { max-width: calc(100% - 60px); }
@@ -1820,26 +1917,35 @@
 <body>
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-      <div class="logo"><span>Bee</span> Chat</div>
+    <div class="sidebar-icon-bar">
+      <button type="button" id="sidebarToggleBtn" title="展开侧边栏">☰</button>
+      <button type="button" id="sidebarNewChatBtn" title="新对话">✎</button>
+      <button type="button" id="sidebarConfigBtn" title="配置">⚙</button>
     </div>
-    <div class="sidebar-search">
-      <input type="text" id="sessionSearch" placeholder="搜索对话" autocomplete="off" />
-      <button class="search-clear-btn" id="searchClearBtn" title="清除搜索">✕</button>
-      <span class="kbd-hint">⌘K</span>
+    <div class="sidebar-main">
+      <div class="sidebar-header">
+        <button type="button" class="sidebar-header-toggle" id="sidebarHeaderToggle" title="收起侧边栏">☰</button>
+        <div class="logo"><span>Bee</span> Chat</div>
+        <button type="button" class="sidebar-search-btn" id="sidebarSearchBtn" title="搜索对话 (⌘K)">🔍</button>
+      </div>
+      <div class="sidebar-search-wrap" id="sidebarSearchWrap" style="display: none;">
+        <input type="text" id="sessionSearch" placeholder="搜索对话" autocomplete="off" />
+        <button class="search-clear-btn" id="searchClearBtn" title="清除搜索">✕</button>
+      </div>
+      <div class="new-chat-item" id="newChatBtn" role="button" tabindex="0" title="新对话">
+        <span class="session-item-icon">✎</span>
+        <span class="session-item-content"><span class="title">新对话</span></span>
+      </div>
+      <div class="search-stats" id="searchStats" style="display: none;"></div>
+      <div class="session-list" id="sessionList"></div>
     </div>
-    <div class="search-stats" id="searchStats" style="display: none;"></div>
-    <button class="new-chat-btn" id="newChatBtn">
-      <span>+</span> 新对话
-    </button>
-    <div class="session-list" id="sessionList"></div>
   </aside>
 
   <!-- Main content -->
   <div class="main">
     <header class="header">
       <div class="header-left">
-        <button class="toggle-sidebar" id="toggleSidebar" title="切换侧边栏">☰</button>
+        <button class="toggle-sidebar-mobile" id="toggleSidebar" title="切换侧边栏">☰</button>
         <span class="header-title" id="headerTitle">新对话</span>
       </div>
       <div class="header-actions">
@@ -2469,7 +2575,29 @@
     function clearSearch() {
       sessionSearchEl.value = '';
       loadSessionList();
-      sessionSearchEl.focus();
+      const wrap = document.getElementById('sidebarSearchWrap');
+      if (wrap) wrap.style.display = 'none';
+    }
+
+    function toggleSearchVisible() {
+      const wrap = document.getElementById('sidebarSearchWrap');
+      if (!wrap) return;
+      const visible = wrap.style.display !== 'none';
+      wrap.style.display = visible ? 'none' : 'block';
+      if (!visible) {
+        sessionSearchEl.focus();
+      } else {
+        sessionSearchEl.blur();
+      }
+    }
+
+    function showSearchAndFocus() {
+      if (window.innerWidth > 768 && sidebar.classList.contains('collapsed')) {
+        sidebar.classList.remove('collapsed');
+      }
+      const wrap = document.getElementById('sidebarSearchWrap');
+      if (wrap) wrap.style.display = 'block';
+      setTimeout(() => sessionSearchEl.focus(), 50);
     }
 
     async function switchSession(id) {
@@ -3478,11 +3606,24 @@
     stopBtn.onclick = () => { if (loading) stopGeneration(); };
     if (sendBtn) sendBtn.onclick = () => { if (!loading) send(); };
     newChatBtn.onclick = newChat;
-    newChatIcon.onclick = newChat;
-    toggleSidebarBtn.onclick = toggleSidebar;
+    newChatBtn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); newChat(); }
+    });
+    if (newChatIcon) newChatIcon.onclick = newChat;
+    if (toggleSidebarBtn) toggleSidebarBtn.onclick = toggleSidebar;
+    const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+    const sidebarNewChatBtn = document.getElementById('sidebarNewChatBtn');
+    const sidebarConfigBtn = document.getElementById('sidebarConfigBtn');
+    if (sidebarToggleBtn) sidebarToggleBtn.onclick = toggleSidebar;
+    const sidebarHeaderToggle = document.getElementById('sidebarHeaderToggle');
+    if (sidebarHeaderToggle) sidebarHeaderToggle.onclick = toggleSidebar;
+    if (sidebarNewChatBtn) sidebarNewChatBtn.onclick = newChat;
+    if (sidebarConfigBtn) sidebarConfigBtn.onclick = openConfigModal;
     if (modeBtn) modeBtn.onclick = toggleTheme;
     sessionSearchEl.oninput = loadSessionList;
     searchClearBtn.onclick = clearSearch;
+    const sidebarSearchBtn = document.getElementById('sidebarSearchBtn');
+    if (sidebarSearchBtn) sidebarSearchBtn.onclick = toggleSearchVisible;
 
     // Keyboard navigation for session list
     let focusedSessionIndex = -1;
@@ -3540,10 +3681,10 @@
         openConfigModal();
         return;
       }
-      // Ctrl/Cmd + K: Focus search
+      // Ctrl/Cmd + K: Show and focus search
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
-        sessionSearchEl.focus();
+        showSearchAndFocus();
       }
       // Ctrl/Cmd + L: Clear current session
       if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
@@ -3563,6 +3704,12 @@
         }
         if (configModal && configModal.classList.contains('active')) {
           closeConfigModal();
+          return;
+        }
+        if (document.activeElement === sessionSearchEl) {
+          const wrap = document.getElementById('sidebarSearchWrap');
+          if (wrap) wrap.style.display = 'none';
+          sessionSearchEl.blur();
           return;
         }
         if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
