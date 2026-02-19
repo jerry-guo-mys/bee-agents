@@ -767,6 +767,20 @@
     .input-option-select:hover, .input-option-select:focus {
       border-color: var(--accent);
     }
+    .input-mode-btn, .input-config-btn {
+      font-size: 0.75rem;
+      padding: 5px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text-secondary);
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input-mode-btn:hover, .input-config-btn:hover {
+      border-color: var(--accent);
+    }
     .input-hint {
       font-size: 0.75rem;
       color: var(--text-muted);
@@ -1286,6 +1300,8 @@
       backdrop-filter: blur(4px);
     }
     .shortcuts-modal.active { display: flex; }
+    .config-modal { display: none; }
+    .config-modal.active { display: flex; }
     .skills-modal { display: none; }
     .skills-modal.active { display: flex; }
     .shortcuts-content {
@@ -1385,6 +1401,31 @@
     .skill-config-panel .btn-save { background: var(--accent); color: #fff; }
     .skill-config-panel .btn-save:hover { filter: brightness(1.1); }
     .skill-config-panel .btn-cancel { background: var(--bg-secondary); color: var(--text-secondary); }
+
+    .config-modal-content { max-width: 520px; max-height: 85vh; overflow-y: auto; }
+    .config-sections { display: flex; flex-direction: column; gap: 20px; }
+    .config-section { padding-bottom: 16px; border-bottom: 1px solid var(--divider); }
+    .config-section:last-child { border-bottom: none; }
+    .config-section-title { font-size: 0.95rem; margin: 0 0 6px; }
+    .config-desc { font-size: 0.8rem; color: var(--text-muted); margin: 0 0 10px; }
+    .config-help { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; }
+    .config-font-row { display: flex; align-items: center; gap: 10px; }
+    .config-font-btn {
+      width: 32px; height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .config-font-btn:hover { border-color: var(--accent); }
+    .config-font-value { font-weight: 600; min-width: 2em; text-align: center; }
+    .config-shortcuts .shortcut-item { padding: 6px 0; }
+    .config-skills-list { max-height: 200px; }
 
     /* Message timestamp - inline right after text */
     .msg-timestamp {
@@ -1782,10 +1823,6 @@
     <div class="sidebar-header">
       <div class="logo"><span>Bee</span> Chat</div>
     </div>
-    <div class="sidebar-toolbar">
-      <button id="newChatIcon" title="新对话">📄</button>
-      <button id="themeToggle" title="切换主题">🌙</button>
-    </div>
     <div class="sidebar-search">
       <input type="text" id="sessionSearch" placeholder="搜索对话" autocomplete="off" />
       <button class="search-clear-btn" id="searchClearBtn" title="清除搜索">✕</button>
@@ -1796,11 +1833,6 @@
       <span>+</span> 新对话
     </button>
     <div class="session-list" id="sessionList"></div>
-    <div class="sidebar-footer">
-      <button id="skillsBtn" title="查看智能体列表">🤖 智能体</button>
-      <button id="shortcutsBtn" title="键盘快捷键 (?)">⌨️ 快捷键</button>
-      <button id="helpBtn" title="帮助">❓ 帮助</button>
-    </div>
   </aside>
 
   <!-- Main content -->
@@ -1863,13 +1895,14 @@
           <div class="input-options">
             <select id="assistantSelect" class="input-option-select" title="选择智能体"></select>
             <select id="modelSelect" class="input-option-select" title="选择模型"></select>
+            <button type="button" id="modeBtn" class="input-mode-btn" title="主题模式">模式</button>
+            <button type="button" id="configBtn" class="input-config-btn" title="配置">⚙ 配置</button>
           </div>
           <span class="input-hint" id="inputHint">Shift+Enter 换行</span>
           <span class="input-toolbar-spacer"></span>
           <span class="char-counter" id="charCounter" style="display: none;">0 / 4000</span>
           <button type="button" class="input-stop" id="stopBtn" style="display:none">停止</button>
           <div class="input-icons">
-            <button type="button" class="input-icon" id="fontSizeBtn" title="调整字体">🔤</button>
             <input type="file" id="fileInput" accept="image/*,.txt,.md,.json,.js,.ts,.py,.html,.css,.xml,.yaml,.yml" multiple style="display:none" />
     <input type="file" id="importFileInput" accept=".md,.json,.txt" style="display:none" />
             <button type="button" class="input-icon" id="attachBtn" title="附加文件">📎</button>
@@ -1904,82 +1937,48 @@
     <img src="" alt="Preview" id="previewImage">
   </div>
 
-  <!-- Keyboard shortcuts modal -->
-  <div class="shortcuts-modal" id="shortcutsModal">
-    <div class="shortcuts-content">
+  <!-- 配置弹窗：智能体、快捷键、帮助、字体 -->
+  <div class="shortcuts-modal config-modal" id="configModal">
+    <div class="shortcuts-content config-modal-content">
       <div class="shortcuts-header">
-        <span class="shortcuts-title">⌨️ 键盘快捷键</span>
-        <button class="shortcuts-close" onclick="closeShortcutsModal()">✕</button>
+        <span class="shortcuts-title">⚙ 配置</span>
+        <button class="shortcuts-close" id="configModalClose">✕</button>
       </div>
-      <div class="shortcuts-list">
-        <div class="shortcut-item">
-          <span>发送消息</span>
-          <div class="shortcut-keys"><span class="shortcut-key">Enter</span></div>
-        </div>
-        <div class="shortcut-item">
-          <span>换行</span>
-          <div class="shortcut-keys"><span class="shortcut-key">Shift</span><span class="shortcut-key">+</span><span class="shortcut-key">Enter</span></div>
-        </div>
-        <div class="shortcut-item">
-          <span>聚焦输入框</span>
-          <div class="shortcut-keys"><span class="shortcut-key">/</span></div>
-        </div>
-        <div class="shortcut-item">
-          <span>新对话</span>
-          <div class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">+</span><span class="shortcut-key">L</span></div>
-        </div>
-        <div class="shortcut-item">
-          <span>搜索对话</span>
-          <div class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">+</span><span class="shortcut-key">K</span></div>
-        </div>
-        <div class="shortcut-item">
-          <span>当前对话搜索</span>
-          <div class="shortcut-keys"><span class="shortcut-key">Ctrl</span><span class="shortcut-key">+</span><span class="shortcut-key">F</span></div>
-        </div>
-        <div class="shortcut-item">
-          <span>下一个匹配</span>
-          <div class="shortcut-keys"><span class="shortcut-key">Enter</span></div>
-        </div>
-        <div class="shortcut-item">
-          <span>上一个匹配</span>
-          <div class="shortcut-keys"><span class="shortcut-key">Shift</span><span class="shortcut-key">+</span><span class="shortcut-key">Enter</span></div>
-        </div>
-        <div class="shortcut-item">
-          <span>停止生成</span>
-          <div class="shortcut-keys"><span class="shortcut-key">Esc</span></div>
-        </div>
-        <div class="shortcut-item">
-          <span>关闭侧边栏/搜索</span>
-          <div class="shortcut-keys"><span class="shortcut-key">Esc</span></div>
-        </div>
-        <div class="shortcut-item">
-          <span>显示快捷键</span>
-          <div class="shortcut-keys"><span class="shortcut-key">?</span></div>
-        </div>
+      <div class="config-sections">
+        <section class="config-section">
+          <h4 class="config-section-title">🤖 智能体</h4>
+          <p class="config-desc">选择与配置可用智能体，点击「⚙ 技能」可为每个智能体选择可用工具</p>
+          <div id="configAssistantList" class="skills-list config-skills-list"></div>
+        </section>
+        <section class="config-section">
+          <h4 class="config-section-title">⌨️ 快捷键</h4>
+          <div class="shortcuts-list config-shortcuts">
+            <div class="shortcut-item"><span>发送</span><div class="shortcut-keys"><span class="shortcut-key">Enter</span></div></div>
+            <div class="shortcut-item"><span>换行</span><div class="shortcut-keys"><span class="shortcut-key">Shift</span>+<span class="shortcut-key">Enter</span></div></div>
+            <div class="shortcut-item"><span>聚焦输入</span><div class="shortcut-keys"><span class="shortcut-key">/</span></div></div>
+            <div class="shortcut-item"><span>新对话</span><div class="shortcut-keys"><span class="shortcut-key">Ctrl</span>+<span class="shortcut-key">L</span></div></div>
+            <div class="shortcut-item"><span>搜索对话</span><div class="shortcut-keys"><span class="shortcut-key">Ctrl</span>+<span class="shortcut-key">K</span></div></div>
+            <div class="shortcut-item"><span>当前对话搜索</span><div class="shortcut-keys"><span class="shortcut-key">Ctrl</span>+<span class="shortcut-key">F</span></div></div>
+            <div class="shortcut-item"><span>停止生成</span><div class="shortcut-keys"><span class="shortcut-key">Esc</span></div></div>
+            <div class="shortcut-item"><span>显示配置</span><div class="shortcut-keys"><span class="shortcut-key">?</span></div></div>
+          </div>
+        </section>
+        <section class="config-section">
+          <h4 class="config-section-title">💡 帮助</h4>
+          <div class="config-help">
+            Bee 个人智能体 - 基于 Rust 的高性能 AI 助手<br>
+            双击会话标题可重命名 · 拖拽文件可上传 · Ctrl+V 粘贴图片
+          </div>
+        </section>
+        <section class="config-section">
+          <h4 class="config-section-title">🔤 字体大小</h4>
+          <div class="config-font-row">
+            <button type="button" id="configFontDown" class="config-font-btn">−</button>
+            <span id="configFontValue" class="config-font-value">14</span>px
+            <button type="button" id="configFontUp" class="config-font-btn">+</button>
+          </div>
+        </section>
       </div>
-      <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--divider);">
-        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">💡 提示</div>
-        <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6;">
-          • 双击会话标题可重命名<br>
-          • 拖拽文件到页面可上传<br>
-          • Ctrl+V 粘贴图片<br>
-          • 悬停消息显示操作按钮<br>
-          • 点击 🔤 调整字体大小<br>
-          • 主题支持跟随系统设置
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Skills / 助手列表 modal -->
-  <div class="shortcuts-modal skills-modal" id="skillsModal">
-    <div class="shortcuts-content skills-modal-content">
-      <div class="shortcuts-header">
-        <span class="shortcuts-title">🤖 智能体</span>
-        <button class="shortcuts-close" id="skillsModalClose">✕</button>
-      </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 16px;">点击选用该智能体；点击「配置技能」可为每个智能体选择可用工具。</p>
-      <div id="skillsModalList" class="skills-list"></div>
     </div>
   </div>
 
@@ -2012,17 +2011,15 @@
     const newChatBtn = document.getElementById('newChatBtn');
     const newChatIcon = document.getElementById('newChatIcon');
     const toggleSidebarBtn = document.getElementById('toggleSidebar');
-    const themeToggleBtn = document.getElementById('themeToggle');
+    const modeBtn = document.getElementById('modeBtn');
+    const configBtn = document.getElementById('configBtn');
+    const configModal = document.getElementById('configModal');
+    const configModalClose = document.getElementById('configModalClose');
+    const configAssistantList = document.getElementById('configAssistantList');
+    const configFontValue = document.getElementById('configFontValue');
     const scrollBottomBtn = document.getElementById('scrollBottom');
     const fileInput = document.getElementById('fileInput');
     const attachBtn = document.getElementById('attachBtn');
-    const shortcutsModal = document.getElementById('shortcutsModal');
-    const shortcutsBtn = document.getElementById('shortcutsBtn');
-    const skillsModal = document.getElementById('skillsModal');
-    const skillsModalClose = document.getElementById('skillsModalClose');
-    const skillsModalList = document.getElementById('skillsModalList');
-    const skillsBtn = document.getElementById('skillsBtn');
-    const helpBtn = document.getElementById('helpBtn');
     const exportBtn = document.getElementById('exportBtn');
     const importBtn = document.getElementById('importBtn');
     const importFileInput = document.getElementById('importFileInput');
@@ -2062,14 +2059,14 @@
 
     // Initialize theme
     document.documentElement.setAttribute('data-theme', currentTheme);
-    themeToggleBtn.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+    if (modeBtn) modeBtn.textContent = useSystemTheme ? '系统' : (currentTheme === 'dark' ? '深色' : '浅色');
 
     // Listen for system theme changes
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
       if (useSystemTheme) {
         const newTheme = e.matches ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', newTheme);
-        themeToggleBtn.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+        if (modeBtn) modeBtn.textContent = '系统';
         currentTheme = newTheme;
       }
     });
@@ -2534,20 +2531,10 @@
     }
 
     // Keyboard shortcuts modal
-    function openShortcutsModal() {
-      shortcutsModal.classList.add('active');
-    }
-    function closeShortcutsModal() {
-      shortcutsModal.classList.remove('active');
-    }
-    shortcutsModal.addEventListener('click', (e) => {
-      if (e.target === shortcutsModal) closeShortcutsModal();
-    });
-
     let allTools = [];
-    async function openSkillsModal() {
-      skillsModal.classList.add('active');
-      skillsModalList.innerHTML = '';
+    async function populateAssistantList(container) {
+      if (!container) return;
+      container.innerHTML = '';
       try {
         const [assistantsRes, toolsRes] = await Promise.all([fetch('/api/assistants'), fetch('/api/tools')]);
         if (!assistantsRes.ok) throw new Error('加载助手失败');
@@ -2566,26 +2553,37 @@
           el.querySelector('.skill-main').onclick = () => {
             currentAssistantId = a.id;
             localStorage.setItem(ASSISTANT_KEY, a.id);
-            skillsModalList.querySelectorAll('.skill-item').forEach(i => i.classList.remove('selected'));
+            container.querySelectorAll('.skill-item').forEach(i => i.classList.remove('selected'));
             el.classList.add('selected');
             const assistantSel = document.getElementById('assistantSelect');
             if (assistantSel) assistantSel.value = a.id;
-            closeSkillsModal();
+            closeConfigModal();
             showToast('已选用：' + a.name, 'success');
           };
           if (canConfig) {
             el.querySelector('.skill-config-btn').onclick = (e) => {
               e.stopPropagation();
-              toggleSkillConfig(el, a);
+              toggleSkillConfig(el, a, container);
             };
           }
-          skillsModalList.appendChild(el);
+          container.appendChild(el);
         });
       } catch (e) {
-        skillsModalList.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem;">加载失败：' + escapeHtml(e.message) + '</p>';
+        container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem;">加载失败：' + escapeHtml(e.message) + '</p>';
       }
     }
-    function toggleSkillConfig(itemEl, assistant) {
+    function openConfigModal() {
+      configModal.classList.add('active');
+      populateAssistantList(configAssistantList);
+      if (configFontValue) configFontValue.textContent = currentFontSize;
+    }
+    function closeConfigModal() {
+      configModal.classList.remove('active');
+    }
+    configModal.addEventListener('click', (e) => {
+      if (e.target === configModal) closeConfigModal();
+    });
+    function toggleSkillConfig(itemEl, assistant, container) {
       let panel = itemEl.querySelector('.skill-config-panel');
       if (panel) {
         panel.remove();
@@ -2614,7 +2612,7 @@
           if (!res.ok) throw new Error(await res.text() || res.statusText);
           showToast('已保存技能配置', 'success');
           panel.remove();
-          openSkillsModal();
+          populateAssistantList(container);
         } catch (e) {
           showToast('保存失败：' + (e.message || '未知错误'), 'error');
         }
@@ -2622,15 +2620,6 @@
       panel.querySelector('.btn-cancel').onclick = () => panel.remove();
       itemEl.appendChild(panel);
     }
-    function closeSkillsModal() {
-      skillsModal.classList.remove('active');
-    }
-    skillsModal.addEventListener('click', (e) => {
-      if (e.target === skillsModal) closeSkillsModal();
-    });
-    if (skillsModalClose) skillsModalClose.onclick = closeSkillsModal;
-    if (skillsBtn) skillsBtn.onclick = openSkillsModal;
-
     // Input draft auto-save
     const DRAFT_KEY = 'bee_input_draft';
     let draftSaveTimeout;
@@ -3356,7 +3345,7 @@
         showToast('已切换至深色模式', 'success', 1500);
       }
       document.documentElement.setAttribute('data-theme', currentTheme);
-      themeToggleBtn.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+      if (modeBtn) modeBtn.textContent = useSystemTheme ? '系统' : (currentTheme === 'dark' ? '深色' : '浅色');
     }
 
     function toggleSidebar() {
@@ -3491,7 +3480,7 @@
     newChatBtn.onclick = newChat;
     newChatIcon.onclick = newChat;
     toggleSidebarBtn.onclick = toggleSidebar;
-    themeToggleBtn.onclick = toggleTheme;
+    if (modeBtn) modeBtn.onclick = toggleTheme;
     sessionSearchEl.oninput = loadSessionList;
     searchClearBtn.onclick = clearSearch;
 
@@ -3522,10 +3511,8 @@
     sessionSearchEl.addEventListener('input', () => {
       focusedSessionIndex = -1;
     });
-    shortcutsBtn.onclick = openShortcutsModal;
-    helpBtn.onclick = () => {
-      showToast('Bee 个人智能体 - 基于 Rust 的高性能 AI 助手', 'info', 5000);
-    };
+    if (configBtn) configBtn.onclick = openConfigModal;
+    if (configModalClose) configModalClose.onclick = closeConfigModal;
     exportBtn.onclick = exportConversation;
     importBtn.onclick = importConversation;
     importFileInput.onchange = async () => {
@@ -3542,15 +3529,15 @@
         // ? key: Show shortcuts modal (even in input, but check if shift is pressed for ?)
         if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
           e.preventDefault();
-          openShortcutsModal();
+          openConfigModal();
           return;
         }
         return;
       }
-      // ? key: Show shortcuts modal
+      // ? key: Show config modal
       if (e.key === '?') {
         e.preventDefault();
-        openShortcutsModal();
+        openConfigModal();
         return;
       }
       // Ctrl/Cmd + K: Focus search
@@ -3563,10 +3550,10 @@
         e.preventDefault();
         if (!loading && sessionId) newChat();
       }
-      // Ctrl/Cmd + /: Show shortcuts
+      // Ctrl/Cmd + /: Show config
       if ((e.ctrlKey || e.metaKey) && e.key === '/') {
         e.preventDefault();
-        openShortcutsModal();
+        openConfigModal();
       }
       // Escape: Close sidebar on mobile / blur input / close modal / close conversation search
       if (e.key === 'Escape') {
@@ -3574,12 +3561,8 @@
           closeConversationSearch();
           return;
         }
-        if (skillsModal.classList.contains('active')) {
-          closeSkillsModal();
-          return;
-        }
-        if (shortcutsModal.classList.contains('active')) {
-          closeShortcutsModal();
+        if (configModal && configModal.classList.contains('active')) {
+          closeConfigModal();
           return;
         }
         if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
@@ -3641,14 +3624,22 @@
       updateCharCounter();
     };
 
-    // Font size adjustment
-    const fontSizeBtn = document.getElementById('fontSizeBtn');
-    fontSizeBtn.onclick = () => {
+    // Font size in config modal
+    const configFontDown = document.getElementById('configFontDown');
+    const configFontUp = document.getElementById('configFontUp');
+    if (configFontDown) configFontDown.onclick = () => {
       const sizes = [12, 14, 16, 18, 20];
-      const currentIndex = sizes.indexOf(currentFontSize);
-      const nextIndex = (currentIndex + 1) % sizes.length;
-      setFontSize(sizes[nextIndex]);
-      showToast(`字体大小: ${sizes[nextIndex]}px`, 'success', 1500);
+      const idx = Math.max(0, sizes.indexOf(currentFontSize) - 1);
+      setFontSize(sizes[idx]);
+      if (configFontValue) configFontValue.textContent = currentFontSize;
+      showToast(`字体: ${currentFontSize}px`, 'success', 1200);
+    };
+    if (configFontUp) configFontUp.onclick = () => {
+      const sizes = [12, 14, 16, 18, 20];
+      const idx = Math.min(sizes.length - 1, sizes.indexOf(currentFontSize) + 1);
+      setFontSize(sizes[idx]);
+      if (configFontValue) configFontValue.textContent = currentFontSize;
+      showToast(`字体: ${currentFontSize}px`, 'success', 1200);
     };
 
     // Fullscreen toggle
