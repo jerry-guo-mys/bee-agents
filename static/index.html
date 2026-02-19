@@ -108,13 +108,15 @@
     }
     .dropdown-menu.active { opacity: 1; visibility: visible; transform: translateY(0); }
     .dropdown-item { 
-      padding: 10px 14px; 
+      padding: 6px 12px; 
       cursor: pointer; 
       display: flex; 
-      align-items: center; 
+      align-items: flex-start; 
       gap: 10px;
       transition: background 0.15s;
     }
+    .dropdown-item .font-medium { line-height: 1.35; }
+    .dropdown-item .text-xs { line-height: 1.35; margin-top: 2px; }
     .dropdown-item:first-child { border-radius: 12px 12px 0 0; }
     .dropdown-item:last-child { border-radius: 0 0 12px 12px; }
     .dropdown-item:hover { background: #F3F4F6; }
@@ -895,7 +897,7 @@
       try {
         const response = await fetch('/api/assistants');
         if (!response.ok) throw new Error('Failed to fetch assistants');
-        const list = await response.json();
+        const list = (await response.json()).filter(a => a.id !== 'auto');
         assistants = [{ id: 'auto', name: 'Auto Helper', description: 'Automatically select the best assistant' }, ...list];
         console.log('Loaded assistants:', assistants);
         renderAssistantDropdown();
