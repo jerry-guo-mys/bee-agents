@@ -73,8 +73,8 @@
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes cursor-blink { 50% { opacity: 0; } }
-    .message-content.streaming::after { content: '▋'; animation: cursor-blink 1s step-end infinite; color: #3b82f6; margin-left: 2px; }
-    .dark .message-content.streaming::after { color: #60a5fa; }
+    .streaming-cursor { color: #3b82f6; margin-left: 2px; }
+    .dark .streaming-cursor { color: #60a5fa; }
     
     .code-block-wrapper { position: relative; margin: 1em 0; background: #1e293b; border-radius: 8px; overflow: hidden; }
     .code-block-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.08); }
@@ -296,8 +296,8 @@
       </div>
       <div class="flex items-center gap-4 text-sm text-text-sub-light dark:text-text-sub-dark">
         <div class="hidden sm:flex gap-4">
-          <span id="token-stats-session">This Session: -</span>
-          <span id="token-stats-total">Total: -</span>
+          <span id="token-stats-session">This Session: 0</span>
+          <span id="token-stats-total">Total: 0</span>
         </div>
         <div class="flex gap-2">
           <button id="import-btn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-xs font-medium">
@@ -535,6 +535,7 @@
     let selectedAssistant = localStorage.getItem('bee_assistant') || 'auto';
     let selectedModel = localStorage.getItem('bee_model') || 'default';
     let isGenerating = false;
+    let sessionTokensAccum = 0;
 
     async function loadSessions() {
       try {
@@ -609,6 +610,8 @@
 
     async function loadSession(sessionId) {
       currentSessionId = sessionId;
+      sessionTokensAccum = 0;
+      updateTokenStats(0, 0);
       try {
         const response = await fetch(`/api/history?session_id=${sessionId}`);
         const data = await response.json();
@@ -710,8 +713,6 @@
       
       isGenerating = true;
       updateSendButtonState();
-      
-      // Show typewriter controls
       typewriterControls?.show();
       
       try {
@@ -753,7 +754,7 @@
                     <span class="duration text-xs text-text-sub-light dark:text-text-sub-dark">0s</span>
                   </div>
                 </div>
-                <div class="steps-content mb-3 hidden"></div>
+                <div class="steps-content mb-3"></div>
                 <div class="message-content typewriter-active"></div>
                 <div class="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button type="button" onclick="copyMessage(this)" class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title="复制">
@@ -771,13 +772,13 @@
         const stepsContent = msgEl.querySelector('.steps-content');
         const thinkingBar = msgEl.querySelector('.thinking-bar');
         const durationEl = msgEl.querySelector('.duration');
+        let responseStarted = false;
         
-        // Initialize typewriter
         const typewriter = new Typewriter(msgContent, {
-          baseSpeed: 20,
-          codeSpeed: 3,
-          punctuationDelay: 180,
-          paragraphDelay: 350,
+          baseSpeed: 15,
+          codeSpeed: 2,
+          punctuationDelay: 120,
+          paragraphDelay: 250,
           onUpdate: () => scrollToBottom(),
           onComplete: () => {
             msgContent.classList.remove('typewriter-active', 'streaming');
@@ -786,13 +787,9 @@
             typewriterControls?.hide();
           }
         });
-        
-        // Set initial speed from preference
-        const savedSpeed = parseFloat(localStorage.getItem('typewriter_speed_preference') || '2');
-        typewriter.setSpeed(savedSpeed);
-        
-        // Connect controls to this typewriter
+        typewriter.setSpeed(parseFloat(localStorage.getItem('typewriter_speed_preference') || '0.5'));
         typewriterControls?.setTypewriter(typewriter);
+        typewriter.start();
         
         const updateDuration = () => {
           const end = thinkingStartTime != null ? Date.now() : streamStartTime;
@@ -819,9 +816,13 @@
           updateDuration();
           scrollToBottom();
         };
-        
-        // Start typewriter
-        typewriter.start();
+        const hideStepsOnResponse = () => {
+          if (!responseStarted && stepsContent.children.length > 0) {
+            responseStarted = true;
+            stepsContent.classList.add('hidden');
+            updateThinkingLabel();
+          }
+        };
         
         while (true) {
           const { done, value } = await reader.read();
@@ -842,9 +843,11 @@
                 selectedAssistant = event.assistant_id;
                 document.getElementById('selected-assistant').textContent = event.assistant_name;
               } else if (event.type === 'message_chunk') {
+                hideStepsOnResponse();
                 assistantMessage += event.text || '';
                 typewriter.appendText(event.text || '');
               } else if (event.type === 'stream') {
+                hideStepsOnResponse();
                 assistantMessage += event.content || '';
                 typewriter.appendText(event.content || '');
               } else if (event.type === 'thinking') {
@@ -875,6 +878,11 @@
                 if (thinkingStartTime == null) thinkingStartTime = Date.now();
                 const prev = (event.preview || '').trim().substring(0, 150);
                 addStep('step-consolidate', '5. 整理到长期记忆', prev ? prev + ((event.preview || '').length > 150 ? '…' : '') : '写入长期记忆');
+              } else if (event.type === 'token_usage') {
+                const delta = event.total_tokens || 0;
+                sessionTokensAccum += delta;
+                const total = event.cumulative_total ?? sessionTokensAccum;
+                updateTokenStats(sessionTokensAccum, total);
               } else if (event.type === 'error') {
                 showToast(event.text || event.message || 'Error', 'error');
               }
@@ -884,7 +892,6 @@
           }
         }
         
-        // Stop typewriter when stream ends (it will display all remaining text)
         typewriter.stop();
         updateDuration();
         if (stepsContent.children.length === 0) thinkingSteps.style.display = 'none';
@@ -1050,6 +1057,8 @@
       newChatBtns.forEach(btn => {
         btn.addEventListener('click', () => {
           currentSessionId = null;
+          sessionTokensAccum = 0;
+          updateTokenStats(0, 0);
           document.getElementById('messages').innerHTML = '';
           document.getElementById('messages').classList.add('hidden');
           document.getElementById('welcome-screen').classList.remove('hidden');
@@ -1139,6 +1148,17 @@
       showToast(`${files.length} file(s) attached`, 'success');
     }
 
+    function formatTokens(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+      return String(n);
+    }
+    function updateTokenStats(sessionTokens, totalTokens) {
+      const sesEl = document.getElementById('token-stats-session');
+      const totEl = document.getElementById('token-stats-total');
+      if (sesEl) sesEl.textContent = 'This Session: ' + formatTokens(sessionTokens);
+      if (totEl) totEl.textContent = 'Total: ' + formatTokens(totalTokens);
+    }
     function escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text;
@@ -1255,6 +1275,9 @@
       appendText(text) {
         this.text += text;
         this.chunkBuffer += text;
+        if (!this.isRunning && this.currentIndex < this.text.length) {
+          this.start();
+        }
       }
       
       start() {
@@ -1366,7 +1389,6 @@
           this.timeoutId = setTimeout(() => this.typeNext(), nextDelay);
         } else {
           this.isRunning = false;
-          this.onComplete();
         }
       }
       
@@ -1420,9 +1442,9 @@
           </button>
           <div class="tw-speed-group">
             <span class="tw-label">速度</span>
-            <button class="tw-speed-btn" data-speed="0.5">0.5x</button>
+            <button class="tw-speed-btn active" data-speed="0.5">0.5x</button>
             <button class="tw-speed-btn" data-speed="1">1x</button>
-            <button class="tw-speed-btn active" data-speed="2">2x</button>
+            <button class="tw-speed-btn" data-speed="2">2x</button>
             <button class="tw-speed-btn" data-speed="3">3x</button>
           </div>
           <button id="tw-skip" class="tw-btn" title="跳过动画">
@@ -1588,7 +1610,7 @@
       });
       
       // Set initial speed from preference
-      const savedSpeed = localStorage.getItem('typewriter_speed_preference') || '2';
+      const savedSpeed = localStorage.getItem('typewriter_speed_preference') || '0.5';
       document.querySelectorAll('.tw-speed-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.speed === savedSpeed);
       });
