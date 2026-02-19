@@ -15,7 +15,12 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::sync::watch;
 
 use crate::core::UiState;
-use crate::ui::render::draw;
+use crate::ui::render::{draw, InputFocus, InputState};
+
+/// 默认智能体列表（TUI 用，与 config/assistants.toml 可扩展）
+const DEFAULT_AGENTS: &[&str] = &["默认", "自动分派"];
+/// 默认模型列表（TUI 用，与 config/models.toml 可扩展）
+const DEFAULT_MODELS: &[&str] = &["默认", "DeepSeek", "GPT-4o", "Claude"];
 
 /// 运行 TUI：启用原始模式与全屏，循环 poll 事件 + 渲染，退出时恢复终端
 pub async fn run_app(
@@ -33,6 +38,9 @@ pub async fn run_app(
     let mut input_buffer = String::new();
     let mut conversation_scroll = 0usize;
     let mut last_history_len = 0usize;
+    let mut input_state = InputState::default();
+    let agents: Vec<&str> = DEFAULT_AGENTS.to_vec();
+    let models: Vec<&str> = DEFAULT_MODELS.to_vec();
 
     loop {
         let state = state_rx.borrow().clone();
@@ -52,24 +60,62 @@ pub async fn run_app(
                 super::event::AppEvent::Key(key) if !state.input_locked => {
                     match key.code {
                         KeyCode::Enter => {
-                            let input = input_buffer.trim().to_string();
-                            input_buffer.clear();
-                            if !input.is_empty() {
-                                if matches!(input.to_lowercase().as_str(), "/exit" | "exit" | "/quit" | "quit") {
-                                    break;
+                            if input_state.focus == InputFocus::Input
+                                || input_state.focus == InputFocus::Send
+                            {
+                                let input = input_buffer.trim().to_string();
+                                input_buffer.clear();
+                                if !input.is_empty() {
+                                    if matches!(input.to_lowercase().as_str(), "/exit" | "exit" | "/quit" | "quit") {
+                                        break;
+                                    }
+                                    event_handler.send_submit(input);
                                 }
-                                event_handler.send_submit(input);
                             }
                         }
-                        KeyCode::Backspace => {
-                            input_buffer.pop();
+                        KeyCode::Tab => {
+                            input_state.focus = match input_state.focus {
+                                InputFocus::Input => InputFocus::Agent,
+                                InputFocus::Agent => InputFocus::Model,
+                                InputFocus::Model => InputFocus::Send,
+                                InputFocus::Send | InputFocus::Mode | InputFocus::Image => InputFocus::Input,
+                            };
                         }
-                        KeyCode::Char(c) => input_buffer.push(c),
+                        KeyCode::BackTab => {
+                            input_state.focus = match input_state.focus {
+                                InputFocus::Input => InputFocus::Send,
+                                InputFocus::Agent => InputFocus::Input,
+                                InputFocus::Model => InputFocus::Agent,
+                                InputFocus::Send | InputFocus::Mode | InputFocus::Image => InputFocus::Model,
+                            };
+                        }
+                        KeyCode::Backspace => {
+                            if input_state.focus == InputFocus::Input {
+                                input_buffer.pop();
+                            }
+                        }
+                        KeyCode::Char(c) => {
+                            if input_state.focus == InputFocus::Input {
+                                input_buffer.push(c);
+                            }
+                        }
                         KeyCode::Up => {
-                            conversation_scroll = conversation_scroll.saturating_sub(1);
+                            if input_state.focus == InputFocus::Agent {
+                                input_state.agent_index = input_state.agent_index.saturating_sub(1);
+                            } else if input_state.focus == InputFocus::Model {
+                                input_state.model_index = input_state.model_index.saturating_sub(1);
+                            } else {
+                                conversation_scroll = conversation_scroll.saturating_sub(1);
+                            }
                         }
                         KeyCode::Down => {
-                            conversation_scroll = conversation_scroll.saturating_add(1);
+                            if input_state.focus == InputFocus::Agent {
+                                input_state.agent_index = (input_state.agent_index + 1).min(agents.len().saturating_sub(1));
+                            } else if input_state.focus == InputFocus::Model {
+                                input_state.model_index = (input_state.model_index + 1).min(models.len().saturating_sub(1));
+                            } else {
+                                conversation_scroll = conversation_scroll.saturating_add(1);
+                            }
                         }
                         KeyCode::PageUp => {
                             conversation_scroll = conversation_scroll.saturating_sub(10);
@@ -92,7 +138,16 @@ pub async fn run_app(
 
         let mut scroll_info = (0usize, 0usize);
         terminal.draw(|f| {
-            draw(f, &state, &input_buffer, conversation_scroll, &mut scroll_info);
+            draw(
+                f,
+                &state,
+                &input_buffer,
+                conversation_scroll,
+                &mut scroll_info,
+                &input_state,
+                &agents,
+                &models,
+            );
         })?;
         let (total_lines, viewport_height) = scroll_info;
         let max_scroll = total_lines.saturating_sub(viewport_height);
