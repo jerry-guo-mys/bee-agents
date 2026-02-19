@@ -1071,7 +1071,7 @@ async fn api_history(
         .filter(|m| {
             let c = m.content.trim();
             if matches!(m.role, Role::User) {
-                !c.starts_with("Observation from ")
+                !c.starts_with("Observation from ") && !c.starts_with("Critic 建议：")
             } else {
                 !c.starts_with("Tool call:")  // 任意 "Tool call:..." 均过滤，不依赖 " | Result: "
             }

@@ -72,6 +72,9 @@
     .typing-dot:nth-child(1) { animation-delay: 0s; }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes cursor-blink { 50% { opacity: 0; } }
+    .message-content.streaming::after { content: '▋'; animation: cursor-blink 1s step-end infinite; color: #3b82f6; margin-left: 2px; }
+    .dark .message-content.streaming::after { color: #60a5fa; }
     
     .code-block-wrapper { position: relative; margin: 1em 0; background: #1e293b; border-radius: 8px; overflow: hidden; }
     .code-block-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.08); }
@@ -119,7 +122,9 @@
     .dropdown-item.selected { background: #E0F2FE; color: #0369a1; }
     .dark .dropdown-item.selected { background: rgba(14,165,233,0.2); color: #38bdf8; }
     
-    .message-content { line-height: 1.7; }
+    .msg-row.user { min-height: 0; }
+    .msg-row.user .message-content { line-height: 1.6; }
+    .message-content { line-height: 1.7; user-select: text; -webkit-user-select: text; }
     .message-content p { margin: 0.5em 0; }
     .message-content p:first-child { margin-top: 0; }
     .message-content p:last-child { margin-bottom: 0; }
@@ -132,6 +137,21 @@
     .message-content a:hover { text-decoration: underline; }
     .message-content blockquote { margin: 0.5em 0; padding-left: 1em; border-left: 3px solid #d1d5db; color: #6b7280; }
     .dark .message-content blockquote { border-color: #4b5563; color: #9ca3af; }
+    
+    .thinking-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; margin-bottom: 8px; cursor: pointer; user-select: none; flex-shrink: 0; }
+    .thinking-bar:hover { opacity: 0.9; }
+    .thinking-bar .label { font-size: 0.8rem; color: #6b7280; display: flex; align-items: center; gap: 6px; }
+    .dark .thinking-bar .label { color: #9ca3af; }
+    .thinking-bar .arrow { font-size: 1rem; color: #9ca3af; transition: transform 0.2s; margin-left: 8px; }
+    .thinking-steps .arrow { transition: transform 0.2s; }
+    .thinking-bar .duration { font-size: 0.75rem; color: #9ca3af; }
+    .thinking-steps { transition: all 0.2s; }
+    .thinking-steps.collapsed .steps-content { display: none; }
+    .step-item { font-size: 0.8rem; padding: 6px 10px; margin: 4px 0; background: rgba(0,0,0,0.03); border-radius: 8px; border-left: 3px solid #3b82f6; }
+    .dark .step-item { background: rgba(255,255,255,0.05); }
+    .step-item.tool-call { border-color: #f59e0b; }
+    .step-item.observation { border-color: #10b981; }
+    .step-item.recovery { border-color: #ef4444; }
     
     .toast-container { position: fixed; top: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
     .toast { 
@@ -281,7 +301,7 @@
       </div>
     </header>
 
-    <div id="messages-wrapper" class="flex-1 overflow-y-auto flex flex-col items-center pb-32 px-4">
+    <div id="messages-wrapper" class="flex-1 overflow-y-auto flex flex-col items-center pb-40 px-4">
       <div id="welcome-screen" class="text-center max-w-2xl w-full animate-fade-in-up flex flex-col items-center justify-center h-full">
         <h1 class="text-4xl md:text-5xl font-bold text-text-main-light dark:text-white mb-4 tracking-tight">
           Bee <span class="font-normal text-text-main-light dark:text-gray-200">Personal AI Agent</span>
@@ -305,17 +325,17 @@
       <div id="messages" class="hidden w-full max-w-3xl py-8 space-y-6"></div>
     </div>
 
-    <div id="input-area" class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-surface-light via-surface-light to-transparent dark:from-background-dark dark:via-background-dark pt-12">
+    <div id="input-area" class="absolute bottom-0 left-0 right-0 px-6 pb-4 pt-8 bg-gradient-to-t from-surface-light via-surface-light to-transparent dark:from-background-dark dark:via-background-dark">
       <div class="max-w-4xl mx-auto w-full">
-        <div class="bg-white dark:bg-[#1a2233] rounded-3xl border border-gray-200 dark:border-gray-700 shadow-xl dark:shadow-2xl dark:shadow-black/50 overflow-visible focus-within:ring-2 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/30 transition-shadow">
-          <div class="p-4 pb-0">
+        <div class="bg-white dark:bg-[#1a2233] rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-xl overflow-visible focus-within:ring-2 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/30 transition-shadow">
+          <div class="px-4 pt-2 pb-0">
             <textarea id="message-input" 
-              class="w-full resize-none border-0 bg-transparent p-2 text-text-main-light dark:text-text-main-dark placeholder-gray-400 dark:placeholder-gray-500 focus:ring-0 text-base max-h-48 overflow-y-auto"
+              class="w-full resize-none border-0 bg-transparent py-1.5 px-2 text-text-main-light dark:text-text-main-dark placeholder-gray-400 dark:placeholder-gray-500 focus:ring-0 text-base max-h-36 overflow-y-auto min-h-[1.5rem]"
               placeholder="Type a message here, press ↵ to send" 
               rows="1"></textarea>
           </div>
           
-          <div class="px-4 py-3 flex items-center justify-between bg-transparent overflow-visible">
+          <div class="px-3 py-2 flex items-center justify-between bg-transparent overflow-visible">
             <div class="flex items-center gap-2 overflow-x-auto no-scrollbar overflow-y-visible">
               <div class="relative">
                 <button id="assistant-selector" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium text-text-sub-light dark:text-text-sub-dark transition-colors whitespace-nowrap">
@@ -356,7 +376,7 @@
             </div>
           </div>
         </div>
-        <p class="text-center text-xs text-gray-400 mt-3 dark:text-gray-600">AI can make mistakes. Consider checking important information.</p>
+        <p class="text-center text-xs text-gray-400 mt-2 dark:text-gray-600">AI can make mistakes. Consider checking important information.</p>
       </div>
     </div>
     
@@ -607,10 +627,10 @@
       
       return `
         <div class="msg-row ${msg.role} ${isStreaming ? 'streaming' : ''}">
-          <div class="w-full ${isUser ? 'flex justify-end' : ''}">
+          <div class="w-full ${isUser ? 'flex justify-end items-start' : ''}">
             <div class="${isUser 
-              ? 'bg-gray-100 dark:bg-gray-800 text-text-main-light dark:text-text-main-dark rounded-2xl rounded-br-md' 
-              : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-md'} 
+              ? 'bg-gray-100 dark:bg-gray-800 text-text-main-light dark:text-text-main-dark rounded-2xl rounded-br-md w-fit max-w-3xl group' 
+              : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-md group'} 
               px-5 py-4 max-w-3xl shadow-sm">
               ${!isUser ? `
                 <div class="flex items-center gap-2 mb-2">
@@ -618,16 +638,14 @@
                   <span class="text-sm font-medium text-text-sub-light dark:text-text-sub-dark">Bee</span>
                 </div>
               ` : ''}
-              <div class="message-content ${isStreaming ? 'streaming' : ''} ${isUser ? 'whitespace-pre-wrap' : ''}">
+              <div class="message-content ${isStreaming ? 'streaming' : ''}">
                 ${content}
               </div>
-              ${!isUser ? `
-                <div class="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onclick="copyMessage(this)" class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
-                    <span class="material-icons-outlined text-sm">content_copy</span>
-                  </button>
-                </div>
-              ` : ''}
+              <div class="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button type="button" onclick="copyMessage(this)" class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title="复制">
+                  <span class="material-icons-outlined text-sm">content_copy</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -702,21 +720,60 @@
         document.getElementById(loadingId).remove();
         
         const msgId = 'msg-' + Date.now();
+        const streamStartTime = Date.now();
+        let thinkingStartTime = null;
         messagesContainer.insertAdjacentHTML('beforeend', `
           <div id="${msgId}" class="msg-row assistant">
             <div class="w-full">
-              <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-md px-5 py-4 max-w-3xl shadow-sm">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="material-icons-outlined text-blue-500">smart_toy</span>
-                  <span class="text-sm font-medium text-text-sub-light dark:text-text-sub-dark">Bee</span>
+              <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-md px-5 py-4 max-w-3xl shadow-sm group">
+                <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                  <div class="flex items-center gap-2">
+                    <span class="material-icons-outlined text-blue-500">smart_toy</span>
+                    <span class="text-sm font-medium text-text-main-light dark:text-text-main-dark">Bee</span>
+                  </div>
+                  <div class="thinking-steps flex items-center gap-2" data-msg-id="${msgId}">
+                    <div class="thinking-bar flex items-center gap-1" role="button" tabindex="0" title="展示/隐藏思考过程">
+                      <span class="label"><span class="material-icons-outlined text-sm">psychology</span><span class="thinking-label">展示步骤</span></span>
+                      <span class="arrow">›</span>
+                    </div>
+                    <span class="duration text-xs text-text-sub-light dark:text-text-sub-dark">0s</span>
+                  </div>
                 </div>
+                <div class="steps-content mb-3 hidden"></div>
                 <div class="message-content streaming"></div>
+                <div class="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button type="button" onclick="copyMessage(this)" class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title="复制">
+                    <span class="material-icons-outlined text-sm">content_copy</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         `);
         
-        const msgContent = document.querySelector(`#${msgId} .message-content`);
+        const msgEl = document.getElementById(msgId);
+        const msgContent = msgEl.querySelector('.message-content');
+        const thinkingSteps = msgEl.querySelector('.thinking-steps');
+        const stepsContent = msgEl.querySelector('.steps-content');
+        const thinkingBar = msgEl.querySelector('.thinking-bar');
+        const durationEl = msgEl.querySelector('.duration');
+        const updateDuration = () => {
+          const end = thinkingStartTime != null ? Date.now() : streamStartTime;
+          const start = thinkingStartTime != null ? thinkingStartTime : streamStartTime;
+          const sec = Math.round((end - start) / 1000);
+          if (durationEl) durationEl.textContent = sec + 's';
+        };
+        const updateThinkingLabel = () => {
+          const lb = msgEl.querySelector('.thinking-label');
+          const isHidden = stepsContent.classList.contains('hidden');
+          if (lb) lb.textContent = isHidden ? '展示步骤' : '隐藏步骤';
+          const arrow = msgEl.querySelector('.thinking-bar .arrow');
+          if (arrow) arrow.style.transform = isHidden ? 'rotate(-90deg)' : 'none';
+        };
+        thinkingBar?.addEventListener('click', () => {
+          stepsContent.classList.toggle('hidden');
+          updateThinkingLabel();
+        });
         
         while (true) {
           const { done, value } = await reader.read();
@@ -736,12 +793,57 @@
               } else if (event.type === 'assistant_dispatched') {
                 selectedAssistant = event.assistant_id;
                 document.getElementById('selected-assistant').textContent = event.assistant_name;
-              } else if (event.type === 'stream') {
-                assistantMessage += event.content;
+              } else if (event.type === 'message_chunk') {
+                assistantMessage += event.text || '';
                 msgContent.innerHTML = marked.parse(assistantMessage);
                 scrollToBottom();
+              } else if (event.type === 'stream') {
+                assistantMessage += event.content || '';
+                msgContent.innerHTML = marked.parse(assistantMessage);
+                scrollToBottom();
+              } else if (event.type === 'thinking' || event.type === 'thinking_content') {
+                if (thinkingStartTime == null) thinkingStartTime = Date.now();
+                const step = document.createElement('div');
+                step.className = 'step-item';
+                step.textContent = event.text || '思考中…';
+                stepsContent.appendChild(step);
+                updateDuration();
+                scrollToBottom();
+              } else if (event.type === 'tool_call') {
+                if (thinkingStartTime == null) thinkingStartTime = Date.now();
+                const step = document.createElement('div');
+                step.className = 'step-item tool-call';
+                step.textContent = '🔧 调用工具: ' + (event.tool || '');
+                stepsContent.appendChild(step);
+                updateDuration();
+                scrollToBottom();
+              } else if (event.type === 'observation') {
+                if (thinkingStartTime == null) thinkingStartTime = Date.now();
+                const step = document.createElement('div');
+                step.className = 'step-item observation';
+                step.textContent = '👁️ 观察 ' + (event.tool || '') + ': ' + (event.preview || '').substring(0, 100);
+                if ((event.preview || '').length > 100) step.textContent += '…';
+                stepsContent.appendChild(step);
+                updateDuration();
+                scrollToBottom();
+              } else if (event.type === 'tool_failure') {
+                if (thinkingStartTime == null) thinkingStartTime = Date.now();
+                const step = document.createElement('div');
+                step.className = 'step-item recovery';
+                step.textContent = '⚠️ 工具失败 ' + (event.tool || '') + ': ' + (event.reason || '');
+                stepsContent.appendChild(step);
+                updateDuration();
+                scrollToBottom();
+              } else if (event.type === 'recovery') {
+                if (thinkingStartTime == null) thinkingStartTime = Date.now();
+                const step = document.createElement('div');
+                step.className = 'step-item recovery';
+                step.textContent = '🔄 ' + (event.detail || event.action || '');
+                stepsContent.appendChild(step);
+                updateDuration();
+                scrollToBottom();
               } else if (event.type === 'error') {
-                showToast(event.message, 'error');
+                showToast(event.text || event.message || 'Error', 'error');
               }
             } catch (e) {
               console.error('Parse error:', e);
@@ -751,6 +853,9 @@
         
         msgContent.innerHTML = marked.parse(assistantMessage);
         msgContent.classList.remove('streaming');
+        updateDuration();
+        if (stepsContent.children.length === 0) thinkingSteps.style.display = 'none';
+        else updateThinkingLabel();
         hljs.highlightAll();
         
       } catch (e) {

@@ -331,9 +331,15 @@ pub async fn react_loop(
                     });
                 }
                 context.working.add_attempt(format!("{} -> {}", tc.tool, observation));
-                // 可选 Critic：校验工具结果是否符合目标，若需修正则注入建议供下一轮 Plan 使用
-                if let Some(c) = critic {
-                    if let Ok(critic_result) = c.evaluate(user_input, &tc.tool, &observation).await {
+                // 可选 Critic：校验工具结果是否符合目标；若 observation 已明确表示工具失败，则跳过 Critic，避免重复的“修正建议”
+                let obs_upper = observation.to_uppercase();
+                let is_tool_failure = obs_upper.contains("FAILED")
+                    || obs_upper.contains("ERROR")
+                    || obs_upper.contains("ACCESS RESTRICTED")
+                    || obs_upper.contains("TIMEOUT");
+                if !is_tool_failure {
+                    if let Some(c) = critic {
+                        if let Ok(critic_result) = c.evaluate(user_input, &tc.tool, &observation).await {
                         if let CriticResult::Correction(suggestion) = critic_result {
                             send_event(&event_tx, ReactEvent::Recovery {
                                 action: "Critic".to_string(),
@@ -344,6 +350,7 @@ pub async fn react_loop(
                                 "Critic 建议：{}",
                                 suggestion
                             )));
+                        }
                         }
                     }
                 }
