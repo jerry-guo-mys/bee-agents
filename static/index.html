@@ -1351,6 +1351,40 @@
     .skill-item.selected { border-color: var(--accent); background: rgba(94,122,140,0.15); }
     .skill-item .skill-name { font-weight: 600; font-size: 0.95rem; margin-bottom: 4px; }
     .skill-item .skill-desc { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; }
+    .skill-item-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .skill-item-header .skill-main { flex: 1; cursor: pointer; }
+    .skill-config-btn {
+      padding: 4px 8px;
+      border: none;
+      border-radius: 6px;
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .skill-config-btn:hover { background: var(--accent); color: #fff; }
+    .skill-config-panel {
+      margin-top: 12px;
+      padding: 12px;
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+    .skill-config-panel .panel-title { font-weight: 600; margin-bottom: 10px; }
+    .skill-config-panel .tool-checkboxes { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+    .skill-config-panel label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .skill-config-panel input { margin: 0; }
+    .skill-config-panel .panel-actions { margin-top: 12px; display: flex; gap: 8px; }
+    .skill-config-panel .panel-actions button {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .skill-config-panel .btn-save { background: var(--accent); color: #fff; }
+    .skill-config-panel .btn-save:hover { filter: brightness(1.1); }
+    .skill-config-panel .btn-cancel { background: var(--bg-secondary); color: var(--text-secondary); }
 
     /* Message timestamp - inline right after text */
     .msg-timestamp {
@@ -1944,7 +1978,7 @@
         <span class="shortcuts-title">🤖 智能体</span>
         <button class="shortcuts-close" id="skillsModalClose">✕</button>
       </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 16px;">点击选用该智能体，新消息将使用其设定。</p>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 16px;">点击选用该智能体；点击「配置技能」可为每个智能体选择可用工具。</p>
       <div id="skillsModalList" class="skills-list"></div>
     </div>
   </div>
@@ -2510,19 +2544,26 @@
       if (e.target === shortcutsModal) closeShortcutsModal();
     });
 
+    let allTools = [];
     async function openSkillsModal() {
       skillsModal.classList.add('active');
       skillsModalList.innerHTML = '';
       try {
-        const res = await fetch('/api/assistants');
-        if (!res.ok) throw new Error('加载失败');
-        const list = await res.json();
+        const [assistantsRes, toolsRes] = await Promise.all([fetch('/api/assistants'), fetch('/api/tools')]);
+        if (!assistantsRes.ok) throw new Error('加载助手失败');
+        if (!toolsRes.ok) throw new Error('加载工具列表失败');
+        const list = await assistantsRes.json();
+        allTools = await toolsRes.json();
         list.forEach(a => {
           const el = document.createElement('div');
           el.className = 'skill-item' + (a.id === currentAssistantId ? ' selected' : '');
           el.dataset.id = a.id;
-          el.innerHTML = '<div class="skill-name">' + escapeHtml(a.name) + '</div><div class="skill-desc">' + escapeHtml(a.description || '') + '</div>';
-          el.onclick = () => {
+          const canConfig = a.id !== 'auto';
+          el.innerHTML = '<div class="skill-item-header">' +
+            '<div class="skill-main"><div class="skill-name">' + escapeHtml(a.name) + '</div><div class="skill-desc">' + escapeHtml(a.description || '') + '</div></div>' +
+            (canConfig ? '<button class="skill-config-btn" type="button" title="配置技能">⚙ 技能</button>' : '') +
+            '</div>';
+          el.querySelector('.skill-main').onclick = () => {
             currentAssistantId = a.id;
             localStorage.setItem(ASSISTANT_KEY, a.id);
             skillsModalList.querySelectorAll('.skill-item').forEach(i => i.classList.remove('selected'));
@@ -2532,11 +2573,54 @@
             closeSkillsModal();
             showToast('已选用：' + a.name, 'success');
           };
+          if (canConfig) {
+            el.querySelector('.skill-config-btn').onclick = (e) => {
+              e.stopPropagation();
+              toggleSkillConfig(el, a);
+            };
+          }
           skillsModalList.appendChild(el);
         });
       } catch (e) {
-        skillsModalList.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem;">加载技能列表失败</p>';
+        skillsModalList.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem;">加载失败：' + escapeHtml(e.message) + '</p>';
       }
+    }
+    function toggleSkillConfig(itemEl, assistant) {
+      let panel = itemEl.querySelector('.skill-config-panel');
+      if (panel) {
+        panel.remove();
+        return;
+      }
+      const currentSkills = new Set(assistant.skills || []);
+      panel = document.createElement('div');
+      panel.className = 'skill-config-panel';
+      let html = '<div class="panel-title">' + escapeHtml(assistant.name) + ' 可用技能</div><div class="tool-checkboxes">';
+      const useAll = assistant.skills == null || assistant.skills.length === 0;
+      allTools.forEach(t => {
+        const checked = useAll || currentSkills.has(t.id);
+        html += '<label><input type="checkbox" data-tool="' + escapeHtml(t.id) + '"' + (checked ? ' checked' : '') + '>' + escapeHtml(t.id) + '</label>';
+      });
+      html += '</div><div class="panel-actions"><button class="btn-save" type="button">保存</button><button class="btn-cancel" type="button">取消</button></div>';
+      panel.innerHTML = html;
+      panel.querySelector('.btn-save').onclick = async () => {
+        const checked = [];
+        panel.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => { checked.push(cb.dataset.tool); });
+        try {
+          const res = await fetch('/api/assistant/' + encodeURIComponent(assistant.id) + '/skills', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skills: checked })
+          });
+          if (!res.ok) throw new Error(await res.text() || res.statusText);
+          showToast('已保存技能配置', 'success');
+          panel.remove();
+          openSkillsModal();
+        } catch (e) {
+          showToast('保存失败：' + (e.message || '未知错误'), 'error');
+        }
+      };
+      panel.querySelector('.btn-cancel').onclick = () => panel.remove();
+      itemEl.appendChild(panel);
     }
     function closeSkillsModal() {
       skillsModal.classList.remove('active');

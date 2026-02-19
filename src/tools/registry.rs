@@ -45,4 +45,12 @@ impl ToolRegistry {
     pub fn tool_names(&self) -> Vec<String> {
         self.tools.keys().cloned().collect()
     }
+
+    /// 返回 (name, description) 列表，用于生成 prompt 中的 Available tools 段落
+    pub fn tool_descriptions(&self) -> Vec<(String, String)> {
+        self.tools
+            .iter()
+            .map(|(name, tool)| (name.clone(), tool.description().to_string()))
+            .collect()
+    }
 }

@@ -228,6 +228,7 @@ pub async fn create_agent(
                                 Some(&critic),
                                 Some(&task_scheduler),
                                 None,
+                                None,
                             ).await;
 
                             match result {

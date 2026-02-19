@@ -73,6 +73,7 @@ pub async fn compact_context(
 
 /// 执行 ReAct 循环：用户输入 -> 拼 system(working+long_term) -> plan -> 解析输出 -> 若 ToolCall 则执行并写回 Observation（可选 Critic 校验）-> 若 Response 则返回并写入长期记忆
 /// 若提供 system_prompt_override，则用其替代 planner 的 base_system_prompt（用于多助手场景）。
+/// allowed_tools: 该智能体可用的工具名列表；为 None 或空时使用 executor 全部工具。
 pub async fn react_loop(
     planner: &Planner,
     executor: &ToolExecutor,
@@ -85,6 +86,7 @@ pub async fn react_loop(
     critic: Option<&Critic>,
     task_scheduler: Option<&TaskScheduler>,
     system_prompt_override: Option<&str>,
+    allowed_tools: Option<&[String]>,
 ) -> Result<ReactResult, AgentError> {
     context.push_message(Message::user(user_input.to_string()));
     context.working.set_goal(user_input);
@@ -272,9 +274,23 @@ pub async fn react_loop(
                     tool: tc.tool.clone(),
                     args: tc.args.clone(),
                 });
-                if !executor.tool_names().iter().any(|n| n == &tc.tool) {
-                    send_event(&event_tx, ReactEvent::Error { text: format!("Hallucinated tool: {}", tc.tool) });
-                    context.append_hallucination_lesson(&tc.tool, &executor.tool_names());
+                let valid_names: &[String] = match allowed_tools {
+                    Some(a) if !a.is_empty() => a,
+                    _ => &[], // 空 slice 表示用 executor 全部工具
+                };
+                let is_allowed = if valid_names.is_empty() {
+                    executor.tool_names().iter().any(|n| n == &tc.tool)
+                } else {
+                    valid_names.iter().any(|n| n == &tc.tool)
+                };
+                if !is_allowed {
+                    let ref_names: Vec<String> = if valid_names.is_empty() {
+                        executor.tool_names()
+                    } else {
+                        valid_names.to_vec()
+                    };
+                    send_event(&event_tx, ReactEvent::Error { text: format!("工具 {} 不在该智能体技能范围内", tc.tool) });
+                    context.append_hallucination_lesson(&tc.tool, &ref_names);
                     return Err(AgentError::HallucinatedTool(tc.tool.clone()));
                 }
                 // 工具并发限制：从 TaskScheduler 获取许可后再执行

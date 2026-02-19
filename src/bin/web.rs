@@ -64,7 +64,14 @@ struct AppState {
     shared_vector_long_term: Option<Arc<InMemoryVectorLongTerm>>,
     /// 多助手：列表与 id -> 完整 system prompt（含 tool schema）
     assistants: Vec<AssistantInfo>,
-    assistant_prompts: HashMap<String, String>,
+    assistant_prompts: Arc<RwLock<HashMap<String, String>>>,
+    /// 每个智能体可用的技能（工具名列表），空表示全部可用
+    assistant_skills: Arc<RwLock<HashMap<String, Vec<String>>>>,
+    /// 工具列表（id, name, description），用于技能配置
+    tool_descriptions: Vec<(String, String)>,
+    /// 助手元数据（prompt 路径等），用于重建 prompt
+    assistant_entries: HashMap<String, AssistantEntry>,
+    config_base: PathBuf,
     /// 可切换模型：列表与 id -> 模型配置
     models: Vec<ModelInfo>,
     model_configs: HashMap<String, ModelEntry>,
@@ -148,6 +155,17 @@ struct AssistantInfo {
     id: String,
     name: String,
     description: String,
+    /// 该智能体可用的技能（工具名列表）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    skills: Option<Vec<String>>,
+}
+
+/// 工具信息：供前端技能配置使用
+#[derive(Debug, Clone, Serialize)]
+struct ToolInfo {
+    id: String,
+    name: String,
+    description: String,
 }
 
 /// 可切换模型：前端展示用
@@ -176,12 +194,15 @@ struct ModelsConfig {
 }
 
 /// assistants.toml 中单条配置
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct AssistantEntry {
     id: String,
     name: String,
     description: String,
     prompt: String,
+    /// 该智能体可用的技能（工具名列表），缺省则使用全部
+    #[serde(default)]
+    skills: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -233,8 +254,42 @@ async fn dispatch_assistant(
     Ok(if valid { id } else { "default".to_string() })
 }
 
-/// 从 config/assistants.toml 与 config/skills/*.toml 加载助手；后者与前者 id 冲突时以 skills 为准
-fn load_assistants(config_base: &std::path::Path) -> (Vec<AssistantInfo>, HashMap<String, String>) {
+/// 从 config/assistant_skills.json 加载页面配置的技能覆盖（可选）
+fn load_skills_overrides(config_base: &std::path::Path) -> HashMap<String, Vec<String>> {
+    let paths = [
+        config_base.join("assistant_skills.json"),
+        std::path::Path::new("config/assistant_skills.json").to_path_buf(),
+        std::path::Path::new("../config/assistant_skills.json").to_path_buf(),
+    ];
+    for p in &paths {
+        if let Ok(s) = std::fs::read_to_string(p) {
+            if let Ok(m) = serde_json::from_str(&s) {
+                return m;
+            }
+        }
+    }
+    HashMap::new()
+}
+
+/// 保存技能覆盖到 config/assistant_skills.json
+fn save_skills_overrides(config_base: &std::path::Path, overrides: &HashMap<String, Vec<String>>) -> std::io::Result<()> {
+    let path = config_base.join("assistant_skills.json");
+    std::fs::create_dir_all(config_base).ok();
+    let s = serde_json::to_string_pretty(overrides).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    std::fs::write(path, s)
+}
+
+/// 从 config/assistants.toml 与 config/skills/*.toml 加载助手；后者与前者 id 冲突时以 skills 为准。
+/// tool_descriptions: (name, description) 列表，用于按 skills 过滤后注入 prompt
+fn load_assistants(
+    config_base: &std::path::Path,
+    tool_descriptions: &[(String, String)],
+) -> (
+    Vec<AssistantInfo>,
+    HashMap<String, String>,
+    HashMap<String, Vec<String>>,
+    HashMap<String, AssistantEntry>,
+) {
     let toml_path = [
         config_base.join("assistants.toml"),
         std::path::Path::new("config/assistants.toml").to_path_buf(),
@@ -253,6 +308,7 @@ fn load_assistants(config_base: &std::path::Path) -> (Vec<AssistantInfo>, HashMa
                 name: "通用助手".to_string(),
                 description: "全能型个人助手".to_string(),
                 prompt: "prompts/system.txt".to_string(),
+                skills: None,
             },
         ],
     };
@@ -292,23 +348,40 @@ fn load_assistants(config_base: &std::path::Path) -> (Vec<AssistantInfo>, HashMa
         }
     }
 
+    let overrides = load_skills_overrides(config_base);
     let tool_schema = tool_call_schema_json();
-    let list: Vec<AssistantInfo> = entries
-        .iter()
-        .map(|e| AssistantInfo {
-            id: e.id.clone(),
-            name: e.name.clone(),
-            description: e.description.clone(),
-        })
-        .collect();
-
     let base = if config_base.is_absolute() {
         config_base.to_path_buf()
     } else {
         std::env::current_dir().unwrap_or_default().join(config_base)
     };
+    let all_names: std::collections::HashSet<_> =
+        tool_descriptions.iter().map(|(n, _)| n.as_str()).collect();
     let mut prompts = HashMap::new();
+    let mut skills_map = HashMap::new();
+    let mut entries_map = HashMap::new();
     for e in &entries {
+        let allowed: Vec<String> = overrides.get(&e.id)
+            .cloned()
+            .or_else(|| match &e.skills {
+                Some(s) if !s.is_empty() => Some(s
+                    .iter()
+                    .filter(|n| all_names.contains(n.as_str()))
+                    .cloned()
+                    .collect()),
+                _ => Some(tool_descriptions.iter().map(|(n, _)| n.clone()).collect()),
+            })
+            .unwrap_or_else(|| tool_descriptions.iter().map(|(n, _)| n.clone()).collect());
+        skills_map.insert(e.id.clone(), allowed.clone());
+        entries_map.insert(e.id.clone(), e.clone());
+
+        let tool_list: String = tool_descriptions
+            .iter()
+            .filter(|(name, _)| allowed.contains(name))
+            .map(|(name, desc)| format!("- {}: {}", name, desc))
+            .collect::<Vec<_>>()
+            .join("\n");
+
         let prompt_path = [
             base.join(&e.prompt),
             std::path::Path::new("config").join(&e.prompt),
@@ -321,17 +394,31 @@ fn load_assistants(config_base: &std::path::Path) -> (Vec<AssistantInfo>, HashMa
             .and_then(|p| std::fs::read_to_string(p).ok())
             .unwrap_or_else(|| format!("You are {}, a helpful assistant.", e.name));
 
+        let tools_section = if tool_list.is_empty() {
+            String::new()
+        } else {
+            format!("\n\nAvailable tools:\n{}\n", tool_list)
+        };
         let full = if tool_schema.is_empty() {
-            content
+            format!("{}{}", content, tools_section)
         } else {
             format!(
-                "{}\n\n## Tool call JSON Schema (you must output valid JSON matching this)\n```json\n{}\n```",
-                content, tool_schema
+                "{}{}\n\n## Tool call JSON Schema (you must output valid JSON matching this)\n```json\n{}\n```",
+                content, tools_section, tool_schema
             )
         };
         prompts.insert(e.id.clone(), full);
     }
-    (list, prompts)
+    let list: Vec<AssistantInfo> = entries
+        .iter()
+        .map(|e| AssistantInfo {
+            id: e.id.clone(),
+            name: e.name.clone(),
+            description: e.description.clone(),
+            skills: Some(skills_map.get(&e.id).cloned().unwrap_or_default()),
+        })
+        .collect();
+    (list, prompts, skills_map, entries_map)
 }
 
 /// 从 config/models.toml 加载可切换模型
@@ -415,20 +502,29 @@ async fn main() -> anyhow::Result<()> {
 
     let (models, model_configs) = load_models(config_base);
 
-    let (mut assistants, mut assistant_prompts) = load_assistants(config_base);
-    if !assistant_prompts.contains_key("default") {
+    let config_base = config_base.to_path_buf();
+    let components_inner = create_agent_components(&workspace, &system_prompt);
+    let tool_descriptions = components_inner.executor.tool_descriptions();
+    let (mut assistants, mut prompts_map, skills_map, assistant_entries) =
+        load_assistants(&config_base, &tool_descriptions);
+    if !prompts_map.contains_key("default") {
         let fallback = assistants
-            .first()
-            .and_then(|a| assistant_prompts.get(&a.id).cloned())
+            .iter()
+            .find(|a| a.id != "auto")
+            .and_then(|a| prompts_map.get(&a.id).cloned())
             .unwrap_or_else(|| system_prompt.clone());
-        assistant_prompts.insert("default".to_string(), fallback);
+        prompts_map.insert("default".to_string(), fallback);
     }
+    let assistant_prompts = Arc::new(RwLock::new(prompts_map));
+    let assistant_skills = Arc::new(RwLock::new(skills_map));
+    let components = Arc::new(RwLock::new(Arc::new(components_inner)));
     assistants.insert(
         0,
         AssistantInfo {
             id: "auto".to_string(),
             name: "自动分派助手".to_string(),
             description: "根据提问自动选择最合适的助手".to_string(),
+            skills: None,
         },
     );
 
@@ -441,9 +537,8 @@ async fn main() -> anyhow::Result<()> {
     let shared_vector_long_term =
         create_shared_vector_long_term(&workspace, &app_config);
 
-    let components = Arc::new(create_agent_components(&workspace, &system_prompt));
     let state = Arc::new(AppState {
-        components: Arc::new(RwLock::new(components)),
+        components,
         sessions: Arc::new(RwLock::new(HashMap::new())),
         sessions_dir,
         memory_root: memory_root.clone(),
@@ -452,6 +547,10 @@ async fn main() -> anyhow::Result<()> {
         shared_vector_long_term,
         assistants,
         assistant_prompts,
+        assistant_skills,
+        tool_descriptions,
+        assistant_entries,
+        config_base,
         models,
         model_configs,
     });
@@ -469,6 +568,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/compact", post(api_compact))
         .route("/api/session/rename", post(api_session_rename))
         .route("/api/assistants", get(api_assistants_list))
+        .route("/api/tools", get(api_tools_list))
+        .route("/api/assistant/:id/skills", axum::routing::put(api_assistant_skills_put))
         .route("/api/models", get(api_models_list))
         .route("/api/memory/consolidate", post(api_memory_consolidate))
         .route("/api/memory/consolidate-llm", post(api_memory_consolidate_llm))
@@ -522,7 +623,7 @@ async fn main() -> anyhow::Result<()> {
                     shared_vec,
                 );
                 let guard = heartbeat_state.components.read().await;
-                match process_message(&**guard, &mut context, HEARTBEAT_PROMPT).await {
+                match process_message(&**guard, &mut context, HEARTBEAT_PROMPT, None).await {
                     Ok(reply) => {
                         tracing::info!("heartbeat ok: {}", reply.trim());
                         append_heartbeat_log(&heartbeat_state.memory_root, &reply);
@@ -808,11 +909,125 @@ async fn api_session_rename(
     Ok(StatusCode::OK)
 }
 
-/// GET /api/assistants：返回多助手列表（id、name、description），供前端选择
+/// GET /api/assistants：返回多助手列表（含 skills），供前端选择与配置
 async fn api_assistants_list(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<AssistantInfo>>, (StatusCode, String)> {
-    Ok(Json(state.assistants.clone()))
+    let skills = state.assistant_skills.read().await;
+    let list: Vec<AssistantInfo> = state
+        .assistants
+        .iter()
+        .map(|a| {
+            let skills_val = skills.get(&a.id).cloned();
+            AssistantInfo {
+                id: a.id.clone(),
+                name: a.name.clone(),
+                description: a.description.clone(),
+                skills: skills_val.or(a.skills.clone()),
+            }
+        })
+        .collect();
+    Ok(Json(list))
+}
+
+/// GET /api/tools：返回可用工具列表，供技能配置使用
+async fn api_tools_list(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<ToolInfo>>, (StatusCode, String)> {
+    let list: Vec<ToolInfo> = state
+        .tool_descriptions
+        .iter()
+        .map(|(id, desc)| ToolInfo {
+            id: id.clone(),
+            name: id.clone(),
+            description: desc.clone(),
+        })
+        .collect();
+    Ok(Json(list))
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateSkillsRequest {
+    skills: Vec<String>,
+}
+
+/// PUT /api/assistant/:id/skills：更新该智能体的技能配置，持久化到 config/assistant_skills.json
+async fn api_assistant_skills_put(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Json(req): Json<UpdateSkillsRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    if id == "auto" {
+        return Err((StatusCode::BAD_REQUEST, "无法配置自动分派助手的技能".to_string()));
+    }
+    let all_tools: std::collections::HashSet<_> =
+        state.tool_descriptions.iter().map(|(n, _)| n.as_str()).collect();
+    let skills: Vec<String> = req
+        .skills
+        .into_iter()
+        .filter(|n| all_tools.contains(n.as_str()))
+        .collect();
+
+    let tool_schema = tool_call_schema_json();
+    let base = &state.config_base;
+    let tool_descriptions = &state.tool_descriptions;
+    let entry = state
+        .assistant_entries
+        .get(&id)
+        .cloned()
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "智能体不存在".to_string()))?;
+
+    let tool_list: String = tool_descriptions
+        .iter()
+        .filter(|(name, _)| skills.contains(name))
+        .map(|(name, desc)| format!("- {}: {}", name, desc))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let prompt_path = [
+        base.join(&entry.prompt),
+        std::path::Path::new("config").join(&entry.prompt),
+        std::path::Path::new("../config").join(&entry.prompt),
+    ]
+    .into_iter()
+    .find(|p| p.exists());
+
+    let content = prompt_path
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .unwrap_or_else(|| format!("You are {}, a helpful assistant.", entry.name));
+
+    let tools_section = if tool_list.is_empty() {
+        String::new()
+    } else {
+        format!("\n\nAvailable tools:\n{}\n", tool_list)
+    };
+    let full = if tool_schema.is_empty() {
+        format!("{}{}", content, tools_section)
+    } else {
+        format!(
+            "{}{}\n\n## Tool call JSON Schema (you must output valid JSON matching this)\n```json\n{}\n```",
+            content, tools_section, tool_schema
+        )
+    };
+
+    {
+        let mut prompts = state.assistant_prompts.write().await;
+        prompts.insert(id.clone(), full);
+    }
+    {
+        let mut skills_map = state.assistant_skills.write().await;
+        skills_map.insert(id.clone(), skills.clone());
+    }
+
+    let mut overrides = load_skills_overrides(base);
+    overrides.insert(id, skills);
+    save_skills_overrides(base, &overrides).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("保存配置失败: {}", e),
+        )
+    })?;
+    Ok(StatusCode::OK)
 }
 
 /// GET /api/models：返回可切换模型列表（id、name）
@@ -904,7 +1119,9 @@ async fn api_chat(
     };
 
     let components = state.components.read().await.clone();
-    let reply = process_message(components.as_ref(), &mut context, message)
+    let assistant_id = req.assistant_id.as_deref().unwrap_or("default");
+    let allowed = state.assistant_skills.read().await.get(assistant_id).cloned();
+    let reply = process_message(components.as_ref(), &mut context, message, allowed.as_deref())
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -950,7 +1167,7 @@ async fn api_chat_stream(
             }
         }
     }
-    let system_prompt_override = state.assistant_prompts.get(&assistant_id).cloned();
+    let system_prompt_override = state.assistant_prompts.read().await.get(&assistant_id).cloned();
 
     let context = {
         let mut sessions = state.sessions.write().await;
@@ -968,6 +1185,7 @@ async fn api_chat_stream(
     let (event_tx, event_rx) = mpsc::unbounded_channel::<ReactEvent>();
     let (context_tx, context_rx) = tokio::sync::oneshot::channel();
 
+    let allowed_for_spawn = state.assistant_skills.read().await.get(&assistant_id).cloned();
     let components = state.components.read().await.clone();
     let session_id_clone = session_id.clone();
     let state_spawn = Arc::clone(&state);
@@ -987,6 +1205,7 @@ async fn api_chat_stream(
             None
         };
         let planner_ref = planner_override.as_deref();
+        let allowed = allowed_for_spawn.as_deref();
         let _ = process_message_stream(
             components.as_ref(),
             &mut ctx,
@@ -994,6 +1213,7 @@ async fn api_chat_stream(
             event_tx,
             prompt_ref,
             planner_ref,
+            allowed,
         )
         .await;
         // 无论流是否被客户端断开（超时/刷新），都持久化当前会话（含用户刚发的提问），刷新后历史不丢

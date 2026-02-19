@@ -64,6 +64,11 @@ impl ToolExecutor {
     pub fn tool_names(&self) -> Vec<String> {
         self.registry.tool_names()
     }
+
+    /// 返回 (name, description) 列表，用于按智能体技能过滤后生成 prompt
+    pub fn tool_descriptions(&self) -> Vec<(String, String)> {
+        self.registry.tool_descriptions()
+    }
 }
 
 fn args_preview(args: &serde_json::Value) -> String {

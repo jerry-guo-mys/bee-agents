@@ -1,4 +1,5 @@
 # 多助手配置：id 用于 API，name/description 用于前端展示，prompt 为文件路径（相对 config 或绝对）
+# skills：该智能体可用的工具名列表，缺省则使用全部（cat、ls、shell、search、echo、code_read 等）
 [[assistants]]
 id = "default"
 name = "通用助手"
