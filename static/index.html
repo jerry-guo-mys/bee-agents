@@ -711,6 +711,9 @@
       isGenerating = true;
       updateSendButtonState();
       
+      // Show typewriter controls
+      typewriterControls?.show();
+      
       try {
         const response = await fetch('/api/chat/stream', {
           method: 'POST',
@@ -751,7 +754,7 @@
                   </div>
                 </div>
                 <div class="steps-content mb-3 hidden"></div>
-                <div class="message-content streaming"></div>
+                <div class="message-content typewriter-active"></div>
                 <div class="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button type="button" onclick="copyMessage(this)" class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title="复制">
                     <span class="material-icons-outlined text-sm">content_copy</span>
@@ -768,6 +771,29 @@
         const stepsContent = msgEl.querySelector('.steps-content');
         const thinkingBar = msgEl.querySelector('.thinking-bar');
         const durationEl = msgEl.querySelector('.duration');
+        
+        // Initialize typewriter
+        const typewriter = new Typewriter(msgContent, {
+          baseSpeed: 20,
+          codeSpeed: 3,
+          punctuationDelay: 180,
+          paragraphDelay: 350,
+          onUpdate: () => scrollToBottom(),
+          onComplete: () => {
+            msgContent.classList.remove('typewriter-active', 'streaming');
+            msgContent.classList.add('streaming-complete');
+            hljs.highlightAll();
+            typewriterControls?.hide();
+          }
+        });
+        
+        // Set initial speed from preference
+        const savedSpeed = parseFloat(localStorage.getItem('typewriter_speed_preference') || '2');
+        typewriter.setSpeed(savedSpeed);
+        
+        // Connect controls to this typewriter
+        typewriterControls?.setTypewriter(typewriter);
+        
         const updateDuration = () => {
           const end = thinkingStartTime != null ? Date.now() : streamStartTime;
           const start = thinkingStartTime != null ? thinkingStartTime : streamStartTime;
@@ -794,6 +820,9 @@
           scrollToBottom();
         };
         
+        // Start typewriter
+        typewriter.start();
+        
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -814,12 +843,10 @@
                 document.getElementById('selected-assistant').textContent = event.assistant_name;
               } else if (event.type === 'message_chunk') {
                 assistantMessage += event.text || '';
-                msgContent.innerHTML = marked.parse(assistantMessage);
-                scrollToBottom();
+                typewriter.appendText(event.text || '');
               } else if (event.type === 'stream') {
                 assistantMessage += event.content || '';
-                msgContent.innerHTML = marked.parse(assistantMessage);
-                scrollToBottom();
+                typewriter.appendText(event.content || '');
               } else if (event.type === 'thinking') {
                 if (thinkingStartTime == null) thinkingStartTime = Date.now();
                 addStep('step-understand', '1. 理解问题', '正在分析用户问题…');
@@ -857,16 +884,16 @@
           }
         }
         
-        msgContent.innerHTML = marked.parse(assistantMessage);
-        msgContent.classList.remove('streaming');
+        // Stop typewriter when stream ends (it will display all remaining text)
+        typewriter.stop();
         updateDuration();
         if (stepsContent.children.length === 0) thinkingSteps.style.display = 'none';
         else updateThinkingLabel();
-        hljs.highlightAll();
         
       } catch (e) {
         showToast('Failed to send message', 'error');
         document.getElementById(loadingId)?.remove();
+        typewriterControls?.hide();
       } finally {
         isGenerating = false;
         updateSendButtonState();
@@ -1191,8 +1218,396 @@
       if (headerToggle) headerToggle.addEventListener('click', expandSidebar);
     }
 
+    // Typewriter Effect Manager
+    class Typewriter {
+      constructor(element, options = {}) {
+        this.element = element;
+        this.text = '';
+        this.displayedText = '';
+        this.isRunning = false;
+        this.isPaused = false;
+        this.currentIndex = 0;
+        
+        // Speed settings (ms per character)
+        this.baseSpeed = options.baseSpeed || 15;
+        this.codeSpeed = options.codeSpeed || 2;
+        this.punctuationDelay = options.punctuationDelay || 150;
+        this.paragraphDelay = options.paragraphDelay || 300;
+        
+        // Speed multiplier (can be adjusted by user)
+        this.speedMultiplier = parseFloat(localStorage.getItem('typewriter_speed') || '1');
+        
+        this.timeoutId = null;
+        this.onComplete = options.onComplete || (() => {});
+        this.onUpdate = options.onUpdate || (() => {});
+        
+        // Chunk buffer for smooth streaming
+        this.chunkBuffer = '';
+        this.isInCodeBlock = false;
+        this.pendingMarkdown = '';
+      }
+      
+      setText(text) {
+        this.text = text;
+        this.chunkBuffer += text.slice(this.currentIndex);
+      }
+      
+      appendText(text) {
+        this.text += text;
+        this.chunkBuffer += text;
+      }
+      
+      start() {
+        if (this.isRunning) return;
+        this.isRunning = true;
+        this.isPaused = false;
+        this.typeNext();
+      }
+      
+      pause() {
+        this.isPaused = true;
+        if (this.timeoutId) {
+          clearTimeout(this.timeoutId);
+          this.timeoutId = null;
+        }
+      }
+      
+      resume() {
+        if (!this.isPaused) return;
+        this.isPaused = false;
+        this.typeNext();
+      }
+      
+      stop() {
+        this.isRunning = false;
+        this.isPaused = false;
+        if (this.timeoutId) {
+          clearTimeout(this.timeoutId);
+          this.timeoutId = null;
+        }
+        // Display all remaining text immediately
+        this.displayedText = this.text;
+        this.render();
+        this.onComplete();
+      }
+      
+      setSpeed(multiplier) {
+        this.speedMultiplier = Math.max(0.1, Math.min(3, multiplier));
+        localStorage.setItem('typewriter_speed', this.speedMultiplier.toString());
+      }
+      
+      getDelay(char, nextChar = '') {
+        // Fast mode for code blocks
+        if (this.isInCodeBlock) {
+          return this.codeSpeed / this.speedMultiplier;
+        }
+        
+        // Check if entering or leaving code block
+        if (char === '`' && nextChar === '`' && this.text[this.currentIndex - 1] === '`') {
+          this.isInCodeBlock = !this.isInCodeBlock;
+          return 0;
+        }
+        
+        // Longer pause for punctuation
+        if ('.!?。！？'.includes(char)) {
+          return this.punctuationDelay / this.speedMultiplier;
+        }
+        
+        // Medium pause for commas and semicolons
+        if (',;，；:：'.includes(char)) {
+          return this.punctuationDelay / 2 / this.speedMultiplier;
+        }
+        
+        // Pause for newlines (paragraph breaks)
+        if (char === '\n' && nextChar === '\n') {
+          return this.paragraphDelay / this.speedMultiplier;
+        }
+        
+        // Base typing speed
+        return this.baseSpeed / this.speedMultiplier;
+      }
+      
+      typeNext() {
+        if (!this.isRunning || this.isPaused) return;
+        
+        // Type multiple characters at once for smoother feel
+        const charsPerTick = this.isInCodeBlock ? 10 : (this.speedMultiplier > 2 ? 3 : 1);
+        let charsToType = 0;
+        let delay = 0;
+        
+        for (let i = 0; i < charsPerTick && this.currentIndex + i < this.text.length; i++) {
+          const char = this.text[this.currentIndex + i];
+          const nextChar = this.text[this.currentIndex + i + 1] || '';
+          charsToType++;
+          
+          // Check for markdown patterns that should be typed together
+          if (char === '\n' && nextChar === '\n') {
+            delay = this.getDelay(char, nextChar);
+            break;
+          }
+          
+          // Stop at punctuation for natural feel
+          if (!this.isInCodeBlock && '.!?。！？'.includes(char)) {
+            delay = this.getDelay(char, nextChar);
+            break;
+          }
+        }
+        
+        this.currentIndex += charsToType;
+        this.displayedText = this.text.slice(0, this.currentIndex);
+        this.render();
+        this.onUpdate(this.displayedText);
+        
+        if (this.currentIndex < this.text.length) {
+          const nextDelay = delay || this.getDelay(
+            this.text[this.currentIndex - 1] || '',
+            this.text[this.currentIndex] || ''
+          );
+          this.timeoutId = setTimeout(() => this.typeNext(), nextDelay);
+        } else {
+          this.isRunning = false;
+          this.onComplete();
+        }
+      }
+      
+      render() {
+        // Use marked.parse for markdown rendering
+        // But only render up to current index
+        const textToRender = this.displayedText;
+        
+        // Check if we're in the middle of a markdown pattern
+        let renderText = textToRender;
+        
+        // Complete incomplete code blocks to prevent rendering issues
+        const codeBlockMatches = (renderText.match(/```/g) || []).length;
+        if (codeBlockMatches % 2 === 1) {
+          renderText += '\n```';
+        }
+        
+        // Complete incomplete inline code
+        const backtickMatches = (renderText.match(/`/g) || []).length;
+        if (backtickMatches % 2 === 1) {
+          renderText += '`';
+        }
+        
+        // Complete incomplete bold/italic markers
+        const asteriskMatches = (renderText.match(/\*/g) || []).length;
+        if (asteriskMatches % 2 === 1) {
+          renderText += '*';
+        }
+        
+        this.element.innerHTML = marked.parse(renderText);
+      }
+      
+      get isActive() {
+        return this.isRunning && !this.isPaused;
+      }
+      
+      get progress() {
+        return this.text.length > 0 ? this.currentIndex / this.text.length : 0;
+      }
+    }
+
+    // Typewriter speed control UI
+    function createTypewriterControls() {
+      const controls = document.createElement('div');
+      controls.id = 'typewriter-controls';
+      controls.className = 'typewriter-controls';
+      controls.innerHTML = `
+        <div class="typewriter-controls-inner">
+          <button id="tw-pause" class="tw-btn" title="暂停/继续">
+            <span class="material-icons-outlined">pause</span>
+          </button>
+          <div class="tw-speed-group">
+            <span class="tw-label">速度</span>
+            <button class="tw-speed-btn" data-speed="0.5">0.5x</button>
+            <button class="tw-speed-btn" data-speed="1">1x</button>
+            <button class="tw-speed-btn active" data-speed="2">2x</button>
+            <button class="tw-speed-btn" data-speed="3">3x</button>
+          </div>
+          <button id="tw-skip" class="tw-btn" title="跳过动画">
+            <span class="material-icons-outlined">skip_next</span>
+          </button>
+        </div>
+      `;
+      
+      // Add styles
+      const style = document.createElement('style');
+      style.textContent = `
+        .typewriter-controls {
+          position: fixed;
+          bottom: 140px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 100;
+          opacity: 0;
+          visibility: hidden;
+          transition: all 0.3s ease;
+        }
+        .typewriter-controls.visible {
+          opacity: 1;
+          visibility: visible;
+        }
+        .typewriter-controls-inner {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 8px 16px;
+          background: rgba(255, 255, 255, 0.95);
+          border: 1px solid #e5e7eb;
+          border-radius: 24px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+          backdrop-filter: blur(10px);
+        }
+        .dark .typewriter-controls-inner {
+          background: rgba(31, 41, 55, 0.95);
+          border-color: #374151;
+        }
+        .tw-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 36px;
+          height: 36px;
+          border: none;
+          border-radius: 50%;
+          background: #f3f4f6;
+          color: #6b7280;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .dark .tw-btn {
+          background: #374151;
+          color: #9ca3af;
+        }
+        .tw-btn:hover {
+          background: #e5e7eb;
+          color: #374151;
+        }
+        .dark .tw-btn:hover {
+          background: #4b5563;
+          color: #e5e7eb;
+        }
+        .tw-speed-group {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .tw-label {
+          font-size: 12px;
+          color: #9ca3af;
+          margin-right: 4px;
+        }
+        .tw-speed-btn {
+          padding: 4px 10px;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          background: transparent;
+          font-size: 12px;
+          color: #6b7280;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .dark .tw-speed-btn {
+          border-color: #4b5563;
+          color: #9ca3af;
+        }
+        .tw-speed-btn:hover {
+          background: #f3f4f6;
+        }
+        .dark .tw-speed-btn:hover {
+          background: #374151;
+        }
+        .tw-speed-btn.active {
+          background: #3b82f6;
+          border-color: #3b82f6;
+          color: white;
+        }
+        
+        /* Enhanced cursor animation */
+        .message-content.typewriter-active::after {
+          content: '▋';
+          display: inline-block;
+          animation: typewriter-cursor 0.8s ease-in-out infinite;
+          color: #3b82f6;
+          margin-left: 2px;
+          font-weight: 300;
+        }
+        .dark .message-content.typewriter-active::after {
+          color: #60a5fa;
+        }
+        @keyframes typewriter-cursor {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+        
+        /* Character highlight effect */
+        .typewriter-char {
+          animation: char-appear 0.15s ease-out;
+        }
+        @keyframes char-appear {
+          0% { opacity: 0; transform: translateY(2px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+      `;
+      document.head.appendChild(style);
+      document.body.appendChild(controls);
+      
+      // Event handlers
+      let currentTypewriter = null;
+      
+      document.getElementById('tw-pause')?.addEventListener('click', () => {
+        if (currentTypewriter) {
+          if (currentTypewriter.isPaused) {
+            currentTypewriter.resume();
+            document.querySelector('#tw-pause .material-icons-outlined').textContent = 'pause';
+          } else {
+            currentTypewriter.pause();
+            document.querySelector('#tw-pause .material-icons-outlined').textContent = 'play_arrow';
+          }
+        }
+      });
+      
+      document.getElementById('tw-skip')?.addEventListener('click', () => {
+        if (currentTypewriter) {
+          currentTypewriter.stop();
+        }
+      });
+      
+      document.querySelectorAll('.tw-speed-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          document.querySelectorAll('.tw-speed-btn').forEach(b => b.classList.remove('active'));
+          e.target.classList.add('active');
+          const speed = parseFloat(e.target.dataset.speed);
+          if (currentTypewriter) {
+            currentTypewriter.setSpeed(speed);
+          }
+          // Save preference
+          localStorage.setItem('typewriter_speed_preference', speed.toString());
+        });
+      });
+      
+      // Set initial speed from preference
+      const savedSpeed = localStorage.getItem('typewriter_speed_preference') || '2';
+      document.querySelectorAll('.tw-speed-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.speed === savedSpeed);
+      });
+      
+      return {
+        show: () => controls.classList.add('visible'),
+        hide: () => controls.classList.remove('visible'),
+        setTypewriter: (tw) => { currentTypewriter = tw; }
+      };
+    }
+
+    // Global typewriter controls
+    let typewriterControls = null;
+
     document.addEventListener('DOMContentLoaded', () => {
       console.log('Bee Chat initializing...');
+      
+      // Initialize typewriter controls
+      typewriterControls = createTypewriterControls();
       
       initTheme();
       initTextarea();
