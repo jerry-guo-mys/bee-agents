@@ -83,16 +83,16 @@
     .code-with-lines { flex: 1; padding: 14px; overflow-x: auto; }
     
     .dropdown-menu { 
-      position: absolute; 
-      bottom: 100%; 
-      left: 0; 
+      position: fixed;
       margin-bottom: 8px;
+      max-height: 280px;
+      overflow-y: auto;
       background: white; 
       border: 1px solid #E5E7EB; 
       border-radius: 12px; 
       box-shadow: 0 10px 40px rgba(0,0,0,0.15);
       min-width: 200px;
-      z-index: 100;
+      z-index: 9999;
       opacity: 0;
       visibility: hidden;
       transform: translateY(10px);
@@ -175,10 +175,25 @@
     .scroll-bottom.visible { opacity: 1; transform: translateY(0); }
     .scroll-bottom:hover { background: #1f2937; transform: translateY(-2px); }
     
+    /* Sidebar collapse - desktop */
+    aside { transition: width 0.3s; }
+    aside .sidebar-content { display: flex; flex-direction: column; flex: 1; min-width: 0; overflow: hidden; }
+    aside .sidebar-icon-bar { display: none; flex-direction: column; align-items: center; padding: 16px 0; gap: 8px; }
+    aside .sidebar-icon-bar button { width: 40px; height: 40px; border: none; border-radius: 10px; background: transparent; color: #6b7280; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; }
+    aside .sidebar-icon-bar button:hover { background: rgba(0,0,0,0.08); }
+    .dark aside .sidebar-icon-bar button:hover { background: rgba(255,255,255,0.08); }
+    @media (min-width: 769px) {
+      aside.collapsed { width: 64px !important; min-width: 64px; }
+      aside.collapsed .sidebar-content { display: none; }
+      aside.collapsed .sidebar-icon-bar { display: flex; }
+    }
+    
     /* Mobile sidebar */
     @media (max-width: 768px) {
-      aside { position: fixed; transform: translateX(-100%); transition: transform 0.3s; z-index: 100; }
+      aside { position: fixed; width: 320px !important; transform: translateX(-100%); transition: transform 0.3s; z-index: 100; }
       aside.mobile-open { transform: translateX(0); }
+      aside .sidebar-icon-bar { display: none !important; }
+      aside.collapsed .sidebar-content { display: flex !important; }
       main { margin-left: 0; }
     }
     
@@ -193,7 +208,12 @@
   </style>
 </head>
 <body class="bg-background-light dark:bg-background-dark text-text-main-light dark:text-text-main-dark h-screen flex overflow-hidden">
-  <aside class="w-80 bg-[#F3F4F6] dark:bg-[#1a2233] flex flex-col border-r border-border-light dark:border-border-dark flex-shrink-0 h-full">
+  <aside id="sidebar" class="w-80 bg-[#F3F4F6] dark:bg-[#1a2233] flex flex-col border-r border-border-light dark:border-border-dark flex-shrink-0 h-full">
+    <div class="sidebar-icon-bar">
+      <button type="button" id="sidebar-expand-btn" title="展开侧边栏"><span class="material-icons-outlined">menu</span></button>
+      <button type="button" id="sidebar-new-chat-icon" title="新对话"><span class="material-icons-outlined">edit_note</span></button>
+    </div>
+    <div class="sidebar-content">
     <div class="h-16 flex items-center justify-between px-4 mt-2">
       <div class="flex items-center gap-3">
         <button id="sidebar-toggle" class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-text-sub-light dark:text-text-sub-dark">
@@ -234,11 +254,15 @@
         <p class="text-xs mt-1 opacity-70">点击上方按钮开始新对话</p>
       </div>
     </div>
+    </div>
   </aside>
 
   <main class="flex-1 flex flex-col h-full bg-surface-light dark:bg-background-dark relative">
     <header class="h-16 flex items-center justify-between px-8 border-b border-transparent dark:border-border-dark flex-shrink-0">
-      <h2 id="current-session-title" class="text-lg text-text-sub-light dark:text-text-sub-dark font-normal truncate max-w-md">New Chat</h2>
+      <div class="flex items-center gap-3">
+        <button id="header-sidebar-toggle" class="md:hidden p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700" title="打开侧边栏"><span class="material-icons-outlined">menu</span></button>
+        <h2 id="current-session-title" class="text-lg text-text-sub-light dark:text-text-sub-dark font-normal truncate max-w-md">New Chat</h2>
+      </div>
       <div class="flex items-center gap-4 text-sm text-text-sub-light dark:text-text-sub-dark">
         <div class="hidden sm:flex gap-4">
           <span id="token-stats-session">This Session: -</span>
@@ -283,7 +307,7 @@
 
     <div id="input-area" class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-surface-light via-surface-light to-transparent dark:from-background-dark dark:via-background-dark pt-12">
       <div class="max-w-4xl mx-auto w-full">
-        <div class="bg-white dark:bg-[#1a2233] rounded-3xl border border-gray-200 dark:border-gray-700 shadow-xl dark:shadow-2xl dark:shadow-black/50 overflow-hidden focus-within:ring-2 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/30 transition-shadow">
+        <div class="bg-white dark:bg-[#1a2233] rounded-3xl border border-gray-200 dark:border-gray-700 shadow-xl dark:shadow-2xl dark:shadow-black/50 overflow-visible focus-within:ring-2 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/30 transition-shadow">
           <div class="p-4 pb-0">
             <textarea id="message-input" 
               class="w-full resize-none border-0 bg-transparent p-2 text-text-main-light dark:text-text-main-dark placeholder-gray-400 dark:placeholder-gray-500 focus:ring-0 text-base max-h-48 overflow-y-auto"
@@ -291,8 +315,8 @@
               rows="1"></textarea>
           </div>
           
-          <div class="px-4 py-3 flex items-center justify-between bg-transparent">
-            <div class="flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <div class="px-4 py-3 flex items-center justify-between bg-transparent overflow-visible">
+            <div class="flex items-center gap-2 overflow-x-auto no-scrollbar overflow-y-visible">
               <div class="relative">
                 <button id="assistant-selector" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium text-text-sub-light dark:text-text-sub-dark transition-colors whitespace-nowrap">
                   <span id="selected-assistant">Auto Helper</span>
@@ -310,17 +334,16 @@
                 <div id="model-dropdown" class="dropdown-menu"></div>
               </div>
               
-              <button id="mode-btn" class="px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium text-text-sub-light dark:text-text-sub-dark transition-colors whitespace-nowrap">Light</button>
-              
-              <button id="config-btn" class="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium text-text-sub-light dark:text-text-sub-dark transition-colors whitespace-nowrap">
-                <span class="material-icons-outlined text-xs">settings</span>
-                Config
-              </button>
-              
               <span class="text-xs text-gray-400 ml-2 hidden sm:inline-block">Shift+Enter for new line</span>
             </div>
             
             <div class="flex items-center gap-3 flex-shrink-0">
+              <button id="mode-btn" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme">
+                <span class="material-icons-outlined" id="mode-btn-icon">dark_mode</span>
+              </button>
+              <button id="config-btn" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" title="Config">
+                <span class="material-icons-outlined">settings</span>
+              </button>
               <button id="attach-btn" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" title="Attach file">
                 <span class="material-icons-outlined rotate-45">attach_file</span>
               </button>
@@ -355,14 +378,20 @@
     function initTheme() {
       const savedTheme = localStorage.getItem('theme');
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
-        document.documentElement.classList.add('dark');
-      }
+      const isDark = savedTheme === 'dark' || (!savedTheme && prefersDark);
+      if (isDark) document.documentElement.classList.add('dark');
+      updateModeBtnText();
     }
     
     function toggleTheme() {
       document.documentElement.classList.toggle('dark');
       localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+      updateModeBtnText();
+    }
+    
+    function updateModeBtnText() {
+      const icon = document.getElementById('mode-btn-icon');
+      if (icon) icon.textContent = document.documentElement.classList.contains('dark') ? 'light_mode' : 'dark_mode';
     }
 
     // Auto-resize textarea
@@ -442,8 +471,16 @@
               if (otherMenu) otherMenu.classList.remove('active');
             }
           });
+          const isOpen = !menu.classList.contains('active');
           menu.classList.toggle('active');
-          console.log(`${type} dropdown toggled:`, menu.classList.contains('active'));
+          if (isOpen) {
+            if (type === 'assistant' && typeof renderAssistantDropdown === 'function') renderAssistantDropdown();
+            if (type === 'model' && typeof renderModelDropdown === 'function') renderModelDropdown();
+            const rect = btn.getBoundingClientRect();
+            menu.style.left = rect.left + 'px';
+            menu.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+            menu.style.minWidth = Math.max(rect.width, 200) + 'px';
+          }
         });
         
         // Prevent menu from closing when clicking inside it
@@ -464,8 +501,8 @@
     let currentSessionId = null;
     let assistants = [];
     let models = [];
-    let selectedAssistant = 'auto';
-    let selectedModel = 'default';
+    let selectedAssistant = localStorage.getItem('bee_assistant') || 'auto';
+    let selectedModel = localStorage.getItem('bee_model') || 'default';
     let isGenerating = false;
 
     async function loadSessions() {
@@ -753,7 +790,8 @@
       try {
         const response = await fetch('/api/assistants');
         if (!response.ok) throw new Error('Failed to fetch assistants');
-        assistants = await response.json();
+        const list = await response.json();
+        assistants = [{ id: 'auto', name: 'Auto Helper', description: 'Automatically select the best assistant' }, ...list];
         console.log('Loaded assistants:', assistants);
         renderAssistantDropdown();
       } catch (e) {
@@ -772,6 +810,9 @@
         const response = await fetch('/api/models');
         if (!response.ok) throw new Error('Failed to fetch models');
         models = await response.json();
+        if (!models.some(m => m.id === 'default')) {
+          models = [{ id: 'default', name: 'Default (Config)' }, ...models];
+        }
         console.log('Loaded models:', models);
         renderModelDropdown();
       } catch (e) {
@@ -779,7 +820,7 @@
         // Fallback data
         models = [
           { id: 'default', name: 'Default (Config)' },
-          { id: 'deepseek', name: 'DeepSeek Chat' }
+          { id: 'deepseek-chat', name: 'DeepSeek Chat' }
         ];
         renderModelDropdown();
       }
@@ -791,8 +832,8 @@
         <div class="dropdown-item ${a.id === selectedAssistant ? 'selected' : ''}" data-id="${a.id}" data-name="${a.name}">
           <span class="material-icons-outlined text-sm">psychology</span>
           <div>
-            <div class="font-medium">${a.name}</div>
-            <div class="text-xs opacity-70">${a.description}</div>
+            <div class="font-medium">${escapeHtml(a.name)}</div>
+            <div class="text-xs opacity-70">${a.description ? escapeHtml(a.description) : ''}</div>
           </div>
         </div>
       `).join('');
@@ -801,11 +842,14 @@
         item.addEventListener('click', (e) => {
           e.stopPropagation();
           selectedAssistant = item.dataset.id;
+          localStorage.setItem('bee_assistant', selectedAssistant);
           document.getElementById('selected-assistant').textContent = item.dataset.name;
           dropdown.classList.remove('active');
           renderAssistantDropdown();
         });
       });
+      const sel = document.getElementById('selected-assistant');
+      if (sel) sel.textContent = assistants.find(a => a.id === selectedAssistant)?.name || selectedAssistant;
     }
 
     function renderModelDropdown() {
@@ -813,7 +857,7 @@
       dropdown.innerHTML = models.map(m => `
         <div class="dropdown-item ${m.id === selectedModel ? 'selected' : ''}" data-id="${m.id}" data-name="${m.name}">
           <span class="material-icons-outlined text-sm text-yellow-500">auto_awesome</span>
-          <span>${m.name}</span>
+          <span>${escapeHtml(m.name)}</span>
         </div>
       `).join('');
       
@@ -821,11 +865,14 @@
         item.addEventListener('click', (e) => {
           e.stopPropagation();
           selectedModel = item.dataset.id;
+          localStorage.setItem('bee_model', selectedModel);
           document.getElementById('selected-model').textContent = item.dataset.name;
           dropdown.classList.remove('active');
           renderModelDropdown();
         });
       });
+      const selModel = document.getElementById('selected-model');
+      if (selModel) selModel.textContent = models.find(m => m.id === selectedModel)?.name || selectedModel;
     }
 
     function initSearch() {
@@ -967,14 +1014,7 @@
       });
     }
 
-    document.getElementById('mode-btn')?.addEventListener('click', () => {
-      const btn = document.getElementById('mode-btn');
-      const current = btn.textContent.trim();
-      const modes = ['Light', 'Balanced', 'Creative', 'Precise'];
-      const nextIndex = (modes.indexOf(current) + 1) % modes.length;
-      btn.textContent = modes[nextIndex];
-      showToast(`Mode changed to ${modes[nextIndex]}`, 'success');
-    });
+    document.getElementById('mode-btn')?.addEventListener('click', toggleTheme);
 
     document.getElementById('config-btn')?.addEventListener('click', () => {
       showToast('Configuration panel coming soon', 'info');
@@ -1003,15 +1043,41 @@
       showToast('Import functionality coming soon', 'info');
     });
 
-    // Sidebar toggle for mobile
+    // Sidebar toggle
     function initSidebarToggle() {
       const toggle = document.getElementById('sidebar-toggle');
-      const sidebar = document.querySelector('aside');
+      const expandBtn = document.getElementById('sidebar-expand-btn');
+      const newChatIcon = document.getElementById('sidebar-new-chat-icon');
+      const sidebar = document.getElementById('sidebar');
+      const newChatBtn = document.getElementById('new-chat-btn');
       
-      toggle.addEventListener('click', () => {
-        sidebar.classList.toggle('collapsed');
-        sidebar.classList.toggle('mobile-open');
-      });
+      function collapseSidebar() {
+        if (window.innerWidth > 768) {
+          sidebar.classList.add('collapsed');
+        } else {
+          sidebar.classList.remove('mobile-open');
+        }
+      }
+      function expandSidebar() {
+        if (window.innerWidth > 768) {
+          sidebar.classList.remove('collapsed');
+        } else {
+          sidebar.classList.add('mobile-open');
+        }
+      }
+      function toggleSidebar() {
+        if (window.innerWidth > 768) {
+          sidebar.classList.toggle('collapsed');
+        } else {
+          sidebar.classList.toggle('mobile-open');
+        }
+      }
+      
+      if (toggle) toggle.addEventListener('click', toggleSidebar);
+      if (expandBtn) expandBtn.addEventListener('click', expandSidebar);
+      if (newChatIcon && newChatBtn) newChatIcon.addEventListener('click', () => newChatBtn.click());
+      const headerToggle = document.getElementById('header-sidebar-toggle');
+      if (headerToggle) headerToggle.addEventListener('click', expandSidebar);
     }
 
     document.addEventListener('DOMContentLoaded', () => {
