@@ -149,8 +149,17 @@
     .thinking-bar .duration { font-size: 0.75rem; color: #9ca3af; }
     .thinking-steps { transition: all 0.2s; }
     .thinking-steps.collapsed .steps-content { display: none; }
-    .step-item { font-size: 0.8rem; padding: 6px 10px; margin: 4px 0; background: rgba(0,0,0,0.03); border-radius: 8px; border-left: 3px solid #3b82f6; }
+    .step-item { font-size: 0.8rem; padding: 8px 12px; margin: 6px 0; background: rgba(0,0,0,0.03); border-radius: 8px; border-left: 3px solid #3b82f6; }
     .dark .step-item { background: rgba(255,255,255,0.05); }
+    .step-item .step-title { font-weight: 600; color: #374151; margin-bottom: 4px; }
+    .dark .step-item .step-title { color: #e5e7eb; }
+    .step-item .step-detail { font-size: 0.75rem; opacity: 0.9; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+    .step-item.step-understand { border-color: #6366f1; }
+    .step-item.step-decompose { border-color: #8b5cf6; }
+    .step-item.step-tool { border-color: #f59e0b; }
+    .step-item.step-context { border-color: #06b6d4; }
+    .step-item.step-memory { border-color: #10b981; }
+    .step-item.step-consolidate { border-color: #14b8a6; }
     .step-item.tool-call { border-color: #f59e0b; }
     .step-item.observation { border-color: #10b981; }
     .step-item.recovery { border-color: #ef4444; }
@@ -776,6 +785,14 @@
           stepsContent.classList.toggle('hidden');
           updateThinkingLabel();
         });
+        const addStep = (type, title, detail) => {
+          const step = document.createElement('div');
+          step.className = `step-item ${type}`;
+          step.innerHTML = detail ? `<div class="step-title">${escapeHtml(title)}</div><div class="step-detail">${escapeHtml(detail)}</div>` : `<div class="step-title">${escapeHtml(title)}</div>`;
+          stepsContent.appendChild(step);
+          updateDuration();
+          scrollToBottom();
+        };
         
         while (true) {
           const { done, value } = await reader.read();
@@ -803,47 +820,34 @@
                 assistantMessage += event.content || '';
                 msgContent.innerHTML = marked.parse(assistantMessage);
                 scrollToBottom();
-              } else if (event.type === 'thinking' || event.type === 'thinking_content') {
+              } else if (event.type === 'thinking') {
                 if (thinkingStartTime == null) thinkingStartTime = Date.now();
-                const step = document.createElement('div');
-                step.className = 'step-item';
-                step.textContent = event.text || '思考中…';
-                stepsContent.appendChild(step);
-                updateDuration();
-                scrollToBottom();
+                addStep('step-understand', '1. 理解问题', '正在分析用户问题…');
+              } else if (event.type === 'thinking_content') {
+                if (thinkingStartTime == null) thinkingStartTime = Date.now();
+                const text = (event.text || '').trim();
+                addStep('step-decompose', '2. 拆解与规划', text ? text.substring(0, 300) + (text.length > 300 ? '…' : '') : '规划中…');
+              } else if (event.type === 'memory_recovery') {
+                if (thinkingStartTime == null) thinkingStartTime = Date.now();
+                const preview = (event.preview || '').trim();
+                addStep('step-memory', '4. 组织上下文 · 使用长期记忆', preview ? preview.substring(0, 200) + (preview.length > 200 ? '…' : '') : '检索相关记忆');
               } else if (event.type === 'tool_call') {
                 if (thinkingStartTime == null) thinkingStartTime = Date.now();
-                const step = document.createElement('div');
-                step.className = 'step-item tool-call';
-                step.textContent = '🔧 调用工具: ' + (event.tool || '');
-                stepsContent.appendChild(step);
-                updateDuration();
-                scrollToBottom();
+                addStep('step-tool tool-call', '3. 选择并调用工具', event.tool || '');
               } else if (event.type === 'observation') {
                 if (thinkingStartTime == null) thinkingStartTime = Date.now();
-                const step = document.createElement('div');
-                step.className = 'step-item observation';
-                step.textContent = '👁️ 观察 ' + (event.tool || '') + ': ' + (event.preview || '').substring(0, 100);
-                if ((event.preview || '').length > 100) step.textContent += '…';
-                stepsContent.appendChild(step);
-                updateDuration();
-                scrollToBottom();
+                const prev = (event.preview || '').substring(0, 150);
+                addStep('observation', '观察工具返回', event.tool ? `${event.tool}: ${prev}${(event.preview || '').length > 150 ? '…' : ''}` : prev || '');
               } else if (event.type === 'tool_failure') {
                 if (thinkingStartTime == null) thinkingStartTime = Date.now();
-                const step = document.createElement('div');
-                step.className = 'step-item recovery';
-                step.textContent = '⚠️ 工具失败 ' + (event.tool || '') + ': ' + (event.reason || '');
-                stepsContent.appendChild(step);
-                updateDuration();
-                scrollToBottom();
+                addStep('recovery', '工具失败', `${event.tool || ''}: ${event.reason || ''}`);
               } else if (event.type === 'recovery') {
                 if (thinkingStartTime == null) thinkingStartTime = Date.now();
-                const step = document.createElement('div');
-                step.className = 'step-item recovery';
-                step.textContent = '🔄 ' + (event.detail || event.action || '');
-                stepsContent.appendChild(step);
-                updateDuration();
-                scrollToBottom();
+                addStep('recovery', '错误恢复', event.detail || event.action || '');
+              } else if (event.type === 'memory_consolidation') {
+                if (thinkingStartTime == null) thinkingStartTime = Date.now();
+                const prev = (event.preview || '').trim().substring(0, 150);
+                addStep('step-consolidate', '5. 整理到长期记忆', prev ? prev + ((event.preview || '').length > 150 ? '…' : '') : '写入长期记忆');
               } else if (event.type === 'error') {
                 showToast(event.text || event.message || 'Error', 'error');
               }
