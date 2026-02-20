@@ -23,6 +23,11 @@ path = "src/bin/web.rs"
 required-features = ["web"]
 
 [[bin]]
+name = "bee-lark"
+path = "src/bin/lark.rs"
+required-features = ["lark"]
+
+[[bin]]
 name = "bee-evolution"
 path = "src/bin/evolution_test.rs"
 
@@ -74,6 +79,7 @@ headless_chrome = { version = "1.0", optional = true }
 [features]
 default = []
 whatsapp = ["dep:axum", "dep:tower"]
+lark = ["dep:axum", "dep:tower"]
 web = ["dep:axum", "dep:tower", "dep:bytes", "dep:toml"]
 browser = ["dep:headless_chrome"]
 
