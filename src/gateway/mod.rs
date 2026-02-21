@@ -40,6 +40,7 @@ mod runtime;
 mod session;
 mod session_store;
 mod spoke;
+mod task_queue;
 
 pub use hub::{Hub, HubConfig};
 pub use intent::{Intent, IntentRecognizer};
@@ -52,3 +53,4 @@ pub use session_store::{SessionStore, MemorySessionStore, create_session_store};
 #[cfg(feature = "async-sqlite")]
 pub use session_store::PersistentSessionStore;
 pub use spoke::{SpokeAdapter, CommunicationSpoke, CapabilitySpoke, WebSocketSpoke, HttpSpoke};
+pub use task_queue::{BackgroundTask, TaskQueue, TaskExecutor, TaskId, TaskNotification, TaskPriority, TaskStatus};

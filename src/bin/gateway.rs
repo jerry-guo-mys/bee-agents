@@ -32,6 +32,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|_| "You are a helpful AI assistant.".to_string());
 
     let session_db_path = workspace.join("gateway_sessions.db");
+    let task_db_path = workspace.join("gateway_tasks.db");
+    let user_memory_dir = workspace.join("memory/users");
     
     let hub_config = HubConfig {
         bind_addr: bind_addr.clone(),
@@ -46,6 +48,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_concurrent: 10,
             enable_skills: true,
             session_db_path: Some(session_db_path),
+            task_db_path: Some(task_db_path),
+            user_memory_dir: Some(user_memory_dir),
         },
     };
 

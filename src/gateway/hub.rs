@@ -20,6 +20,18 @@ use super::message::{ClientInfo, GatewayMessage, HistoryMessage, MessageType};
 use super::runtime::{AgentRuntime, RuntimeConfig};
 use super::session_store::{SessionStore, create_session_store};
 use super::spoke::SpokeAdapter;
+use super::task_queue::{TaskNotification, TaskQueue};
+use crate::llm::{create_embedder_from_config, EmbeddingProvider};
+use crate::memory::{UserMemoryConfig, UserMemoryManager};
+
+/// 空实现的 Embedding Provider
+struct NoopEmbedder;
+
+impl EmbeddingProvider for NoopEmbedder {
+    fn embed_sync(&self, _text: &str) -> Result<Vec<f32>, String> {
+        Ok(vec![])
+    }
+}
 
 /// Hub 配置
 #[derive(Debug, Clone)]
@@ -69,6 +81,12 @@ pub struct Hub {
     connections: Arc<RwLock<HashMap<String, Connection>>>,
     spokes: Arc<RwLock<Vec<Arc<dyn SpokeAdapter>>>>,
     shutdown: tokio::sync::watch::Sender<bool>,
+    /// 后台任务队列
+    task_queue: Arc<TaskQueue>,
+    /// 任务完成通知接收器
+    notification_rx: Arc<RwLock<Option<mpsc::UnboundedReceiver<TaskNotification>>>>,
+    /// 用户记忆管理器
+    user_memory: Arc<UserMemoryManager>,
 }
 
 impl Hub {
@@ -89,6 +107,39 @@ impl Hub {
         ));
         let (shutdown_tx, _) = tokio::sync::watch::channel(false);
 
+        #[cfg(feature = "async-sqlite")]
+        let (task_queue, _pending_rx, notification_rx) = if let Some(ref db_path) = config.runtime.task_db_path {
+            match TaskQueue::with_persistence(db_path).await {
+                Ok(q) => q,
+                Err(e) => {
+                    tracing::warn!("Failed to create persistent task queue: {}, using in-memory", e);
+                    TaskQueue::new()
+                }
+            }
+        } else {
+            TaskQueue::new()
+        };
+
+        #[cfg(not(feature = "async-sqlite"))]
+        let (task_queue, _pending_rx, notification_rx) = TaskQueue::new();
+
+        let user_memory_config = UserMemoryConfig {
+            max_entries_per_user: 500,
+            snapshot_dir: config.runtime.user_memory_dir.clone(),
+            vector_enabled: config.runtime.app_config.memory.vector_enabled,
+        };
+
+        let api_key = std::env::var("OPENAI_API_KEY")
+            .or_else(|_| std::env::var("DEEPSEEK_API_KEY"))
+            .ok();
+        let embedder: Arc<dyn EmbeddingProvider> = create_embedder_from_config(
+            config.runtime.app_config.memory.embedding_base_url.as_deref()
+                .or(config.runtime.app_config.llm.base_url.as_deref()),
+            &config.runtime.app_config.memory.embedding_model,
+            api_key.as_deref(),
+        ).unwrap_or_else(|| Arc::new(NoopEmbedder));
+        let user_memory = Arc::new(UserMemoryManager::new(user_memory_config, embedder));
+
         Self {
             config,
             session_store,
@@ -97,6 +148,9 @@ impl Hub {
             connections: Arc::new(RwLock::new(HashMap::new())),
             spokes: Arc::new(RwLock::new(Vec::new())),
             shutdown: shutdown_tx,
+            task_queue: Arc::new(task_queue),
+            notification_rx: Arc::new(RwLock::new(Some(notification_rx))),
+            user_memory,
         }
     }
 
@@ -223,6 +277,65 @@ impl Hub {
     /// 获取活跃会话数
     pub async fn session_count(&self) -> usize {
         self.session_store.active_count().await
+    }
+
+    /// 获取任务队列
+    pub fn task_queue(&self) -> &Arc<TaskQueue> {
+        &self.task_queue
+    }
+
+    /// 获取用户记忆管理器
+    pub fn user_memory(&self) -> &Arc<UserMemoryManager> {
+        &self.user_memory
+    }
+
+    /// 启动任务完成通知处理
+    pub async fn start_notification_handler(&self) {
+        let connections = Arc::clone(&self.connections);
+        
+        let notification_rx = {
+            let mut guard = self.notification_rx.write().await;
+            guard.take()
+        };
+        
+        if let Some(mut rx) = notification_rx {
+            tokio::spawn(async move {
+                while let Some(notification) = rx.recv().await {
+                    let msg = GatewayMessage::new(
+                        None,
+                        MessageType::TaskComplete {
+                            task_id: notification.task_id.clone(),
+                            user_id: notification.user_id.clone(),
+                            success: notification.status == super::task_queue::TaskStatus::Completed,
+                            result: notification.result,
+                            error: notification.error,
+                        },
+                    );
+
+                    let connections = connections.read().await;
+                    for conn in connections.values() {
+                        if let Ok(json) = serde_json::to_string(&msg) {
+                            let _ = conn.tx.send(json);
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    /// 为用户添加长期记忆
+    pub async fn add_user_memory(&self, user_id: &str, text: &str) {
+        self.user_memory.add(user_id, text).await;
+    }
+
+    /// 为用户搜索长期记忆
+    pub async fn search_user_memory(&self, user_id: &str, query: &str, k: usize) -> Vec<String> {
+        self.user_memory.search(user_id, query, k).await
+    }
+
+    /// 刷新所有用户记忆到磁盘
+    pub async fn flush_user_memories(&self) {
+        self.user_memory.flush_all().await;
     }
 }
 

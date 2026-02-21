@@ -149,6 +149,40 @@ pub enum MessageType {
     History {
         messages: Vec<HistoryMessage>,
     },
+
+    /// 后台任务完成通知
+    TaskComplete {
+        task_id: String,
+        user_id: String,
+        success: bool,
+        result: Option<String>,
+        error: Option<String>,
+    },
+
+    /// 提交后台任务
+    SubmitTask {
+        instruction: String,
+        priority: Option<String>,
+    },
+
+    /// 任务提交结果
+    TaskSubmitted {
+        task_id: String,
+    },
+
+    /// 查询任务状态
+    GetTaskStatus {
+        task_id: String,
+    },
+
+    /// 任务状态响应
+    TaskStatus {
+        task_id: String,
+        status: String,
+        progress: u8,
+        result: Option<String>,
+        error: Option<String>,
+    },
 }
 
 /// 会话状态

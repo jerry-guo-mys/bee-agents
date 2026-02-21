@@ -30,6 +30,10 @@ pub struct RuntimeConfig {
     pub enable_skills: bool,
     /// 会话数据库路径（None 表示使用内存存储）
     pub session_db_path: Option<PathBuf>,
+    /// 任务队列数据库路径（None 表示使用内存存储）
+    pub task_db_path: Option<PathBuf>,
+    /// 用户记忆快照目录
+    pub user_memory_dir: Option<PathBuf>,
 }
 
 impl Default for RuntimeConfig {
@@ -41,6 +45,8 @@ impl Default for RuntimeConfig {
             max_concurrent: 10,
             enable_skills: true,
             session_db_path: None,
+            task_db_path: None,
+            user_memory_dir: None,
         }
     }
 }

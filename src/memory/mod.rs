@@ -13,6 +13,7 @@ pub mod persistence;
 pub mod rag;
 pub mod token_budget;
 pub mod tokenizer;
+pub mod user_memory;
 pub mod working;
 
 pub use conversation::{
@@ -43,3 +44,4 @@ pub use async_io::{
 pub use async_persistence::{AsyncPersistence, AsyncSqlitePersistence};
 
 pub use rag::{Chunk, Chunker, ChunkingConfig, RagPipeline, RetrievalResult, VectorStore};
+pub use user_memory::{UserMemoryConfig, UserMemoryManager, UserScopedMemory};
