@@ -538,6 +538,7 @@ async fn main() -> anyhow::Result<()> {
     let config_base = config_base.to_path_buf();
     let components_inner = create_agent_components(&cfg, &workspace);
     let tool_descriptions = components_inner.executor.tool_descriptions();
+    let skill_loader = components_inner.skill_loader.clone();
     let (mut assistants, mut prompts_map, skills_map, assistant_entries) =
         load_assistants(&config_base, &tool_descriptions);
     if !prompts_map.contains_key("default") {
@@ -567,11 +568,6 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&memory_root).ok();
 
     let shared_vector_long_term = create_shared_vector_long_term(&workspace, &cfg);
-
-    let skill_loader = Arc::new(SkillLoader::from_default());
-    if let Err(e) = skill_loader.load_all().await {
-        tracing::warn!("Failed to load skills: {}", e);
-    }
 
     let state = Arc::new(AppState {
         config: cfg.clone(),

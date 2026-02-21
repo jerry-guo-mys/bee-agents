@@ -75,7 +75,9 @@ impl AgentBuilder {
     }
 
     /// 构建统一的工具注册表（所有接入方式共享同一套工具）
-    pub fn build_tool_registry(&self) -> ToolRegistry {
+    /// 
+    /// 需要传入共享的 LLM 客户端供深度研究等工具使用
+    pub fn build_tool_registry(&self, llm: Arc<dyn LlmClient>) -> ToolRegistry {
         let mut tools = ToolRegistry::new();
 
         tools.register(CatTool::new(&self.workspace));
@@ -112,12 +114,12 @@ impl AgentBuilder {
         tools.register(TestRunTool::new(&self.workspace));
         tools.register(TestCheckTool::new(&self.workspace));
         tools.register(GitCommitTool::new(&self.workspace));
-        tools.register(DeepSearchTool::new(&self.config));
+        tools.register(DeepSearchTool::new(llm.clone()));
         tools.register(SourceValidatorTool::new(
             self.config.tools.search.allowed_domains.clone(),
         ));
-        tools.register(ReportGeneratorTool::new(&self.config));
-        tools.register(KnowledgeGraphBuilder::new(&self.config));
+        tools.register(ReportGeneratorTool::new(llm.clone()));
+        tools.register(KnowledgeGraphBuilder::new(llm));
 
         tools
     }
@@ -170,22 +172,22 @@ impl AgentBuilder {
         Some(Critic::from_config(critic_llm, &critic_config))
     }
 
-    /// 构建技能缓存
-    pub fn build_skill_cache(&self) -> SkillCache {
-        let skill_loader = SkillLoader::from_default();
-        let skill_cache = skill_loader.cache();
+    /// 构建技能加载器（返回 Arc 可共享）
+    pub fn build_skill_loader(&self) -> Arc<SkillLoader> {
+        let skill_loader = Arc::new(SkillLoader::from_default());
 
         if self.enable_skills {
+            let loader = skill_loader.clone();
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
-                    if let Err(e) = skill_loader.load_all().await {
+                    if let Err(e) = loader.load_all().await {
                         tracing::warn!("Failed to load skills: {}", e);
                     }
                 });
             });
         }
 
-        skill_cache
+        skill_loader
     }
 
     /// 构建完整系统提示词（包含工具 schema）
@@ -205,9 +207,9 @@ impl AgentBuilder {
     pub fn build_components(&self) -> AgentComponents {
         let llm = self.build_llm();
         let critic = self.build_critic(llm.clone());
-        let tools = self.build_tool_registry();
+        let tools = self.build_tool_registry(llm.clone());
         let full_system_prompt = self.build_full_system_prompt(&tools);
-        let skill_cache = self.build_skill_cache();
+        let skill_loader = self.build_skill_loader();
 
         AgentComponents {
             planner: Planner::new(llm.clone(), full_system_prompt),
@@ -215,7 +217,7 @@ impl AgentBuilder {
             recovery: RecoveryEngine::new(),
             critic,
             task_scheduler: TaskScheduler::default(),
-            skill_cache,
+            skill_loader,
             llm,
             config: self.config.clone(),
         }
@@ -240,12 +242,17 @@ pub struct AgentComponents {
     pub recovery: RecoveryEngine,
     pub critic: Option<Critic>,
     pub task_scheduler: TaskScheduler,
-    pub skill_cache: SkillCache,
+    pub skill_loader: Arc<SkillLoader>,
     pub llm: Arc<dyn LlmClient>,
     pub config: AppConfig,
 }
 
 impl AgentComponents {
+    /// 获取技能缓存引用
+    pub fn skill_cache(&self) -> SkillCache {
+        self.skill_loader.cache()
+    }
+
     /// 获取 LLM 客户端引用
     pub fn llm(&self) -> &Arc<dyn LlmClient> {
         &self.llm

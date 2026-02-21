@@ -6,15 +6,13 @@ use serde_json::Value;
 use crate::tools::Tool;
 use crate::llm::LlmClient;
 use crate::memory::Message;
-use crate::config::AppConfig;
 
 pub struct ReportGeneratorTool {
     llm: Arc<dyn LlmClient>,
 }
 
 impl ReportGeneratorTool {
-    pub fn new(config: &AppConfig) -> Self {
-        let llm = crate::core::orchestrator::create_llm_from_config(config);
+    pub fn new(llm: Arc<dyn LlmClient>) -> Self {
         Self { llm }
     }
 }

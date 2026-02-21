@@ -220,7 +220,7 @@ impl AgentRuntime {
 
         let system_prompt = if self.config.enable_skills {
             let selector = SkillSelector::new(
-                Arc::clone(&self.components.skill_cache),
+                self.components.skill_cache(),
                 Arc::clone(&self.components.llm),
             );
             let skills = selector.select(user_input).await;

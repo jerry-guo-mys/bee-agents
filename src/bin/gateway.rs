@@ -38,6 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         session_timeout: 3600,
         max_context_turns: cfg.app.max_context_turns,
         runtime: RuntimeConfig {
+            app_config: cfg,
             workspace,
             system_prompt,
             max_concurrent: 10,

@@ -263,7 +263,7 @@ pub async fn process_message_with_skills(
     allowed_tools: Option<&[String]>,
 ) -> Result<String, AgentError> {
     let selector = SkillSelector::new(
-        Arc::clone(&components.skill_cache),
+        components.skill_cache(),
         Arc::clone(&components.llm),
     );
 
