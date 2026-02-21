@@ -2789,7 +2789,7 @@
       });
       
       return {
-        show: () => controls.classList.add('visible'),
+        show: () => {}, // 禁用速度调整弹框
         hide: () => controls.classList.remove('visible'),
         setTypewriter: (tw) => { currentTypewriter = tw; }
       };

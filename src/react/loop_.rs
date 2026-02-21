@@ -11,7 +11,7 @@ use crate::react::{parse_llm_output, ContextManager, Critic, CriticResult, Plann
 use crate::tools::ToolExecutor;
 
 /// 单次对话内最大 ReAct 步数，防止死循环
-const MAX_REACT_STEPS: usize = 10;
+const MAX_REACT_STEPS: usize = 20;
 /// 对话条数超过此值时在规划前执行一次 Context Compaction（摘要写入长期记忆并替换为摘要消息）
 const COMPACT_THRESHOLD: usize = 24;
 
