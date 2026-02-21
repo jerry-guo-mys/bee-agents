@@ -1280,7 +1280,7 @@
         });
         typewriter.setSpeed(parseFloat(localStorage.getItem('typewriter_speed_preference') || '0.5'));
         typewriterControls?.setTypewriter(typewriter);
-        typewriter.start();
+        // Don't call start() here - appendText() will auto-start when chunks arrive
         
         const updateDuration = () => {
           const end = thinkingStartTime != null ? Date.now() : streamStartTime;
@@ -1383,7 +1383,7 @@
           }
         }
         
-        typewriter.stop();
+        typewriter.finish();
         updateDuration();
         if (stepsContent.children.length === 0) thinkingSteps.style.display = 'none';
         else updateThinkingLabel();
@@ -2419,6 +2419,7 @@
         this.chunkBuffer = '';
         this.isInCodeBlock = false;
         this.pendingMarkdown = '';
+        this.streamEnded = false;
       }
       
       setText(text) {
@@ -2477,6 +2478,7 @@
       stop() {
         this.isRunning = false;
         this.isPaused = false;
+        this.streamEnded = false;
         if (this.timeoutId) {
           clearTimeout(this.timeoutId);
           this.timeoutId = null;
@@ -2485,6 +2487,20 @@
         this.displayedText = this.text;
         this.render();
         this.onComplete();
+      }
+      
+      // Stream ended - continue typing remaining text gracefully
+      finish() {
+        this.streamEnded = true;
+        // If not currently running but has remaining text, start typing
+        if (!this.isRunning && this.currentIndex < this.text.length) {
+          this.start();
+        }
+        // If already running, it will complete naturally
+        // If no text or already complete, trigger completion
+        if (this.currentIndex >= this.text.length) {
+          this.onComplete();
+        }
       }
       
       setSpeed(multiplier) {
@@ -2562,6 +2578,10 @@
           this.timeoutId = setTimeout(() => this.typeNext(), nextDelay);
         } else {
           this.isRunning = false;
+          // If stream ended and all text typed, trigger completion
+          if (this.streamEnded) {
+            this.onComplete();
+          }
         }
       }
       
