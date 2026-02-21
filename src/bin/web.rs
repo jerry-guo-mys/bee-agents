@@ -28,6 +28,7 @@ use bee::agent::{
     consolidate_memory_with_llm, create_agent_components, create_context_with_long_term,
     create_shared_vector_long_term, process_message, process_message_stream, AgentComponents,
 };
+use bee::skills::{Skill, SkillLoader};
 use bee::tools::tool_call_schema_json;
 use bee::memory::InMemoryVectorLongTerm;
 use bee::config::{load_config, AppConfig};
@@ -75,6 +76,8 @@ struct AppState {
     /// 可切换模型：列表与 id -> 模型配置
     models: Vec<ModelInfo>,
     model_configs: HashMap<String, ModelEntry>,
+    /// 技能加载器
+    skill_loader: Arc<SkillLoader>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -173,6 +176,32 @@ struct ToolInfo {
 struct ModelInfo {
     id: String,
     name: String,
+}
+
+/// 技能信息：前端展示用
+#[derive(Debug, Clone, Serialize)]
+struct SkillInfo {
+    id: String,
+    name: String,
+    description: String,
+    tags: Vec<String>,
+    capability: String,
+    template: Option<String>,
+    has_script: bool,
+}
+
+impl From<&Skill> for SkillInfo {
+    fn from(s: &Skill) -> Self {
+        Self {
+            id: s.meta.id.clone(),
+            name: s.meta.name.clone(),
+            description: s.meta.description.clone(),
+            tags: s.meta.tags.clone(),
+            capability: s.capability.clone(),
+            template: s.template.clone(),
+            has_script: s.script_path.is_some(),
+        }
+    }
 }
 
 /// models.toml 中单条配置
@@ -537,6 +566,11 @@ async fn main() -> anyhow::Result<()> {
     let shared_vector_long_term =
         create_shared_vector_long_term(&workspace, &app_config);
 
+    let skill_loader = Arc::new(SkillLoader::from_default());
+    if let Err(e) = skill_loader.load_all().await {
+        tracing::warn!("Failed to load skills: {}", e);
+    }
+
     let state = Arc::new(AppState {
         components,
         sessions: Arc::new(RwLock::new(HashMap::new())),
@@ -553,6 +587,7 @@ async fn main() -> anyhow::Result<()> {
         config_base,
         models,
         model_configs,
+        skill_loader,
     });
 
     let app = Router::new()
@@ -571,6 +606,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/tools", get(api_tools_list))
         .route("/api/assistant/:id/skills", axum::routing::put(api_assistant_skills_put))
         .route("/api/models", get(api_models_list))
+        .route("/api/skills", get(api_skills_list))
+        .route("/api/skills/:id", get(api_skill_get))
+        .route("/api/skills/:id", axum::routing::put(api_skill_update))
         .route("/api/memory/consolidate", post(api_memory_consolidate))
         .route("/api/memory/consolidate-llm", post(api_memory_consolidate_llm))
         .route("/api/config/reload", post(api_config_reload))
@@ -1035,6 +1073,111 @@ async fn api_models_list(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<ModelInfo>>, (StatusCode, String)> {
     Ok(Json(state.models.clone()))
+}
+
+/// GET /api/skills：返回所有技能列表
+async fn api_skills_list(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<SkillInfo>>, (StatusCode, String)> {
+    let cache = state.skill_loader.cache();
+    let skills = cache.read().await;
+    let list: Vec<SkillInfo> = skills.values().map(SkillInfo::from).collect();
+    Ok(Json(list))
+}
+
+/// GET /api/skills/:id：获取单个技能详情
+async fn api_skill_get(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<SkillInfo>, (StatusCode, String)> {
+    let skill = state
+        .skill_loader
+        .get(&id)
+        .await
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("技能 {} 不存在", id)))?;
+    Ok(Json(SkillInfo::from(&skill)))
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateSkillRequest {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    tags: Option<Vec<String>>,
+    #[serde(default)]
+    capability: Option<String>,
+    #[serde(default)]
+    template: Option<String>,
+}
+
+/// PUT /api/skills/:id：更新技能（保存到文件）
+async fn api_skill_update(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Json(req): Json<UpdateSkillRequest>,
+) -> Result<Json<SkillInfo>, (StatusCode, String)> {
+    let skill = state
+        .skill_loader
+        .get(&id)
+        .await
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("技能 {} 不存在", id)))?;
+
+    let skill_dir = &skill.dir;
+
+    if req.name.is_some() || req.description.is_some() || req.tags.is_some() {
+        let mut meta = skill.meta.clone();
+        if let Some(name) = req.name {
+            meta.name = name;
+        }
+        if let Some(description) = req.description {
+            meta.description = description;
+        }
+        if let Some(tags) = req.tags {
+            meta.tags = tags;
+        }
+
+        let toml_content = format!(
+            "[skill]\nid = \"{}\"\nname = \"{}\"\ndescription = \"{}\"\ntags = {:?}\n",
+            meta.id, meta.name, meta.description, meta.tags
+        );
+        if let Some(script) = &meta.script {
+            let toml_content = format!("{}script = \"{}\"\n", toml_content, script);
+            std::fs::write(skill_dir.join("skill.toml"), toml_content)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        } else {
+            std::fs::write(skill_dir.join("skill.toml"), toml_content)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        }
+    }
+
+    if let Some(capability) = &req.capability {
+        std::fs::write(skill_dir.join("capability.md"), capability)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
+    if let Some(template) = &req.template {
+        if template.is_empty() {
+            let _ = std::fs::remove_file(skill_dir.join("template.md"));
+        } else {
+            std::fs::write(skill_dir.join("template.md"), template)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        }
+    }
+
+    state
+        .skill_loader
+        .load_all()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let updated = state
+        .skill_loader
+        .get(&id)
+        .await
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "重新加载失败".to_string()))?;
+    Ok(Json(SkillInfo::from(&updated)))
 }
 
 /// GET /api/history?session_id=...：返回该会话的对话列表，过滤掉 Tool call / Observation 等内部消息

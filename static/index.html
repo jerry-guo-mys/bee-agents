@@ -234,6 +234,71 @@
     .settings-model-name { font-size: 0.85rem; color: #374151; }
     .dark .settings-model-name { color: #E5E7EB; }
     
+    /* Skills list */
+    .settings-skills-list { max-height: 200px; overflow-y: auto; border: 1px solid #E5E7EB; border-radius: 8px; }
+    .dark .settings-skills-list { border-color: #374151; }
+    .settings-skill-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #F3F4F6; cursor: pointer; transition: background 0.15s; }
+    .settings-skill-item:last-child { border-bottom: none; }
+    .settings-skill-item:hover { background: #F3F4F6; }
+    .dark .settings-skill-item { border-color: #374151; }
+    .dark .settings-skill-item:hover { background: #374151; }
+    .settings-skill-info { flex: 1; min-width: 0; }
+    .settings-skill-name { font-size: 0.85rem; font-weight: 500; color: #374151; }
+    .dark .settings-skill-name { color: #E5E7EB; }
+    .settings-skill-desc { font-size: 0.75rem; color: #9CA3AF; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .settings-skill-tags { display: flex; gap: 4px; margin-top: 4px; }
+    .settings-skill-tag { font-size: 0.65rem; padding: 2px 6px; background: #E5E7EB; color: #6B7280; border-radius: 4px; }
+    .dark .settings-skill-tag { background: #374151; color: #9CA3AF; }
+    .settings-skill-edit-btn { padding: 4px 8px; font-size: 0.75rem; background: #3B82F6; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    .settings-skill-edit-btn:hover { background: #2563EB; }
+    
+    /* Skill edit modal */
+    .skill-edit-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 1002; display: none; align-items: center; justify-content: center; }
+    .skill-edit-modal.active { display: flex; }
+    .skill-edit-panel { background: white; border-radius: 16px; width: 90%; max-width: 600px; max-height: 85vh; overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.25); animation: modalEnter 0.2s ease-out; }
+    .dark .skill-edit-panel { background: #1F2937; }
+    .skill-edit-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #E5E7EB; }
+    .dark .skill-edit-header { border-color: #374151; }
+    .skill-edit-body { padding: 20px; overflow-y: auto; max-height: calc(85vh - 140px); }
+    .skill-edit-footer { padding: 16px 20px; border-top: 1px solid #E5E7EB; display: flex; justify-content: flex-end; gap: 12px; }
+    .dark .skill-edit-footer { border-color: #374151; }
+    .skill-edit-field { margin-bottom: 16px; }
+    .skill-edit-label { display: block; font-size: 0.85rem; font-weight: 500; color: #374151; margin-bottom: 6px; }
+    .dark .skill-edit-label { color: #E5E7EB; }
+    .skill-edit-input { width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 0.9rem; background: white; color: #374151; }
+    .dark .skill-edit-input { background: #374151; border-color: #4B5563; color: #E5E7EB; }
+    .skill-edit-textarea { width: 100%; min-height: 120px; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 0.85rem; font-family: monospace; background: white; color: #374151; resize: vertical; }
+    .dark .skill-edit-textarea { background: #374151; border-color: #4B5563; color: #E5E7EB; }
+    
+    /* Settings View (in main area) */
+    .settings-view-section { margin-bottom: 32px; }
+    .settings-view-title { font-size: 0.8rem; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+    .dark .settings-view-title { color: #9CA3AF; }
+    .settings-view-card { background: white; border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden; }
+    .dark .settings-view-card { background: #1F2937; border-color: #374151; }
+    .settings-view-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #F3F4F6; }
+    .settings-view-item:last-child { border-bottom: none; }
+    .dark .settings-view-item { border-color: #374151; }
+    .settings-view-item-info { display: flex; align-items: center; flex: 1; min-width: 0; }
+    .settings-view-item-label { font-size: 0.95rem; font-weight: 500; color: #374151; }
+    .dark .settings-view-item-label { color: #E5E7EB; }
+    .settings-view-item-desc { font-size: 0.8rem; color: #9CA3AF; margin-top: 2px; }
+    .settings-view-skills-list { }
+    .settings-view-skill-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #F3F4F6; cursor: pointer; transition: background 0.15s; }
+    .settings-view-skill-item:last-child { border-bottom: none; }
+    .settings-view-skill-item:hover { background: #F9FAFB; }
+    .dark .settings-view-skill-item { border-color: #374151; }
+    .dark .settings-view-skill-item:hover { background: #374151; }
+    .settings-view-skill-info { flex: 1; min-width: 0; }
+    .settings-view-skill-name { font-size: 0.9rem; font-weight: 500; color: #374151; }
+    .dark .settings-view-skill-name { color: #E5E7EB; }
+    .settings-view-skill-desc { font-size: 0.8rem; color: #9CA3AF; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .settings-view-skill-tags { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+    .settings-view-skill-tag { font-size: 0.7rem; padding: 2px 8px; background: #E5E7EB; color: #6B7280; border-radius: 4px; }
+    .dark .settings-view-skill-tag { background: #374151; color: #9CA3AF; }
+    .settings-view-skill-edit-btn { padding: 6px 12px; font-size: 0.8rem; background: #3B82F6; color: white; border: none; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
+    .settings-view-skill-edit-btn:hover { background: #2563EB; }
+    
     .scroll-bottom { 
       position: fixed; 
       bottom: 120px; 
@@ -291,6 +356,8 @@
     <div class="sidebar-icon-bar">
       <button type="button" id="sidebar-expand-btn" title="展开侧边栏"><span class="material-icons-outlined">menu</span></button>
       <button type="button" id="sidebar-new-chat-icon" title="新对话"><span class="material-icons-outlined">edit_note</span></button>
+      <div class="flex-1"></div>
+      <button type="button" id="sidebar-settings-icon" title="设置"><span class="material-icons-outlined">settings</span></button>
     </div>
     <div class="sidebar-content">
     <div class="h-16 flex items-center justify-between px-4 mt-2">
@@ -332,6 +399,14 @@
         <p class="text-sm">还没有会话</p>
         <p class="text-xs mt-1 opacity-70">点击上方按钮开始新对话</p>
       </div>
+    </div>
+    
+    <!-- Sidebar Settings Button -->
+    <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+      <button id="sidebar-settings-btn" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white dark:hover:bg-gray-800 text-text-sub-light dark:text-text-sub-dark transition-all group">
+        <span class="material-icons-outlined text-gray-500 group-hover:text-blue-500 transition-colors">settings</span>
+        <span class="font-medium">设置</span>
+      </button>
     </div>
     </div>
   </aside>
@@ -382,6 +457,168 @@
       </div>
       
       <div id="messages" class="hidden w-full max-w-3xl py-8 space-y-6"></div>
+    </div>
+    
+    <!-- Settings View (in main area) -->
+    <div id="settings-view" class="hidden flex-1 overflow-y-auto">
+      <div class="max-w-2xl mx-auto py-8 px-6">
+        <div class="flex items-center justify-between mb-8">
+          <h2 class="text-2xl font-bold text-text-main-light dark:text-text-main-dark">设置</h2>
+          <button id="settings-view-close" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
+            <span class="material-icons-outlined">close</span>
+          </button>
+        </div>
+        
+        <!-- Appearance -->
+        <div class="settings-view-section">
+          <h3 class="settings-view-title">外观</h3>
+          <div class="settings-view-card">
+            <div class="settings-view-item">
+              <div class="settings-view-item-info">
+                <span class="material-icons-outlined text-gray-400 mr-3">palette</span>
+                <div>
+                  <div class="settings-view-item-label">主题</div>
+                  <div class="settings-view-item-desc">选择界面颜色主题</div>
+                </div>
+              </div>
+              <select id="settings-view-theme" class="settings-select">
+                <option value="system">跟随系统</option>
+                <option value="light">浅色</option>
+                <option value="dark">深色</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Chat -->
+        <div class="settings-view-section">
+          <h3 class="settings-view-title">对话</h3>
+          <div class="settings-view-card">
+            <div class="settings-view-item">
+              <div class="settings-view-item-info">
+                <span class="material-icons-outlined text-gray-400 mr-3">text_fields</span>
+                <div>
+                  <div class="settings-view-item-label">打字机效果</div>
+                  <div class="settings-view-item-desc">消息逐字显示动画</div>
+                </div>
+              </div>
+              <div id="settings-view-typewriter-toggle" class="settings-toggle active"></div>
+            </div>
+            <div class="settings-view-item" id="settings-view-speed-row">
+              <div class="settings-view-item-info">
+                <span class="material-icons-outlined text-gray-400 mr-3">speed</span>
+                <div>
+                  <div class="settings-view-item-label">打字速度</div>
+                  <div class="settings-view-item-desc">调整动画速度</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-400">慢</span>
+                <input type="range" id="settings-view-typewriter-speed" class="settings-slider" min="0.2" max="2" step="0.1" value="1">
+                <span class="text-xs text-gray-400">快</span>
+              </div>
+            </div>
+            <div class="settings-view-item">
+              <div class="settings-view-item-info">
+                <span class="material-icons-outlined text-gray-400 mr-3">vertical_align_bottom</span>
+                <div>
+                  <div class="settings-view-item-label">自动滚动</div>
+                  <div class="settings-view-item-desc">新消息时自动滚动到底部</div>
+                </div>
+              </div>
+              <div id="settings-view-autoscroll-toggle" class="settings-toggle active"></div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Defaults -->
+        <div class="settings-view-section">
+          <h3 class="settings-view-title">默认设置</h3>
+          <div class="settings-view-card">
+            <div class="settings-view-item">
+              <div class="settings-view-item-info">
+                <span class="material-icons-outlined text-gray-400 mr-3">psychology</span>
+                <div>
+                  <div class="settings-view-item-label">默认助手</div>
+                  <div class="settings-view-item-desc">新对话使用的助手</div>
+                </div>
+              </div>
+              <select id="settings-view-default-assistant" class="settings-select">
+                <option value="auto">自动</option>
+              </select>
+            </div>
+            <div class="settings-view-item">
+              <div class="settings-view-item-info">
+                <span class="material-icons-outlined text-gray-400 mr-3">auto_awesome</span>
+                <div>
+                  <div class="settings-view-item-label">默认模型</div>
+                  <div class="settings-view-item-desc">新对话使用的模型</div>
+                </div>
+              </div>
+              <select id="settings-view-default-model" class="settings-select">
+                <option value="default">默认</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Skills Management -->
+        <div class="settings-view-section">
+          <h3 class="settings-view-title">技能管理</h3>
+          <div class="settings-view-card">
+            <div id="settings-view-skills-list" class="settings-view-skills-list">
+              <!-- Dynamic skills list -->
+            </div>
+          </div>
+          <button id="settings-view-skills-refresh" class="mt-3 px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">刷新技能</button>
+        </div>
+        
+        <!-- Available Models -->
+        <div class="settings-view-section">
+          <h3 class="settings-view-title">可用模型</h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">选择在模型列表中显示的模型</p>
+          <div class="settings-view-card">
+            <div id="settings-view-models-list" class="p-2">
+              <!-- Dynamic model checkboxes -->
+            </div>
+          </div>
+          <div class="flex gap-2 mt-3">
+            <button id="settings-view-models-all" class="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">全选</button>
+            <button id="settings-view-models-none" class="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">全不选</button>
+          </div>
+        </div>
+        
+        <!-- Data Management -->
+        <div class="settings-view-section">
+          <h3 class="settings-view-title">数据管理</h3>
+          <div class="settings-view-card">
+            <div class="settings-view-item">
+              <div class="settings-view-item-info">
+                <span class="material-icons-outlined text-gray-400 mr-3">delete_outline</span>
+                <div>
+                  <div class="settings-view-item-label">清除当前对话</div>
+                  <div class="settings-view-item-desc">删除当前会话的所有消息</div>
+                </div>
+              </div>
+              <button id="settings-view-clear-current" class="settings-btn settings-btn-danger">清除</button>
+            </div>
+            <div class="settings-view-item">
+              <div class="settings-view-item-info">
+                <span class="material-icons-outlined text-gray-400 mr-3">delete_sweep</span>
+                <div>
+                  <div class="settings-view-item-label">清除所有对话</div>
+                  <div class="settings-view-item-desc">删除所有会话记录</div>
+                </div>
+              </div>
+              <button id="settings-view-clear-all" class="settings-btn settings-btn-danger">全部清除</button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="text-center text-sm text-gray-400 dark:text-gray-500 mt-8 pb-8">
+          Bee Personal AI v0.1.0
+        </div>
+      </div>
     </div>
 
     <div id="input-area" class="absolute bottom-0 left-0 right-0 px-6 pb-4 pt-8 bg-gradient-to-t from-surface-light via-surface-light to-transparent dark:from-background-dark dark:via-background-dark">
@@ -525,6 +762,16 @@
           </div>
         </div>
         
+        <!-- Skills Management -->
+        <div class="settings-section">
+          <div class="settings-section-title">技能管理</div>
+          <div class="settings-item-desc" style="margin-bottom: 12px;">查看和编辑可用技能</div>
+          <div id="settings-skills-list" class="settings-skills-list">
+            <!-- Dynamic skills list -->
+          </div>
+          <button id="settings-skills-refresh" class="settings-btn text-xs px-3 py-1.5 mt-3" style="background: #E5E7EB; color: #374151;">刷新技能</button>
+        </div>
+        
         <!-- Model Selection -->
         <div class="settings-section">
           <div class="settings-section-title">可用模型</div>
@@ -559,6 +806,45 @@
       </div>
       <div class="settings-footer">
         <p class="text-xs text-gray-400 dark:text-gray-500">Bee Personal AI v0.1.0</p>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Skill Edit Modal -->
+  <div id="skill-edit-modal" class="skill-edit-modal">
+    <div class="skill-edit-panel">
+      <div class="skill-edit-header">
+        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">编辑技能</h2>
+        <button id="skill-edit-close" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+          <span class="material-icons-outlined">close</span>
+        </button>
+      </div>
+      <div class="skill-edit-body">
+        <input type="hidden" id="skill-edit-id">
+        <div class="skill-edit-field">
+          <label class="skill-edit-label">技能名称</label>
+          <input type="text" id="skill-edit-name" class="skill-edit-input" placeholder="技能名称">
+        </div>
+        <div class="skill-edit-field">
+          <label class="skill-edit-label">描述</label>
+          <input type="text" id="skill-edit-description" class="skill-edit-input" placeholder="简短描述">
+        </div>
+        <div class="skill-edit-field">
+          <label class="skill-edit-label">标签（逗号分隔）</label>
+          <input type="text" id="skill-edit-tags" class="skill-edit-input" placeholder="写作, 营销, 自媒体">
+        </div>
+        <div class="skill-edit-field">
+          <label class="skill-edit-label">能力描述（Markdown）</label>
+          <textarea id="skill-edit-capability" class="skill-edit-textarea" placeholder="# 能力描述&#10;&#10;- 能力1&#10;- 能力2"></textarea>
+        </div>
+        <div class="skill-edit-field">
+          <label class="skill-edit-label">模板（可选，Markdown）</label>
+          <textarea id="skill-edit-template" class="skill-edit-textarea" placeholder="# 模板&#10;&#10;模板内容..."></textarea>
+        </div>
+      </div>
+      <div class="skill-edit-footer">
+        <button id="skill-edit-cancel" class="settings-btn" style="background: #E5E7EB; color: #374151;">取消</button>
+        <button id="skill-edit-save" class="settings-btn settings-btn-primary">保存</button>
       </div>
     </div>
   </div>
@@ -698,6 +984,7 @@
     let currentSessionId = null;
     let assistants = [];
     let models = [];
+    let skills = [];
     let selectedAssistant = localStorage.getItem('bee_assistant') || 'auto';
     let selectedModel = localStorage.getItem('bee_model') || 'default';
     let isGenerating = false;
@@ -1355,17 +1642,283 @@
     document.getElementById('mode-btn')?.addEventListener('click', toggleTheme);
 
     document.getElementById('config-btn')?.addEventListener('click', openSettings);
+    document.getElementById('sidebar-settings-btn')?.addEventListener('click', openSettings);
+    document.getElementById('sidebar-settings-icon')?.addEventListener('click', openSettings);
     
-    // Settings Panel
+    // Settings View (in main area)
+    let previousView = null;
+    
     function openSettings() {
-      const modal = document.getElementById('settings-modal');
-      modal.classList.add('active');
-      loadSettingsValues();
+      const settingsView = document.getElementById('settings-view');
+      const messagesWrapper = document.getElementById('messages-wrapper');
+      const inputArea = document.getElementById('input-area');
+      
+      if (!settingsView.classList.contains('hidden')) {
+        return;
+      }
+      
+      previousView = {
+        messagesHidden: messagesWrapper.classList.contains('hidden'),
+        inputHidden: inputArea.classList.contains('hidden')
+      };
+      
+      messagesWrapper.classList.add('hidden');
+      inputArea.classList.add('hidden');
+      settingsView.classList.remove('hidden');
+      
+      loadSettingsViewValues();
     }
     
     function closeSettings() {
-      document.getElementById('settings-modal').classList.remove('active');
+      const settingsView = document.getElementById('settings-view');
+      const messagesWrapper = document.getElementById('messages-wrapper');
+      const inputArea = document.getElementById('input-area');
+      
+      settingsView.classList.add('hidden');
+      messagesWrapper.classList.remove('hidden');
+      inputArea.classList.remove('hidden');
     }
+    
+    document.getElementById('settings-view-close')?.addEventListener('click', closeSettings);
+    
+    function loadSettingsViewValues() {
+      // Theme
+      const themeSelect = document.getElementById('settings-view-theme');
+      const savedTheme = localStorage.getItem('theme') || 'system';
+      if (themeSelect) themeSelect.value = savedTheme;
+      
+      // Typewriter
+      const typewriterEnabled = localStorage.getItem('typewriter_enabled') !== 'false';
+      const typewriterToggle = document.getElementById('settings-view-typewriter-toggle');
+      if (typewriterToggle) typewriterToggle.classList.toggle('active', typewriterEnabled);
+      const speedRow = document.getElementById('settings-view-speed-row');
+      if (speedRow) speedRow.style.opacity = typewriterEnabled ? '1' : '0.5';
+      
+      const speed = parseFloat(localStorage.getItem('typewriter_speed') || '1');
+      const speedInput = document.getElementById('settings-view-typewriter-speed');
+      if (speedInput) speedInput.value = speed;
+      
+      // Auto scroll
+      const autoScroll = localStorage.getItem('auto_scroll') !== 'false';
+      const autoscrollToggle = document.getElementById('settings-view-autoscroll-toggle');
+      if (autoscrollToggle) autoscrollToggle.classList.toggle('active', autoScroll);
+      
+      // Default assistant/model
+      const defaultAssistant = localStorage.getItem('bee_assistant') || 'auto';
+      const defaultModel = localStorage.getItem('bee_model') || 'default';
+      
+      const assistantSelect = document.getElementById('settings-view-default-assistant');
+      if (assistantSelect) {
+        assistantSelect.innerHTML = '<option value="auto">自动</option>';
+        assistants.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.id;
+          opt.textContent = a.name;
+          opt.selected = a.id === defaultAssistant;
+          assistantSelect.appendChild(opt);
+        });
+      }
+      
+      const modelSelect = document.getElementById('settings-view-default-model');
+      if (modelSelect) {
+        modelSelect.innerHTML = '<option value="default">默认</option>';
+        models.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.name;
+          opt.selected = m.id === defaultModel;
+          modelSelect.appendChild(opt);
+        });
+      }
+      
+      // Load skills
+      renderSettingsViewSkills();
+      
+      // Load enabled models
+      renderSettingsViewModels();
+    }
+    
+    function renderSettingsViewSkills() {
+      const container = document.getElementById('settings-view-skills-list');
+      if (!container) return;
+      
+      if (skills.length === 0) {
+        container.innerHTML = '<div class="p-6 text-center text-gray-400 text-sm">暂无技能，请先添加技能</div>';
+        return;
+      }
+      
+      container.innerHTML = skills.map(skill => `
+        <div class="settings-view-skill-item" data-id="${escapeHtml(skill.id)}">
+          <div class="settings-view-skill-info">
+            <div class="settings-view-skill-name">${escapeHtml(skill.name)}</div>
+            <div class="settings-view-skill-desc">${escapeHtml(skill.description)}</div>
+            ${skill.tags && skill.tags.length > 0 ? `
+              <div class="settings-view-skill-tags">
+                ${skill.tags.map(t => `<span class="settings-view-skill-tag">${escapeHtml(t)}</span>`).join('')}
+              </div>
+            ` : ''}
+          </div>
+          <button class="settings-view-skill-edit-btn" onclick="openSkillEdit('${escapeHtml(skill.id)}')">编辑</button>
+        </div>
+      `).join('');
+    }
+    
+    function renderSettingsViewModels() {
+      const container = document.getElementById('settings-view-models-list');
+      if (!container) return;
+      
+      const enabledModels = getEnabledModels();
+      container.innerHTML = '';
+      
+      models.forEach(m => {
+        const item = document.createElement('div');
+        item.className = 'settings-model-item';
+        item.dataset.id = m.id;
+        
+        const checkbox = document.createElement('div');
+        checkbox.className = 'settings-model-checkbox' + (enabledModels.includes(m.id) ? ' checked' : '');
+        
+        const name = document.createElement('span');
+        name.className = 'settings-model-name';
+        name.textContent = m.name;
+        
+        item.appendChild(checkbox);
+        item.appendChild(name);
+        
+        item.addEventListener('click', () => {
+          checkbox.classList.toggle('checked');
+          saveSettingsViewModelSelection();
+        });
+        
+        container.appendChild(item);
+      });
+    }
+    
+    function saveSettingsViewModelSelection() {
+      const items = document.querySelectorAll('#settings-view-models-list .settings-model-item');
+      const enabled = [];
+      items.forEach(item => {
+        if (item.querySelector('.settings-model-checkbox.checked')) {
+          enabled.push(item.dataset.id);
+        }
+      });
+      if (enabled.length === 0) {
+        enabled.push('default');
+        const firstItem = document.querySelector('#settings-view-models-list .settings-model-item[data-id="default"]');
+        if (firstItem) firstItem.querySelector('.settings-model-checkbox').classList.add('checked');
+      }
+      setEnabledModels(enabled);
+    }
+    
+    // Settings View event listeners
+    document.getElementById('settings-view-theme')?.addEventListener('change', (e) => {
+      const value = e.target.value;
+      if (value === 'system') {
+        localStorage.removeItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', prefersDark);
+      } else {
+        localStorage.setItem('theme', value);
+        document.documentElement.classList.toggle('dark', value === 'dark');
+      }
+      updateModeBtnText();
+    });
+    
+    document.getElementById('settings-view-typewriter-toggle')?.addEventListener('click', function() {
+      this.classList.toggle('active');
+      const enabled = this.classList.contains('active');
+      localStorage.setItem('typewriter_enabled', enabled.toString());
+      const speedRow = document.getElementById('settings-view-speed-row');
+      if (speedRow) speedRow.style.opacity = enabled ? '1' : '0.5';
+    });
+    
+    document.getElementById('settings-view-typewriter-speed')?.addEventListener('input', (e) => {
+      localStorage.setItem('typewriter_speed', e.target.value);
+    });
+    
+    document.getElementById('settings-view-autoscroll-toggle')?.addEventListener('click', function() {
+      this.classList.toggle('active');
+      localStorage.setItem('auto_scroll', this.classList.contains('active').toString());
+    });
+    
+    document.getElementById('settings-view-default-assistant')?.addEventListener('change', (e) => {
+      localStorage.setItem('bee_assistant', e.target.value);
+      selectedAssistant = e.target.value;
+      const opt = e.target.options[e.target.selectedIndex];
+      document.getElementById('selected-assistant').textContent = opt.textContent;
+    });
+    
+    document.getElementById('settings-view-default-model')?.addEventListener('change', (e) => {
+      localStorage.setItem('bee_model', e.target.value);
+      selectedModel = e.target.value;
+      const opt = e.target.options[e.target.selectedIndex];
+      document.getElementById('selected-model').textContent = opt.textContent;
+    });
+    
+    document.getElementById('settings-view-models-all')?.addEventListener('click', () => {
+      document.querySelectorAll('#settings-view-models-list .settings-model-checkbox').forEach(cb => {
+        cb.classList.add('checked');
+      });
+      saveSettingsViewModelSelection();
+    });
+    
+    document.getElementById('settings-view-models-none')?.addEventListener('click', () => {
+      document.querySelectorAll('#settings-view-models-list .settings-model-checkbox').forEach(cb => {
+        cb.classList.remove('checked');
+      });
+      const first = document.querySelector('#settings-view-models-list .settings-model-checkbox');
+      if (first) first.classList.add('checked');
+      saveSettingsViewModelSelection();
+    });
+    
+    document.getElementById('settings-view-skills-refresh')?.addEventListener('click', async () => {
+      await loadSkills();
+      renderSettingsViewSkills();
+      showToast('技能已刷新', 'success');
+    });
+    
+    document.getElementById('settings-view-clear-current')?.addEventListener('click', async () => {
+      if (!currentSessionId) {
+        showToast('没有活动的会话', 'info');
+        return;
+      }
+      if (!confirm('确定要清除当前对话吗？此操作不可撤销。')) return;
+      try {
+        await fetch('/api/session/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: currentSessionId })
+        });
+        document.getElementById('messages').innerHTML = '';
+        currentSessionId = null;
+        loadSessions();
+        closeSettings();
+        showToast('当前对话已清除', 'success');
+      } catch (e) {
+        showToast('清除失败', 'error');
+      }
+    });
+    
+    document.getElementById('settings-view-clear-all')?.addEventListener('click', async () => {
+      if (!confirm('确定要清除所有对话吗？此操作不可撤销。')) return;
+      try {
+        const sessions = await fetch('/api/sessions').then(r => r.json());
+        for (const s of sessions) {
+          await fetch('/api/session/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: s.id })
+          });
+        }
+        document.getElementById('messages').innerHTML = '';
+        currentSessionId = null;
+        loadSessions();
+        closeSettings();
+        showToast('所有对话已清除', 'success');
+      } catch (e) {
+        showToast('清除失败', 'error');
+      }
+    });
     
     function loadSettingsValues() {
       // Theme
@@ -1411,6 +1964,9 @@
       
       // Load enabled models
       renderModelsCheckboxes();
+      
+      // Load skills
+      loadSkills();
     }
     
     function setEnabledModels(ids) {
@@ -1568,6 +2124,111 @@
       } catch (e) {
         showToast('清除失败', 'error');
       }
+    });
+    
+    // Skills management
+    async function loadSkills() {
+      try {
+        const response = await fetch('/api/skills');
+        if (!response.ok) throw new Error('Failed to fetch skills');
+        skills = await response.json();
+        renderSkillsList();
+        renderSettingsViewSkills();
+      } catch (e) {
+        console.error('Failed to load skills:', e);
+        skills = [];
+        renderSkillsList();
+        renderSettingsViewSkills();
+      }
+    }
+    
+    function renderSkillsList() {
+      const container = document.getElementById('settings-skills-list');
+      if (!container) return;
+      
+      if (skills.length === 0) {
+        container.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">暂无技能</div>';
+        return;
+      }
+      
+      container.innerHTML = skills.map(skill => `
+        <div class="settings-skill-item" data-id="${escapeHtml(skill.id)}">
+          <div class="settings-skill-info">
+            <div class="settings-skill-name">${escapeHtml(skill.name)}</div>
+            <div class="settings-skill-desc">${escapeHtml(skill.description)}</div>
+            ${skill.tags && skill.tags.length > 0 ? `
+              <div class="settings-skill-tags">
+                ${skill.tags.map(t => `<span class="settings-skill-tag">${escapeHtml(t)}</span>`).join('')}
+              </div>
+            ` : ''}
+          </div>
+          <button class="settings-skill-edit-btn" onclick="openSkillEdit('${escapeHtml(skill.id)}')">编辑</button>
+        </div>
+      `).join('');
+    }
+    
+    function openSkillEdit(skillId) {
+      const skill = skills.find(s => s.id === skillId);
+      if (!skill) return;
+      
+      document.getElementById('skill-edit-id').value = skill.id;
+      document.getElementById('skill-edit-name').value = skill.name;
+      document.getElementById('skill-edit-description').value = skill.description;
+      document.getElementById('skill-edit-tags').value = (skill.tags || []).join(', ');
+      document.getElementById('skill-edit-capability').value = skill.capability || '';
+      document.getElementById('skill-edit-template').value = skill.template || '';
+      
+      document.getElementById('skill-edit-modal').classList.add('active');
+    }
+    
+    function closeSkillEdit() {
+      document.getElementById('skill-edit-modal').classList.remove('active');
+    }
+    
+    async function saveSkillEdit() {
+      const id = document.getElementById('skill-edit-id').value;
+      const name = document.getElementById('skill-edit-name').value.trim();
+      const description = document.getElementById('skill-edit-description').value.trim();
+      const tagsStr = document.getElementById('skill-edit-tags').value.trim();
+      const capability = document.getElementById('skill-edit-capability').value;
+      const template = document.getElementById('skill-edit-template').value;
+      
+      if (!name) {
+        showToast('技能名称不能为空', 'error');
+        return;
+      }
+      
+      const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(t => t) : [];
+      
+      try {
+        const response = await fetch(`/api/skills/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description, tags, capability, template })
+        });
+        
+        if (!response.ok) {
+          const err = await response.text();
+          throw new Error(err);
+        }
+        
+        showToast('技能已保存', 'success');
+        closeSkillEdit();
+        await loadSkills();
+      } catch (e) {
+        showToast('保存失败: ' + e.message, 'error');
+      }
+    }
+    
+    document.getElementById('skill-edit-close')?.addEventListener('click', closeSkillEdit);
+    document.getElementById('skill-edit-cancel')?.addEventListener('click', closeSkillEdit);
+    document.getElementById('skill-edit-save')?.addEventListener('click', saveSkillEdit);
+    document.getElementById('skill-edit-modal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'skill-edit-modal') closeSkillEdit();
+    });
+    document.getElementById('settings-skills-refresh')?.addEventListener('click', async () => {
+      await loadSkills();
+      showToast('技能已刷新', 'success');
     });
 
     document.getElementById('expand-btn')?.addEventListener('click', () => {
@@ -2054,10 +2715,11 @@
       initKeyboardShortcuts();
       
       // Test API endpoints
-      console.log('Loading sessions, assistants, models...');
+      console.log('Loading sessions, assistants, models, skills...');
       loadSessions();
       loadAssistants();
       loadModels();
+      loadSkills();
       
       document.getElementById('send-btn').addEventListener('click', sendMessage);
       
