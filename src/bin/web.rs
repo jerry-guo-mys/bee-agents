@@ -609,6 +609,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/skills", get(api_skills_list))
         .route("/api/skills/:id", get(api_skill_get))
         .route("/api/skills/:id", axum::routing::put(api_skill_update))
+        .route("/api/skills/import-openclaw", post(api_skill_import_openclaw))
         .route("/api/memory/consolidate", post(api_memory_consolidate))
         .route("/api/memory/consolidate-llm", post(api_memory_consolidate_llm))
         .route("/api/config/reload", post(api_config_reload))
@@ -1178,6 +1179,103 @@ async fn api_skill_update(
         .await
         .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "重新加载失败".to_string()))?;
     Ok(Json(SkillInfo::from(&updated)))
+}
+
+/// OpenClaw skill.json 格式
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct OpenClawSkillJson {
+    name: String,
+    #[serde(default)]
+    version: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    author: Option<String>,
+    #[serde(default)]
+    license: Option<String>,
+    #[serde(default)]
+    homepage: Option<String>,
+    #[serde(default)]
+    repository: Option<String>,
+    #[serde(default)]
+    tags: Option<Vec<String>>,
+}
+
+/// 导入 OpenClaw 技能请求
+#[derive(Debug, Deserialize)]
+struct ImportOpenClawRequest {
+    /// OpenClaw skill.json 内容 (JSON 字符串)
+    skill_json: String,
+    /// SKILL.md 内容
+    #[serde(default)]
+    skill_md: Option<String>,
+    /// 可选：覆盖已有的同名技能
+    #[serde(default)]
+    overwrite: bool,
+}
+
+/// 导入 OpenClaw 技能：将 OpenClaw 格式转换为 Bee 格式并保存
+async fn api_skill_import_openclaw(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<ImportOpenClawRequest>,
+) -> Result<Json<SkillInfo>, (StatusCode, String)> {
+    let openclaw: OpenClawSkillJson = serde_json::from_str(&req.skill_json)
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("无效的 skill.json: {}", e)))?;
+    
+    let skill_id = openclaw.name
+        .to_lowercase()
+        .replace(' ', "-")
+        .replace(|c: char| !c.is_alphanumeric() && c != '-', "");
+    
+    if skill_id.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "技能名称无效".to_string()));
+    }
+
+    let existing = state.skill_loader.get(&skill_id).await;
+    if existing.is_some() && !req.overwrite {
+        return Err((StatusCode::CONFLICT, format!("技能 '{}' 已存在，使用 overwrite=true 覆盖", skill_id)));
+    }
+
+    let skill_dir = state.skill_loader.skills_dir().join(&skill_id);
+    std::fs::create_dir_all(&skill_dir)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("创建目录失败: {}", e)))?;
+
+    let description = openclaw.description.as_deref().unwrap_or("从 OpenClaw 导入的技能");
+    let tags = openclaw.tags.unwrap_or_default();
+    let toml_content = format!(
+        "[skill]\nid = \"{}\"\nname = \"{}\"\ndescription = \"{}\"\ntags = {:?}\n",
+        skill_id, openclaw.name, description, tags
+    );
+    std::fs::write(skill_dir.join("skill.toml"), toml_content)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("写入 skill.toml 失败: {}", e)))?;
+
+    let capability = req.skill_md.unwrap_or_else(|| {
+        format!(
+            "# {}\n\n{}\n\n- Author: {}\n- License: {}",
+            openclaw.name,
+            description,
+            openclaw.author.as_deref().unwrap_or("unknown"),
+            openclaw.license.as_deref().unwrap_or("MIT")
+        )
+    });
+    std::fs::write(skill_dir.join("capability.md"), capability)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("写入 capability.md 失败: {}", e)))?;
+
+    state
+        .skill_loader
+        .load_all()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let imported = state
+        .skill_loader
+        .get(&skill_id)
+        .await
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "导入后无法加载技能".to_string()))?;
+    
+    tracing::info!("Imported OpenClaw skill: {} ({})", openclaw.name, skill_id);
+    Ok(Json(SkillInfo::from(&imported)))
 }
 
 /// GET /api/history?session_id=...：返回该会话的对话列表，过滤掉 Tool call / Observation 等内部消息

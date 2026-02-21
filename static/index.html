@@ -570,7 +570,10 @@
               <!-- Dynamic skills list -->
             </div>
           </div>
-          <button id="settings-view-skills-refresh" class="mt-3 px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">刷新技能</button>
+          <div class="flex gap-2 mt-3">
+            <button id="settings-view-skills-refresh" class="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">刷新技能</button>
+            <button id="settings-view-skills-import-openclaw" class="px-4 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors">导入 OpenClaw 技能</button>
+          </div>
         </div>
         
         <!-- Available Models -->
@@ -769,7 +772,10 @@
           <div id="settings-skills-list" class="settings-skills-list">
             <!-- Dynamic skills list -->
           </div>
-          <button id="settings-skills-refresh" class="settings-btn text-xs px-3 py-1.5 mt-3" style="background: #E5E7EB; color: #374151;">刷新技能</button>
+          <div class="flex gap-2 mt-3">
+            <button id="settings-skills-refresh" class="settings-btn text-xs px-3 py-1.5" style="background: #E5E7EB; color: #374151;">刷新技能</button>
+            <button id="settings-skills-import-openclaw" class="settings-btn text-xs px-3 py-1.5" style="background: #3B82F6; color: white;">导入 OpenClaw 技能</button>
+          </div>
         </div>
         
         <!-- Model Selection -->
@@ -845,6 +851,38 @@
       <div class="skill-edit-footer">
         <button id="skill-edit-cancel" class="settings-btn" style="background: #E5E7EB; color: #374151;">取消</button>
         <button id="skill-edit-save" class="settings-btn settings-btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- OpenClaw Import Modal -->
+  <div id="openclaw-import-modal" class="skill-edit-modal">
+    <div class="skill-edit-panel">
+      <div class="skill-edit-header">
+        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">导入 OpenClaw 技能</h2>
+        <button id="openclaw-import-close" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+          <span class="material-icons-outlined">close</span>
+        </button>
+      </div>
+      <div class="skill-edit-body">
+        <div class="skill-edit-field">
+          <label class="skill-edit-label">skill.json 内容</label>
+          <textarea id="openclaw-skill-json" class="skill-edit-textarea" rows="6" placeholder='{"name": "my-skill", "description": "描述", "tags": ["tag1"]}'></textarea>
+        </div>
+        <div class="skill-edit-field">
+          <label class="skill-edit-label">SKILL.md 内容（可选）</label>
+          <textarea id="openclaw-skill-md" class="skill-edit-textarea" rows="6" placeholder="# 技能详细说明&#10;&#10;描述技能的功能和用法..."></textarea>
+        </div>
+        <div class="skill-edit-field">
+          <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+            <input type="checkbox" id="openclaw-overwrite" class="rounded">
+            覆盖已存在的同名技能
+          </label>
+        </div>
+      </div>
+      <div class="skill-edit-footer">
+        <button id="openclaw-import-cancel" class="settings-btn" style="background: #E5E7EB; color: #374151;">取消</button>
+        <button id="openclaw-import-save" class="settings-btn settings-btn-primary">导入</button>
       </div>
     </div>
   </div>
@@ -1876,6 +1914,8 @@
       renderSettingsViewSkills();
       showToast('技能已刷新', 'success');
     });
+
+    document.getElementById('settings-view-skills-import-openclaw')?.addEventListener('click', openOpenClawImport);
     
     document.getElementById('settings-view-clear-current')?.addEventListener('click', async () => {
       if (!currentSessionId) {
@@ -2229,6 +2269,67 @@
     document.getElementById('settings-skills-refresh')?.addEventListener('click', async () => {
       await loadSkills();
       showToast('技能已刷新', 'success');
+    });
+
+    function openOpenClawImport() {
+      document.getElementById('openclaw-skill-json').value = '';
+      document.getElementById('openclaw-skill-md').value = '';
+      document.getElementById('openclaw-overwrite').checked = false;
+      document.getElementById('openclaw-import-modal').classList.add('active');
+    }
+
+    function closeOpenClawImport() {
+      document.getElementById('openclaw-import-modal').classList.remove('active');
+    }
+
+    async function saveOpenClawImport() {
+      const skillJson = document.getElementById('openclaw-skill-json').value.trim();
+      const skillMd = document.getElementById('openclaw-skill-md').value.trim();
+      const overwrite = document.getElementById('openclaw-overwrite').checked;
+
+      if (!skillJson) {
+        showToast('请输入 skill.json 内容', 'error');
+        return;
+      }
+
+      try {
+        JSON.parse(skillJson);
+      } catch (e) {
+        showToast('skill.json 格式无效: ' + e.message, 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/skills/import-openclaw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            skill_json: skillJson,
+            skill_md: skillMd || null,
+            overwrite
+          })
+        });
+
+        if (!response.ok) {
+          const err = await response.text();
+          throw new Error(err);
+        }
+
+        const result = await response.json();
+        showToast(`技能 "${result.name}" 导入成功`, 'success');
+        closeOpenClawImport();
+        await loadSkills();
+      } catch (e) {
+        showToast('导入失败: ' + e.message, 'error');
+      }
+    }
+
+    document.getElementById('settings-skills-import-openclaw')?.addEventListener('click', openOpenClawImport);
+    document.getElementById('openclaw-import-close')?.addEventListener('click', closeOpenClawImport);
+    document.getElementById('openclaw-import-cancel')?.addEventListener('click', closeOpenClawImport);
+    document.getElementById('openclaw-import-save')?.addEventListener('click', saveOpenClawImport);
+    document.getElementById('openclaw-import-modal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'openclaw-import-modal') closeOpenClawImport();
     });
 
     document.getElementById('expand-btn')?.addEventListener('click', () => {

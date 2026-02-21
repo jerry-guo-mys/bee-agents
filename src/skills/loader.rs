@@ -100,6 +100,11 @@ impl SkillLoader {
         Arc::clone(&self.cache)
     }
 
+    /// 获取技能目录路径
+    pub fn skills_dir(&self) -> &std::path::Path {
+        &self.skills_dir
+    }
+
     /// 加载所有技能并缓存
     pub async fn load_all(&self) -> anyhow::Result<Vec<Skill>> {
         let mut skills = Vec::new();
