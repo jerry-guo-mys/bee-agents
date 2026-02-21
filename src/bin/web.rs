@@ -590,6 +590,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/", get(index))
+        .route("/metrics", get(serve_metrics_dashboard))
         .route("/js/marked.min.js", get(serve_marked_js))
         .route("/js/highlight.min.js", get(serve_highlight_js))
         .route("/css/github-dark.min.css", get(serve_highlight_css))
@@ -696,6 +697,10 @@ async fn main() -> anyhow::Result<()> {
 
 async fn index() -> Html<&'static str> {
     Html(include_str!("../../static/index.html"))
+}
+
+async fn serve_metrics_dashboard() -> Html<&'static str> {
+    Html(include_str!("../../static/metrics.html"))
 }
 
 async fn serve_marked_js() -> Response {

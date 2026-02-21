@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bee Metrics Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .metric-card { transition: all 0.2s; }
+    .metric-card:hover { transform: translateY(-2px); }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    .live-indicator { animation: pulse 2s infinite; }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+  <div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-3xl font-bold text-white">Bee Metrics Dashboard</h1>
+        <p class="text-gray-400 mt-1">实时监控系统运行状态</p>
+      </div>
+      <div class="flex items-center gap-4">
+        <span class="live-indicator flex items-center gap-2 text-green-400">
+          <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+          Live
+        </span>
+        <button onclick="refreshMetrics()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition">
+          刷新
+        </button>
+      </div>
+    </div>
+
+    <!-- LLM Metrics -->
+    <div class="mb-8">
+      <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+        <span class="text-blue-400">●</span> LLM 调用
+      </h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">总调用次数</p>
+          <p id="llm-total-calls" class="text-2xl font-bold text-white mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">成功</p>
+          <p id="llm-successful" class="text-2xl font-bold text-green-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">失败</p>
+          <p id="llm-failed" class="text-2xl font-bold text-red-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">错误率</p>
+          <p id="llm-error-rate" class="text-2xl font-bold text-yellow-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">平均延迟</p>
+          <p id="llm-avg-latency" class="text-2xl font-bold text-blue-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">Token 消耗</p>
+          <p id="llm-total-tokens" class="text-2xl font-bold text-purple-400 mt-1">-</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tool Metrics -->
+    <div class="mb-8">
+      <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+        <span class="text-green-400">●</span> 工具执行
+      </h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">总执行次数</p>
+          <p id="tool-total" class="text-2xl font-bold text-white mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">成功</p>
+          <p id="tool-success" class="text-2xl font-bold text-green-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">失败</p>
+          <p id="tool-failed" class="text-2xl font-bold text-red-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">平均执行时间</p>
+          <p id="tool-avg-time" class="text-2xl font-bold text-yellow-400 mt-1">-</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session Metrics -->
+    <div class="mb-8">
+      <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+        <span class="text-purple-400">●</span> 会话统计
+      </h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">总请求数</p>
+          <p id="session-total" class="text-2xl font-bold text-white mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">活跃会话</p>
+          <p id="session-active" class="text-2xl font-bold text-blue-400 mt-1">-</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Token Breakdown -->
+    <div class="mb-8">
+      <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+        <span class="text-purple-400">●</span> Token 消耗详情
+      </h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">Prompt Tokens</p>
+          <p id="token-prompt" class="text-xl font-bold text-blue-400 mt-1">-</p>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">Completion Tokens</p>
+          <p id="token-completion" class="text-xl font-bold text-green-400 mt-1">-</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Behavior Metrics -->
+    <div class="mb-8">
+      <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+        <span class="text-orange-400">●</span> AI 行为质量
+      </h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-4">
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">任务完成率</p>
+          <p id="behavior-completion-rate" class="text-2xl font-bold text-green-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">总任务数</p>
+          <p id="behavior-tasks-total" class="text-2xl font-bold text-white mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">一次成功</p>
+          <p id="behavior-tasks-first-try" class="text-2xl font-bold text-green-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">错误率</p>
+          <p id="behavior-error-rate" class="text-2xl font-bold text-yellow-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">总错误数</p>
+          <p id="behavior-total-errors" class="text-2xl font-bold text-red-400 mt-1">-</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">意图误解</p>
+          <p id="behavior-intent" class="text-xl font-bold text-orange-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">工具误用</p>
+          <p id="behavior-tool-misuse" class="text-xl font-bold text-orange-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">路径错误</p>
+          <p id="behavior-path-error" class="text-xl font-bold text-orange-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">输出不当</p>
+          <p id="behavior-output-issue" class="text-xl font-bold text-orange-400 mt-1">-</p>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-xl p-4 border border-gray-700">
+          <p class="text-gray-400 text-sm">用户纠正</p>
+          <p id="behavior-user-correction" class="text-xl font-bold text-orange-400 mt-1">-</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Raw JSON -->
+    <div class="mb-8">
+      <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+        <span class="text-gray-400">●</span> 原始数据
+      </h2>
+      <pre id="raw-json" class="bg-gray-800 rounded-xl p-4 border border-gray-700 text-sm text-gray-300 overflow-x-auto"></pre>
+    </div>
+  </div>
+
+  <script>
+    let historyData = { llm: [], tool: [], session: [] };
+    const MAX_HISTORY = 20;
+
+    async function refreshMetrics() {
+      try {
+        const response = await fetch('/api/metrics');
+        const data = await response.json();
+        updateDisplay(data);
+        updateHistory(data);
+        updateChart();
+      } catch (error) {
+        console.error('Failed to fetch metrics:', error);
+      }
+    }
+
+    function updateDisplay(data) {
+      const llm = data.llm || {};
+      const tool = data.tools || {};
+      const session = data.session || {};
+      const behavior = data.behavior || {};
+
+      document.getElementById('llm-total-calls').textContent = llm.total_calls || 0;
+      document.getElementById('llm-successful').textContent = llm.successful_calls || 0;
+      document.getElementById('llm-failed').textContent = llm.failed_calls || 0;
+      document.getElementById('llm-error-rate').textContent = ((llm.error_rate || 0) * 100).toFixed(1) + '%';
+      document.getElementById('llm-avg-latency').textContent = (llm.average_latency_ms || 0).toFixed(0) + 'ms';
+      document.getElementById('llm-total-tokens').textContent = formatNumber((llm.total_prompt_tokens || 0) + (llm.total_completion_tokens || 0));
+
+      document.getElementById('tool-total').textContent = tool.total_executions || 0;
+      document.getElementById('tool-success').textContent = tool.successful_executions || 0;
+      document.getElementById('tool-failed').textContent = tool.failed_executions || 0;
+      document.getElementById('tool-avg-time').textContent = (tool.average_execution_time_ms || 0).toFixed(0) + 'ms';
+
+      document.getElementById('session-total').textContent = session.total_requests || 0;
+      document.getElementById('session-active').textContent = session.active_sessions || 0;
+
+      document.getElementById('token-prompt').textContent = formatNumber(llm.total_prompt_tokens || 0);
+      document.getElementById('token-completion').textContent = formatNumber(llm.total_completion_tokens || 0);
+
+      // Behavior metrics
+      document.getElementById('behavior-completion-rate').textContent = ((behavior.completion_rate || 0) * 100).toFixed(1) + '%';
+      document.getElementById('behavior-tasks-total').textContent = behavior.tasks_total || 0;
+      document.getElementById('behavior-tasks-first-try').textContent = behavior.tasks_completed_first_try || 0;
+      document.getElementById('behavior-error-rate').textContent = ((behavior.error_rate || 0) * 100).toFixed(1) + '%';
+      document.getElementById('behavior-total-errors').textContent = behavior.total_errors || 0;
+      document.getElementById('behavior-intent').textContent = behavior.intent_misunderstandings || 0;
+      document.getElementById('behavior-tool-misuse').textContent = behavior.tool_misuses || 0;
+      document.getElementById('behavior-path-error').textContent = behavior.path_errors || 0;
+      document.getElementById('behavior-output-issue').textContent = behavior.output_issues || 0;
+      document.getElementById('behavior-user-correction').textContent = behavior.user_corrections || 0;
+
+      document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+    }
+
+    function updateHistory(data) {
+      historyData.llm.push({ time: Date.now(), calls: data.llm.total_calls, latency: data.llm.average_latency_ms });
+      historyData.tool.push({ time: Date.now(), total: data.tools.total_executions, avgTime: data.tools.average_execution_time_ms });
+      historyData.session.push({ time: Date.now(), requests: data.session.total_requests });
+
+      if (historyData.llm.length > MAX_HISTORY) historyData.llm.shift();
+      if (historyData.tool.length > MAX_HISTORY) historyData.tool.shift();
+      if (historyData.session.length > MAX_HISTORY) historyData.session.shift();
+    }
+
+    function formatNumber(num) {
+      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+      if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+      return num.toString();
+    }
+
+    // Auto-refresh every 5 seconds
+    setInterval(refreshMetrics, 5000);
+    refreshMetrics();
+  </script>
+</body>
+</html>

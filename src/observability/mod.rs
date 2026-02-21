@@ -46,6 +46,8 @@ pub struct Metrics {
     pub tools: ToolMetrics,
     /// 会话相关指标
     pub session: SessionMetrics,
+    /// AI 行为质量指标
+    pub behavior: BehaviorMetrics,
 }
 
 impl Metrics {
@@ -82,6 +84,18 @@ impl Metrics {
             "session": {
                 "total_requests": self.session.total_requests.load(Ordering::Relaxed),
                 "active_sessions": self.session.active_sessions.load(Ordering::Relaxed),
+            },
+            "behavior": {
+                "intent_misunderstandings": self.behavior.intent_misunderstandings.load(Ordering::Relaxed),
+                "tool_misuses": self.behavior.tool_misuses.load(Ordering::Relaxed),
+                "path_errors": self.behavior.path_errors.load(Ordering::Relaxed),
+                "output_issues": self.behavior.output_issues.load(Ordering::Relaxed),
+                "user_corrections": self.behavior.user_corrections.load(Ordering::Relaxed),
+                "total_errors": self.behavior.total_errors(),
+                "tasks_completed_first_try": self.behavior.tasks_completed_first_try.load(Ordering::Relaxed),
+                "tasks_total": self.behavior.tasks_total.load(Ordering::Relaxed),
+                "completion_rate": self.behavior.completion_rate(),
+                "error_rate": self.behavior.error_rate(),
             }
         })
     }
@@ -142,6 +156,44 @@ impl Metrics {
         output.push_str(&format!(
             "# TYPE bee_session_active_sessions gauge\nbee_session_active_sessions {}\n",
             self.session.active_sessions.load(Ordering::Relaxed)
+        ));
+
+        // Behavior metrics
+        output.push_str(&format!(
+            "# TYPE bee_behavior_intent_misunderstandings counter\nbee_behavior_intent_misunderstandings {}\n",
+            self.behavior.intent_misunderstandings.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_behavior_tool_misuses counter\nbee_behavior_tool_misuses {}\n",
+            self.behavior.tool_misuses.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_behavior_path_errors counter\nbee_behavior_path_errors {}\n",
+            self.behavior.path_errors.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_behavior_output_issues counter\nbee_behavior_output_issues {}\n",
+            self.behavior.output_issues.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_behavior_user_corrections counter\nbee_behavior_user_corrections {}\n",
+            self.behavior.user_corrections.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_behavior_tasks_total counter\nbee_behavior_tasks_total {}\n",
+            self.behavior.tasks_total.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_behavior_tasks_completed_first_try counter\nbee_behavior_tasks_completed_first_try {}\n",
+            self.behavior.tasks_completed_first_try.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_behavior_completion_rate gauge\nbee_behavior_completion_rate {}\n",
+            self.behavior.completion_rate()
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_behavior_error_rate gauge\nbee_behavior_error_rate {}\n",
+            self.behavior.error_rate()
         ));
         
         output
@@ -242,6 +294,88 @@ impl SessionMetrics {
 
     pub fn decrement_active_sessions(&self) {
         self.active_sessions.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
+/// AI 行为质量指标（从 Python ai_monitor.py 迁移）
+#[derive(Debug, Default)]
+pub struct BehaviorMetrics {
+    /// 意图误解次数
+    pub intent_misunderstandings: AtomicU64,
+    /// 工具误用次数
+    pub tool_misuses: AtomicU64,
+    /// 路径错误次数
+    pub path_errors: AtomicU64,
+    /// 输出不当次数
+    pub output_issues: AtomicU64,
+    /// 用户纠正次数
+    pub user_corrections: AtomicU64,
+    /// 一次完成的任务数
+    pub tasks_completed_first_try: AtomicU64,
+    /// 总任务数
+    pub tasks_total: AtomicU64,
+}
+
+impl BehaviorMetrics {
+    /// 记录意图误解
+    pub fn record_intent_misunderstanding(&self) {
+        self.intent_misunderstandings.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// 记录工具误用
+    pub fn record_tool_misuse(&self) {
+        self.tool_misuses.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// 记录路径错误
+    pub fn record_path_error(&self) {
+        self.path_errors.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// 记录输出不当
+    pub fn record_output_issue(&self) {
+        self.output_issues.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// 记录用户纠正
+    pub fn record_user_correction(&self) {
+        self.user_corrections.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// 记录任务完成情况
+    pub fn record_task(&self, completed_first_try: bool) {
+        self.tasks_total.fetch_add(1, Ordering::Relaxed);
+        if completed_first_try {
+            self.tasks_completed_first_try.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// 获取总错误数
+    pub fn total_errors(&self) -> u64 {
+        self.intent_misunderstandings.load(Ordering::Relaxed)
+            + self.tool_misuses.load(Ordering::Relaxed)
+            + self.path_errors.load(Ordering::Relaxed)
+            + self.output_issues.load(Ordering::Relaxed)
+    }
+
+    /// 计算任务完成率
+    pub fn completion_rate(&self) -> f64 {
+        let total = self.tasks_total.load(Ordering::Relaxed);
+        if total == 0 {
+            0.0
+        } else {
+            self.tasks_completed_first_try.load(Ordering::Relaxed) as f64 / total as f64
+        }
+    }
+
+    /// 计算错误率（相对于总任务数）
+    pub fn error_rate(&self) -> f64 {
+        let total = self.tasks_total.load(Ordering::Relaxed);
+        if total == 0 {
+            0.0
+        } else {
+            self.total_errors() as f64 / total as f64
+        }
     }
 }
 
@@ -355,5 +489,37 @@ mod tests {
         let timer = SpanTimer::new("test_operation");
         std::thread::sleep(Duration::from_millis(10));
         assert!(timer.elapsed() >= Duration::from_millis(10));
+    }
+
+    #[test]
+    fn test_behavior_metrics() {
+        let metrics = BehaviorMetrics::default();
+        
+        metrics.record_intent_misunderstanding();
+        metrics.record_tool_misuse();
+        metrics.record_path_error();
+        metrics.record_output_issue();
+        metrics.record_user_correction();
+
+        assert_eq!(metrics.intent_misunderstandings.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.tool_misuses.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.path_errors.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.output_issues.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.user_corrections.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.total_errors(), 4);
+    }
+
+    #[test]
+    fn test_behavior_metrics_completion_rate() {
+        let metrics = BehaviorMetrics::default();
+        
+        metrics.record_task(true);
+        metrics.record_task(true);
+        metrics.record_task(false);
+        metrics.record_task(true);
+
+        assert_eq!(metrics.tasks_total.load(Ordering::Relaxed), 4);
+        assert_eq!(metrics.tasks_completed_first_try.load(Ordering::Relaxed), 3);
+        assert!((metrics.completion_rate() - 0.75).abs() < 0.001);
     }
 }
