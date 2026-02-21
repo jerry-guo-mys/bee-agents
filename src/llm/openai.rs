@@ -19,6 +19,8 @@ use futures_util::{Stream, StreamExt};
 
 use crate::llm::{LlmClient, LlmError};
 use crate::memory::Message;
+use crate::observability::Metrics;
+use std::time::Instant;
 
 /// Token 使用统计（累计值）
 #[derive(Debug, Clone, Default)]
@@ -145,6 +147,9 @@ impl LlmClient for OpenAiClient {
     }
 
     async fn complete(&self, messages: &[Message]) -> Result<String, LlmError> {
+        let start = Instant::now();
+        let metrics = Metrics::global();
+        
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.model)
             .messages(self.to_openai_messages(messages))
@@ -159,18 +164,32 @@ impl LlmClient for OpenAiClient {
             .map_err(convert_openai_error)?;
 
         // 提取 token 使用统计
-        if let Some(usage) = &response.usage {
+        let (prompt_tokens, completion_tokens) = if let Some(usage) = &response.usage {
             self.usage.add(
                 usage.prompt_tokens as u64,
                 usage.completion_tokens as u64,
             );
-        }
+            (usage.prompt_tokens as u64, usage.completion_tokens as u64)
+        } else {
+            (0, 0)
+        };
 
         let content = response
             .choices
             .first()
             .and_then(|c| c.message.content.clone())
             .unwrap_or_default();
+
+        // 记录 metrics
+        let latency = start.elapsed();
+        metrics.llm.record_call(true, latency, prompt_tokens, completion_tokens);
+        tracing::debug!(
+            target: "bee::metrics",
+            latency_ms = latency.as_millis(),
+            prompt_tokens = prompt_tokens,
+            completion_tokens = completion_tokens,
+            "llm_call_complete"
+        );
 
         Ok(content)
     }
@@ -179,6 +198,10 @@ impl LlmClient for OpenAiClient {
         &self,
         messages: &[Message],
     ) -> Result<Pin<Box<dyn Stream<Item = Result<String, LlmError>> + Send>>, LlmError> {
+        let start = Instant::now();
+        let metrics = Metrics::global();
+        let usage = self.usage.clone();
+        
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.model)
             .messages(self.to_openai_messages(messages))
@@ -193,15 +216,43 @@ impl LlmClient for OpenAiClient {
             .await
             .map_err(convert_openai_error)?;
 
-        let mapped_stream = response_stream.map(|result| {
+        let mapped_stream = response_stream.map(move |result| {
+            let start = start.clone();
+            let metrics = metrics;
+            let usage = usage.clone();
+            
             result
                 .map_err(convert_openai_error)
-                .map(|response| {
-                    response
+                .map(move |response| {
+                    // 累积 token 使用
+                    if let Some(usage_info) = &response.usage {
+                        usage.add(
+                            usage_info.prompt_tokens as u64,
+                            usage_info.completion_tokens as u64,
+                        );
+                    }
+                    
+                    let content = response
                         .choices
                         .first()
                         .and_then(|c| c.delta.content.clone())
-                        .unwrap_or_default()
+                        .unwrap_or_default();
+                    
+                    // 在流结束时记录 metrics
+                    if response.choices.is_empty() || content.is_empty() {
+                        let latency = start.elapsed();
+                        let (prompt, completion, _total) = usage.get();
+                        metrics.llm.record_call(true, latency, prompt, completion);
+                        tracing::debug!(
+                            target: "bee::metrics",
+                            latency_ms = latency.as_millis(),
+                            prompt_tokens = prompt,
+                            completion_tokens = completion,
+                            "llm_call_stream_complete"
+                        );
+                    }
+                    
+                    content
                 })
         });
 

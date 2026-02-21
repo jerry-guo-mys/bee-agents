@@ -9,12 +9,28 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use uuid::Uuid;
 
 pub fn init() {
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
         .with(fmt::layer())
         .init();
+}
+
+/// 生成新的请求 ID
+pub fn generate_request_id() -> String {
+    Uuid::new_v4().to_string()
+}
+
+/// 在 tracing span 中注入请求 ID
+pub fn with_request_id<F, T>(request_id: &str, f: F) -> T
+where
+    F: FnOnce() -> T,
+{
+    let span = tracing::info_span!("request", request_id = %request_id);
+    let _guard = span.enter();
+    f()
 }
 
 pub fn init_metrics() {
@@ -53,18 +69,82 @@ impl Metrics {
                 "total_prompt_tokens": self.llm.total_prompt_tokens.load(Ordering::Relaxed),
                 "total_completion_tokens": self.llm.total_completion_tokens.load(Ordering::Relaxed),
                 "total_latency_ms": self.llm.total_latency_ms.load(Ordering::Relaxed),
+                "average_latency_ms": self.llm.average_latency_ms(),
+                "error_rate": self.llm.error_rate(),
             },
             "tools": {
                 "total_executions": self.tools.total_executions.load(Ordering::Relaxed),
                 "successful_executions": self.tools.successful_executions.load(Ordering::Relaxed),
                 "failed_executions": self.tools.failed_executions.load(Ordering::Relaxed),
                 "total_execution_time_ms": self.tools.total_execution_time_ms.load(Ordering::Relaxed),
+                "average_execution_time_ms": self.tools.average_execution_time_ms(),
             },
             "session": {
                 "total_requests": self.session.total_requests.load(Ordering::Relaxed),
                 "active_sessions": self.session.active_sessions.load(Ordering::Relaxed),
             }
         })
+    }
+
+    /// 导出为 Prometheus 格式
+    pub fn to_prometheus(&self) -> String {
+        let mut output = String::new();
+        
+        // LLM metrics
+        output.push_str(&format!(
+            "# TYPE bee_llm_calls_total counter\nbee_llm_calls_total {}\n",
+            self.llm.total_calls.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_llm_calls_success counter\nbee_llm_calls_success {}\n",
+            self.llm.successful_calls.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_llm_calls_failure counter\nbee_llm_calls_failure {}\n",
+            self.llm.failed_calls.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_llm_prompt_tokens_total counter\nbee_llm_prompt_tokens_total {}\n",
+            self.llm.total_prompt_tokens.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_llm_completion_tokens_total counter\nbee_llm_completion_tokens_total {}\n",
+            self.llm.total_completion_tokens.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_llm_latency_ms_total counter\nbee_llm_latency_ms_total {}\n",
+            self.llm.total_latency_ms.load(Ordering::Relaxed)
+        ));
+        
+        // Tool metrics
+        output.push_str(&format!(
+            "# TYPE bee_tool_executions_total counter\nbee_tool_executions_total {}\n",
+            self.tools.total_executions.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_tool_executions_success counter\nbee_tool_executions_success {}\n",
+            self.tools.successful_executions.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_tool_executions_failure counter\nbee_tool_executions_failure {}\n",
+            self.tools.failed_executions.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_tool_execution_time_ms_total counter\nbee_tool_execution_time_ms_total {}\n",
+            self.tools.total_execution_time_ms.load(Ordering::Relaxed)
+        ));
+        
+        // Session metrics
+        output.push_str(&format!(
+            "# TYPE bee_session_requests_total counter\nbee_session_requests_total {}\n",
+            self.session.total_requests.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "# TYPE bee_session_active_sessions gauge\nbee_session_active_sessions {}\n",
+            self.session.active_sessions.load(Ordering::Relaxed)
+        ));
+        
+        output
     }
 }
 

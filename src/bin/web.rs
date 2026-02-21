@@ -612,6 +612,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/memory/consolidate-llm", post(api_memory_consolidate_llm))
         .route("/api/config/reload", post(api_config_reload))
         .route("/api/health", get(|| async { "OK" }))
+        .route("/api/metrics", get(api_metrics))
+        .route("/api/metrics/prometheus", get(api_metrics_prometheus))
         .with_state(Arc::clone(&state));
 
     // 定期整理记忆：每 24 小时将近期短期日志归纳写入长期记忆
@@ -1553,4 +1555,16 @@ async fn api_chat_stream(
         )],
         Body::from_stream(stream),
     ))
+}
+
+/// GET /api/metrics：返回 JSON 格式的 metrics
+async fn api_metrics() -> Json<serde_json::Value> {
+    let metrics = bee::observability::Metrics::global();
+    Json(metrics.to_json())
+}
+
+/// GET /api/metrics/prometheus：返回 Prometheus 格式的 metrics
+async fn api_metrics_prometheus() -> (axum::http::StatusCode, String) {
+    let metrics = bee::observability::Metrics::global();
+    (axum::http::StatusCode::OK, metrics.to_prometheus())
 }

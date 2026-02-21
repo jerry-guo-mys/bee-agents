@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use tokio::time::timeout;
 
 use crate::core::AgentError;
+use crate::observability::Metrics;
 use crate::tools::ToolRegistry;
 
 /// 工具执行器：对每次调用施加超时，并将结果映射为 AgentError
@@ -28,18 +29,25 @@ impl ToolExecutor {
     pub async fn execute(&self, tool_name: &str, args: serde_json::Value) -> Result<String, AgentError> {
         let start = Instant::now();
         let args_preview = args_preview(&args);
+        let metrics = Metrics::global();
+        
         let result = timeout(
             self.timeout,
             self.registry.execute(tool_name, args),
         )
         .await;
 
-        let (ok, outcome): (bool, &str) = match &result {
-            Ok(Ok(_)) => (true, "ok"),
-            Ok(Err(_)) => (false, "error"),
-            Err(_) => (false, "timeout"),
+        let (ok, outcome, success): (bool, &str, bool) = match &result {
+            Ok(Ok(_)) => (true, "ok", true),
+            Ok(Err(_)) => (false, "error", false),
+            Err(_) => (false, "timeout", false),
         };
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration = start.elapsed();
+        let duration_ms = duration.as_millis() as u64;
+        
+        // 记录工具执行 metrics
+        metrics.tools.record_execution(success, duration);
+        
         let audit = serde_json::json!({
             "event": "tool_audit",
             "tool": tool_name,
@@ -49,6 +57,13 @@ impl ToolExecutor {
             "args_preview": args_preview,
         });
         tracing::info!(audit = %audit.to_string(), "tool");
+        tracing::debug!(
+            target: "bee::metrics",
+            tool = tool_name,
+            success = success,
+            duration_ms = duration_ms,
+            "tool_execution"
+        );
 
         match result {
             Ok(Ok(content)) => Ok(content),
