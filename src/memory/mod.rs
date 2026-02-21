@@ -3,11 +3,14 @@
 //! 自我改进：.learnings/ERRORS.md、LEARNINGS.md、FEATURE_REQUESTS.md
 
 pub mod async_io;
+#[cfg(feature = "async-sqlite")]
+pub mod async_persistence;
 pub mod conversation;
 pub mod learnings;
 pub mod long_term;
 pub mod markdown_store;
 pub mod persistence;
+pub mod rag;
 pub mod token_budget;
 pub mod tokenizer;
 pub mod working;
@@ -35,3 +38,8 @@ pub use async_io::{
     file_exists_async, load_lessons_async, load_preferences_async, load_procedural_async,
     read_file_async, write_file_async,
 };
+
+#[cfg(feature = "async-sqlite")]
+pub use async_persistence::{AsyncPersistence, AsyncSqlitePersistence};
+
+pub use rag::{Chunk, Chunker, ChunkingConfig, RagPipeline, RetrievalResult, VectorStore};

@@ -22,6 +22,7 @@ pub mod integrations;
 pub mod llm;
 pub mod memory;
 pub mod observability;
+pub mod plugins;
 pub mod react;
 pub mod skills;
 pub mod tools;
