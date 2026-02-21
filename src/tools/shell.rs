@@ -74,7 +74,20 @@ impl Tool for ShellTool {
     }
 
     fn description(&self) -> &str {
-        "Run a whitelisted shell command. Args: {\"command\": \"ls -la\"}. Allowed: ls, grep, cat, head, tail, wc, find, cargo, rustc (configurable)."
+        "Run a whitelisted shell command. Allowed commands: ls, grep, cat, head, tail, wc, find, cargo, rustc (configurable)."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "The shell command to execute (must be in allowlist)"
+                }
+            },
+            "required": ["command"]
+        })
     }
 
     async fn execute(&self, args: Value) -> Result<String, String> {

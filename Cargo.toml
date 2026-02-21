@@ -70,6 +70,9 @@ regex = "1.10"
 glob = "0.3"
 walkdir = "2.4"
 
+# 中文分词（长期记忆检索）
+jieba-rs = "0.7"
+
 # TOML 配置解析（skills 模块）
 toml = "0.8"
 

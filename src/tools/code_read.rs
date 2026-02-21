@@ -136,17 +136,30 @@ impl Tool for CodeReadTool {
     }
 
     fn description(&self) -> &str {
-        r#"读取代码文件内容，返回带行号的文本。
+        "Read code file contents with line numbers"
+    }
 
-参数:
-- file_path: 文件路径（相对项目根目录或绝对路径）
-- offset: 起始行号（从1开始，可选，默认1）
-- limit: 最大读取行数（可选，默认200）
-
-返回: 带行号的文件内容
-
-示例:
-{"file_path": "src/main.rs", "offset": 1, "limit": 50}"#
+    fn parameters_schema(&self) -> Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "File path (relative to project root or absolute)"
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Starting line number (1-based, default: 1)",
+                    "default": 1
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum lines to read (default: 200)",
+                    "default": 200
+                }
+            },
+            "required": ["file_path"]
+        })
     }
 
     async fn execute(&self, args: Value) -> Result<String, String> {

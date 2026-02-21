@@ -18,6 +18,11 @@ pub trait LongTermMemory: Send + Sync {
     fn enabled(&self) -> bool {
         true
     }
+
+    /// 刷新缓存到持久存储（用于优雅关闭）
+    fn flush(&self) {
+        // 默认为空操作
+    }
 }
 
 /// 空实现：未启用长期记忆时使用
@@ -36,21 +41,15 @@ impl LongTermMemory for NoopLongTerm {
     }
 }
 
-/// 简单内存实现：按关键词重叠检索（无真实向量，适合 MVP）
+/// 简单内存实现：按关键词重叠检索（支持中英文分词）
 #[derive(Clone)]
 pub struct InMemoryLongTerm {
-    /// (text, 小写词集合) 用于简单匹配
+    /// (text, 分词集合) 用于相似度匹配
     store: Arc<std::sync::RwLock<Vec<(String, std::collections::HashSet<String>)>>>,
     max_entries: usize,
 }
 
-/// 将文本切分为小写词集合，用于简单相似度（词重叠数）
-fn tokenize_lower(s: &str) -> std::collections::HashSet<String> {
-    s.split_whitespace()
-        .map(|w| w.to_lowercase())
-        .filter(|w| w.len() > 1)
-        .collect()
-}
+use super::tokenizer;
 
 impl InMemoryLongTerm {
     pub fn new(max_entries: usize) -> Self {
@@ -60,9 +59,9 @@ impl InMemoryLongTerm {
         }
     }
 
-    /// 相似度：查询词与文档词的交集大小
-    fn score(&self, query_tokens: &std::collections::HashSet<String>, doc_tokens: &std::collections::HashSet<String>) -> usize {
-        query_tokens.intersection(doc_tokens).count()
+    /// 相似度：使用 Jaccard 相似度（更好的归一化）
+    fn score(&self, query_tokens: &std::collections::HashSet<String>, doc_tokens: &std::collections::HashSet<String>) -> f32 {
+        tokenizer::jaccard_similarity(query_tokens, doc_tokens)
     }
 }
 
@@ -72,7 +71,8 @@ impl LongTermMemory for InMemoryLongTerm {
         if text.is_empty() {
             return;
         }
-        let tokens = tokenize_lower(text);
+        // 使用智能分词（支持中文）
+        let tokens = tokenizer::tokenize_to_set(text);
         let mut store = self.store.write().unwrap();
         store.push((text.to_string(), tokens));
         let n = store.len();
@@ -82,17 +82,17 @@ impl LongTermMemory for InMemoryLongTerm {
     }
 
     fn search(&self, query: &str, k: usize) -> Vec<String> {
-        let query_tokens = tokenize_lower(query);
+        let query_tokens = tokenizer::tokenize_to_set(query);
         if query_tokens.is_empty() {
             return Vec::new();
         }
         let store = self.store.read().unwrap();
-        let mut scored: Vec<(usize, String)> = store
+        let mut scored: Vec<(f32, String)> = store
             .iter()
             .map(|(text, doc_tokens)| (self.score(&query_tokens, doc_tokens), text.clone()))
-            .filter(|(s, _)| *s > 0)
+            .filter(|(s, _)| *s > 0.0)
             .collect();
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         scored
             .into_iter()
             .take(k)
@@ -182,7 +182,7 @@ impl InMemoryVectorLongTerm {
         }
     }
 
-    /// 将当前 store 写入快照路径（若配置了 snapshot_path）
+    /// 将当前 store 写入快照路径（若配置了 snapshot_path）- 同步版本
     pub fn save_snapshot(&self) {
         if let Some(ref path) = self.snapshot_path {
             let store = self.store.read().unwrap();
@@ -200,6 +200,44 @@ impl InMemoryVectorLongTerm {
             if let Ok(json) = serde_json::to_string_pretty(&entries) {
                 if std::fs::write(path, json).is_ok() {
                     tracing::debug!("vector snapshot saved to {:?}", path);
+                }
+            }
+        }
+    }
+
+    /// 将当前 store 写入快照路径（若配置了 snapshot_path）- 异步版本
+    pub async fn save_snapshot_async(&self) {
+        if let Some(ref path) = self.snapshot_path {
+            let store = self.store.read().unwrap();
+            let entries: Vec<VectorSnapshotEntry> = store
+                .iter()
+                .map(|(text, emb)| VectorSnapshotEntry {
+                    text: text.clone(),
+                    embedding: emb.clone(),
+                })
+                .collect();
+            drop(store);
+            if let Some(parent) = path.parent() {
+                let _ = tokio::fs::create_dir_all(parent).await;
+            }
+            if let Ok(json) = serde_json::to_string_pretty(&entries) {
+                if tokio::fs::write(path, json).await.is_ok() {
+                    tracing::debug!("vector snapshot saved async to {:?}", path);
+                }
+            }
+        }
+    }
+
+    /// 从快照路径加载 - 异步版本
+    pub async fn load_snapshot_async(&self) {
+        if let Some(ref path) = self.snapshot_path {
+            if let Ok(data) = tokio::fs::read_to_string(path).await {
+                if let Ok(entries) = serde_json::from_str::<Vec<VectorSnapshotEntry>>(&data) {
+                    let mut store = self.store.write().unwrap();
+                    for entry in entries {
+                        store.push((entry.text, entry.embedding));
+                    }
+                    tracing::debug!("vector snapshot loaded async {} entries", store.len());
                 }
             }
         }
@@ -243,5 +281,9 @@ impl LongTermMemory for InMemoryVectorLongTerm {
             .collect();
         scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         scored.into_iter().take(k).map(|(_, t)| t).collect()
+    }
+
+    fn flush(&self) {
+        self.save_snapshot();
     }
 }

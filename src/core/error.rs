@@ -30,6 +30,9 @@ pub enum AgentError {
     #[error("Hallucinated tool: {0}")]
     HallucinatedTool(String),
 
+    #[error("Tool not found: {0}")]
+    ToolNotFound(String),
+
     #[error("LLM error: {0}")]
     LlmError(#[from] LlmError),
 

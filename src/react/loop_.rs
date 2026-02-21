@@ -38,6 +38,7 @@ const THINKING_PREVIEW_CHARS: usize = 800;
 const MEMORY_PREVIEW_CHARS: usize = 300;
 
 /// ReAct 循环执行结果：最终回复与当前对话历史
+#[derive(Debug)]
 pub struct ReactResult {
     pub response: String,
     pub messages: Vec<Message>,

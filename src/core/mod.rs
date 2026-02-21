@@ -8,6 +8,7 @@ pub mod error;
 pub mod orchestrator;
 pub mod recovery;
 pub mod session_supervisor;
+pub mod shutdown;
 pub mod state;
 pub mod task_scheduler;
 
@@ -17,6 +18,7 @@ pub use orchestrator::{create_agent, Command};
 pub use recovery::RecoveryEngine;
 pub use session_supervisor::SessionSupervisor;
 pub use state::{AgentPhase, InternalStateSnapshot, UiState};
+pub use shutdown::{run_with_graceful_shutdown, ShutdownCleanup, ShutdownCoordinator, ShutdownManager, ShutdownReason};
 pub use task_scheduler::{TaskKind, TaskScheduler};
 
 /// 白皮书 §3.1：记忆管理器，实现中即 [ContextManager](crate::react::ContextManager)

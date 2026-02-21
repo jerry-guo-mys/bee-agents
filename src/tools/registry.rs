@@ -9,11 +9,27 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 
-/// 工具 trait：名称、描述（供 LLM 理解）、异步执行（args 为 JSON）
+/// 工具 trait：名称、描述（供 LLM 理解）、参数 schema、异步执行（args 为 JSON）
+/// 解决问题 6.2：添加 parameters_schema 方法
 #[async_trait]
 pub trait Tool: Send + Sync {
+    /// 工具名称（用于 JSON 中的 "tool" 字段）
     fn name(&self) -> &str;
+
+    /// 工具描述（供 LLM 理解功能）
     fn description(&self) -> &str;
+
+    /// 参数 JSON Schema（供 LLM 生成正确的参数格式）
+    /// 默认返回空对象，表示无参数或参数格式不限
+    fn parameters_schema(&self) -> Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {},
+            "required": []
+        })
+    }
+
+    /// 执行工具
     async fn execute(&self, args: Value) -> Result<String, String>;
 }
 
@@ -55,6 +71,7 @@ impl ToolRegistry {
     }
 
     /// 动态生成工具 schema JSON（解决问题 6.1：Schema 与实际注册工具匹配）
+    /// 包含参数 schema（解决问题 6.2）
     pub fn to_schema_json(&self) -> String {
         let tools: Vec<serde_json::Value> = self
             .tools
@@ -62,7 +79,8 @@ impl ToolRegistry {
             .map(|(name, tool)| {
                 serde_json::json!({
                     "name": name,
-                    "description": tool.description()
+                    "description": tool.description(),
+                    "parameters": tool.parameters_schema()
                 })
             })
             .collect();

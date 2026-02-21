@@ -15,7 +15,20 @@ impl Tool for EchoTool {
     }
 
     fn description(&self) -> &str {
-        "Echo text (for testing). Args: {\"text\": \"message\"}"
+        "Echo text (for testing)"
+    }
+
+    fn parameters_schema(&self) -> Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "The text to echo"
+                }
+            },
+            "required": ["text"]
+        })
     }
 
     async fn execute(&self, args: Value) -> Result<String, String> {

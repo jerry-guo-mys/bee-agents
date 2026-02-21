@@ -25,6 +25,9 @@ pub struct AppConfig {
     pub heartbeat: HeartbeatSection,
     #[serde(default)]
     pub web: WebSection,
+    /// Critic 配置（解决问题 4.3：配置化与模型分离）
+    #[serde(default)]
+    pub critic: CriticSection,
 }
 
 /// [web] 段：bee-web 服务端口等（可被环境变量 BEE__WEB__PORT 覆盖）
@@ -104,8 +107,58 @@ pub enum SafeMode {
     Permissive,
 }
 
+/// [critic] 段：Critic 配置（解决问题 4.3）
+#[derive(Debug, Clone, Deserialize)]
+pub struct CriticSection {
+    /// 是否启用 Critic
+    #[serde(default = "default_critic_enabled")]
+    pub enabled: bool,
+    /// Critic 使用的模型（为空时使用与 Planner 相同的模型）
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Critic 使用的 API 提供商（为空时使用与 Planner 相同的提供商）
+    #[serde(default)]
+    pub provider: Option<String>,
+    /// 自定义 Critic prompt 模板
+    #[serde(default = "default_critic_prompt")]
+    pub prompt_template: String,
+    /// 是否对每次工具调用都进行评估（false 时仅评估关键工具）
+    #[serde(default)]
+    pub evaluate_all_tools: bool,
+    /// 仅评估的工具列表（为空时评估所有，evaluate_all_tools=false 时生效）
+    #[serde(default)]
+    pub evaluate_tools: Vec<String>,
+}
 
+fn default_critic_enabled() -> bool {
+    false
+}
 
+fn default_critic_prompt() -> String {
+    r#"You are a Critic evaluating tool execution results.
+
+Goal: {goal}
+Tool used: {tool}
+Observation: {observation}
+
+If the result looks correct and helpful for achieving the goal, respond with "OK".
+If there's an issue or better approach, briefly explain the problem.
+
+Response:"#.to_string()
+}
+
+impl Default for CriticSection {
+    fn default() -> Self {
+        Self {
+            enabled: default_critic_enabled(),
+            model: None,
+            provider: None,
+            prompt_template: default_critic_prompt(),
+            evaluate_all_tools: false,
+            evaluate_tools: vec![],
+        }
+    }
+}
 
 /// [evolution] 段：自我进化相关（参见 docs/EVOLUTION.md）
 #[derive(Debug, Clone, Deserialize, Default)]

@@ -127,26 +127,47 @@ impl AgentBuilder {
         crate::core::orchestrator::create_llm_from_config(&self.config)
     }
 
-    /// 构建 Critic（可选）
-    pub fn build_critic(&self, llm: Arc<dyn LlmClient>) -> Option<Critic> {
+    /// 构建 Critic（可选，解决问题 4.3：配置化与模型分离）
+    pub fn build_critic(&self, planner_llm: Arc<dyn LlmClient>) -> Option<Critic> {
+        // 检查配置是否启用 Critic
+        if !self.config.critic.enabled && !self.enable_critic {
+            return None;
+        }
+        // enable_critic 为 false 时也不创建
         if !self.enable_critic {
             return None;
         }
 
+        // 如果配置了独立的 Critic 模型，使用独立的 LLM 实例
+        let critic_llm: Arc<dyn LlmClient> = if let Some(ref model) = self.config.critic.model {
+            let provider = self.config.critic.provider.as_deref()
+                .unwrap_or(&self.config.llm.provider);
+            
+            if provider.to_lowercase() == "deepseek" {
+                Arc::new(crate::llm::create_deepseek_client(Some(model)))
+            } else {
+                let base_url = self.config.llm.base_url.as_deref();
+                let api_key = std::env::var("OPENAI_API_KEY").ok();
+                Arc::new(crate::llm::OpenAiClient::new(base_url, model, api_key.as_deref()))
+            }
+        } else {
+            planner_llm
+        };
+
+        // 尝试从文件加载 prompt，否则使用配置中的模板
         let critic_prompt = [
             "config/prompts/critic.md",
             "../config/prompts/critic.md",
         ]
         .into_iter()
         .find_map(|p| std::fs::read_to_string(p).ok())
-        .unwrap_or_else(|| {
-            "The user wanted: {goal}\nYou executed tool: {tool} with result: {observation}\n\
-             Is this result reasonable? If yes, respond with exactly: OK\n\
-             If not, provide a brief correction (one sentence)."
-                .to_string()
-        });
+        .unwrap_or_else(|| self.config.critic.prompt_template.clone());
 
-        Some(Critic::new(llm, critic_prompt))
+        // 创建修改后的配置副本，使用文件中的 prompt
+        let mut critic_config = self.config.critic.clone();
+        critic_config.prompt_template = critic_prompt;
+
+        Some(Critic::from_config(critic_llm, &critic_config))
     }
 
     /// 构建技能缓存

@@ -2,14 +2,19 @@
 //! 支持 Markdown 文件存储：短期按日日志 memory/logs/YYYY-MM-DD.md，长期 memory/long-term.md
 //! 自我改进：.learnings/ERRORS.md、LEARNINGS.md、FEATURE_REQUESTS.md
 
+pub mod async_io;
 pub mod conversation;
 pub mod learnings;
 pub mod long_term;
 pub mod markdown_store;
 pub mod persistence;
+pub mod token_budget;
+pub mod tokenizer;
 pub mod working;
 
-pub use conversation::{ConversationMemory, Message, Role};
+pub use conversation::{
+    ConversationMemory, Message, MessageImportance, PruneConfig, PruneResult, Role,
+};
 pub use long_term::{InMemoryLongTerm, InMemoryVectorLongTerm, LongTermMemory, NoopLongTerm};
 pub use markdown_store::{
     append_daily_log, append_lesson, append_preference, append_procedural, consolidate_memory,
@@ -22,4 +27,11 @@ pub use learnings::{
     record_error, record_feature_request, record_learning, soul_path, tools_guide_path,
 };
 pub use persistence::{ConversationPersistence, SqlitePersistence};
+pub use token_budget::{MemoryCache, MemorySegment, TokenBudget, TokenEstimator};
 pub use working::WorkingMemory;
+pub use async_io::{
+    append_daily_log_async, append_heartbeat_log_async, append_lesson_async,
+    append_preference_async, append_procedural_async, blocking_read, blocking_write,
+    file_exists_async, load_lessons_async, load_preferences_async, load_procedural_async,
+    read_file_async, write_file_async,
+};
