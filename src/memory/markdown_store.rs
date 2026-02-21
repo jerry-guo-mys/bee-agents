@@ -279,6 +279,7 @@ pub fn append_daily_log(
             Role::User => ("User", m.content.as_str()),
             Role::Assistant => ("Assistant", m.content.as_str()),
             Role::System => ("System", m.content.as_str()),
+            Role::Tool => ("Tool", m.content.as_str()),
         };
         content.push_str(&format!("### {}\n\n{}\n\n", role, body));
     }

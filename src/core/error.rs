@@ -4,9 +4,14 @@
 
 use thiserror::Error;
 
+use crate::llm::LlmError;
+
 /// Agent 运行过程中可能出现的错误（网络、解析、工具、路径逃逸等）
 #[derive(Error, Debug)]
 pub enum AgentError {
+    #[error("Cancelled by user")]
+    Cancelled,
+
     #[error("Network timeout")]
     NetworkTimeout,
 
@@ -26,7 +31,7 @@ pub enum AgentError {
     HallucinatedTool(String),
 
     #[error("LLM error: {0}")]
-    LlmError(String),
+    LlmError(#[from] LlmError),
 
     /// 恢复引擎建议降级模型（如 LLM 持续失败时），由上层决定是否切换轻量模型
     #[error("Suggest downgrade model: {0}")]

@@ -8,6 +8,6 @@ pub mod planner;
 
 pub use critic::{Critic, CriticResult};
 pub use events::ReactEvent;
-pub use loop_::{compact_context, react_loop};
+pub use loop_::{compact_context, react_loop, react_loop_v2, ReactResult, ReactSession};
 pub use memory::ContextManager;
 pub use planner::{parse_llm_output, Planner};

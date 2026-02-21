@@ -211,3 +211,91 @@ impl ContextManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_context_manager_new() {
+        let ctx = ContextManager::new(10);
+        assert!(ctx.messages().is_empty());
+        assert!(ctx.long_term.is_none());
+    }
+
+    #[test]
+    fn test_context_manager_push_message() {
+        let mut ctx = ContextManager::new(10);
+        ctx.push_message(Message::user("Hello"));
+        ctx.push_message(Message::assistant("Hi there!"));
+        assert_eq!(ctx.messages().len(), 2);
+    }
+
+    #[test]
+    fn test_context_manager_set_messages() {
+        let mut ctx = ContextManager::new(10);
+        ctx.push_message(Message::user("Hello"));
+        ctx.push_message(Message::assistant("Hi"));
+        ctx.set_messages(vec![Message::system("Summary")]);
+        assert_eq!(ctx.messages().len(), 1);
+    }
+
+    #[test]
+    fn test_context_manager_working_memory() {
+        let mut ctx = ContextManager::new(10);
+        ctx.working.set_goal("Find files");
+        ctx.working.add_attempt("ls -> directory listing");
+        let section = ctx.working_memory_section();
+        assert!(section.contains("Find files"));
+        assert!(section.contains("ls"));
+    }
+
+    #[test]
+    fn test_context_manager_long_term_disabled() {
+        let ctx = ContextManager::new(10);
+        let section = ctx.long_term_section("query");
+        assert!(section.is_empty());
+    }
+
+    #[test]
+    fn test_context_manager_lessons_no_path() {
+        let ctx = ContextManager::new(10);
+        let section = ctx.lessons_section();
+        assert!(section.is_empty());
+    }
+
+    #[test]
+    fn test_context_manager_procedural_no_path() {
+        let ctx = ContextManager::new(10);
+        let section = ctx.procedural_section();
+        assert!(section.is_empty());
+    }
+
+    #[test]
+    fn test_context_manager_preferences_no_path() {
+        let ctx = ContextManager::new(10);
+        let section = ctx.preferences_section();
+        assert!(section.is_empty());
+    }
+
+    #[test]
+    fn test_context_manager_to_llm_messages() {
+        let mut ctx = ContextManager::new(10);
+        ctx.push_message(Message::user("Question"));
+        ctx.push_message(Message::assistant("Answer"));
+        let llm_msgs = ctx.to_llm_messages();
+        assert_eq!(llm_msgs.len(), 2);
+    }
+
+    #[test]
+    fn test_context_manager_auto_lesson_flag() {
+        let ctx = ContextManager::new(10).with_auto_lesson_on_hallucination(false);
+        assert!(!ctx.auto_lesson_on_hallucination);
+    }
+
+    #[test]
+    fn test_context_manager_record_tool_success_flag() {
+        let ctx = ContextManager::new(10).with_record_tool_success(true);
+        assert!(ctx.record_tool_success);
+    }
+}

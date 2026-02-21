@@ -5,7 +5,7 @@
 use async_trait::async_trait;
 use futures_util::stream;
 
-use crate::llm::LlmClient;
+use crate::llm::{LlmClient, LlmError};
 use crate::memory::Message;
 
 /// Mock 客户端：回显用户最后一条消息
@@ -14,7 +14,7 @@ pub struct MockLlmClient;
 
 #[async_trait]
 impl LlmClient for MockLlmClient {
-    async fn complete(&self, messages: &[Message]) -> Result<String, String> {
+    async fn complete(&self, messages: &[Message]) -> Result<String, LlmError> {
         let last_user = messages
             .iter()
             .rev()
@@ -31,7 +31,7 @@ impl LlmClient for MockLlmClient {
     async fn complete_stream(
         &self,
         messages: &[Message],
-    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<String, String>> + Send>>, String> {
+    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<String, LlmError>> + Send>>, LlmError> {
         let content = self.complete(messages).await?;
         Ok(Box::pin(stream::iter(vec![Ok(content)])))
     }

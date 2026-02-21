@@ -1,7 +1,9 @@
 //! OpenAI 兼容 API 客户端
 //!
 //! 通过 async_openai 调用任意 OpenAI 兼容端点（可配置 base_url）；支持 DeepSeek、OpenAI、自建代理等。
+//! 支持真正的流式输出（解决问题 3.1）。
 
+use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -13,9 +15,9 @@ use async_openai::types::chat::{
 };
 use async_openai::Client;
 use async_trait::async_trait;
-use futures_util::stream;
+use futures_util::{Stream, StreamExt};
 
-use crate::llm::LlmClient;
+use crate::llm::{LlmClient, LlmError};
 use crate::memory::Message;
 
 /// Token 使用统计（累计值）
@@ -103,8 +105,36 @@ impl OpenAiClient {
                         .build()
                         .unwrap(),
                 ),
+                crate::memory::Role::Tool => ChatCompletionRequestMessage::User(
+                    ChatCompletionRequestUserMessageArgs::default()
+                        .content(format!("[Tool Result]\n{}", m.content))
+                        .build()
+                        .unwrap(),
+                ),
             })
             .collect()
+    }
+}
+
+/// 将 async_openai 错误转换为 LlmError
+fn convert_openai_error(e: async_openai::error::OpenAIError) -> LlmError {
+    let msg = e.to_string();
+    let msg_lower = msg.to_lowercase();
+
+    if msg_lower.contains("unauthorized") || msg_lower.contains("invalid api key") {
+        LlmError::AuthError(msg)
+    } else if msg_lower.contains("rate limit") || msg_lower.contains("429") {
+        LlmError::RateLimited { retry_after_ms: 60000 }
+    } else if msg_lower.contains("context length") || msg_lower.contains("maximum context") {
+        LlmError::ContextLengthExceeded { tokens: 0, max_tokens: 0 }
+    } else if msg_lower.contains("model") && msg_lower.contains("not found") {
+        LlmError::ModelNotFound { model: msg }
+    } else if msg_lower.contains("timeout") {
+        LlmError::Timeout { timeout_ms: 30000 }
+    } else if msg_lower.contains("500") || msg_lower.contains("502") || msg_lower.contains("503") {
+        LlmError::ServerError { status: 500, message: msg }
+    } else {
+        LlmError::ApiError(msg)
     }
 }
 
@@ -114,19 +144,19 @@ impl LlmClient for OpenAiClient {
         self.usage.get()
     }
 
-    async fn complete(&self, messages: &[Message]) -> Result<String, String> {
+    async fn complete(&self, messages: &[Message]) -> Result<String, LlmError> {
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.model)
             .messages(self.to_openai_messages(messages))
             .build()
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| LlmError::InvalidRequest(e.to_string()))?;
 
         let response = self
             .client
             .chat()
             .create(request)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(convert_openai_error)?;
 
         // 提取 token 使用统计
         if let Some(usage) = &response.usage {
@@ -148,8 +178,33 @@ impl LlmClient for OpenAiClient {
     async fn complete_stream(
         &self,
         messages: &[Message],
-    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<String, String>> + Send>>, String> {
-        let content = self.complete(messages).await?;
-        Ok(Box::pin(stream::iter(vec![Ok(content)])))
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<String, LlmError>> + Send>>, LlmError> {
+        let request = CreateChatCompletionRequestArgs::default()
+            .model(&self.model)
+            .messages(self.to_openai_messages(messages))
+            .stream(true)
+            .build()
+            .map_err(|e| LlmError::InvalidRequest(e.to_string()))?;
+
+        let response_stream = self
+            .client
+            .chat()
+            .create_stream(request)
+            .await
+            .map_err(convert_openai_error)?;
+
+        let mapped_stream = response_stream.map(|result| {
+            result
+                .map_err(convert_openai_error)
+                .map(|response| {
+                    response
+                        .choices
+                        .first()
+                        .and_then(|c| c.delta.content.clone())
+                        .unwrap_or_default()
+                })
+        });
+
+        Ok(Box::pin(mapped_stream))
     }
 }

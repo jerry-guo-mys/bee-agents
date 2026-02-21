@@ -44,6 +44,7 @@ impl ConversationPersistence {
                     Role::User => "user",
                     Role::Assistant => "assistant",
                     Role::System => "system",
+                    Role::Tool => "tool",
                 }
                 .to_string(),
                 content: m.content.clone(),
@@ -132,6 +133,7 @@ impl SqlitePersistence {
             Role::User => "user",
             Role::Assistant => "assistant",
             Role::System => "system",
+            Role::Tool => "tool",
         };
         let now = Utc::now().to_rfc3339();
         

@@ -1327,6 +1327,7 @@ async fn api_history(
                 Role::User => "user".to_string(),
                 Role::Assistant => "assistant".to_string(),
                 Role::System => "system".to_string(),
+                Role::Tool => "tool".to_string(),
             },
             content: m.content.clone(),
         })

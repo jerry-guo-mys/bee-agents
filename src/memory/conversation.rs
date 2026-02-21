@@ -10,6 +10,8 @@ pub enum Role {
     User,
     Assistant,
     System,
+    /// 工具调用结果（解决问题 4.2：分离工具调用与对话历史）
+    Tool,
 }
 
 /// 单条消息
@@ -37,6 +39,14 @@ impl Message {
     pub fn system(content: impl Into<String>) -> Self {
         Self {
             role: Role::System,
+            content: content.into(),
+        }
+    }
+
+    /// 工具调用结果消息
+    pub fn tool(content: impl Into<String>) -> Self {
+        Self {
+            role: Role::Tool,
             content: content.into(),
         }
     }

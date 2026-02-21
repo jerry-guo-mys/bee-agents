@@ -139,6 +139,7 @@ pub fn draw(
             Role::User => ("You ", Color::Cyan),
             Role::Assistant => ("Bee ", Color::Green),
             Role::System => ("Sys ", Color::Gray),
+            Role::Tool => ("🔧  ", Color::Yellow),
         };
         let display_text = truncate_for_display(&m.content);
         let wrapped = wrap_text(&display_text, content_width.max(40));

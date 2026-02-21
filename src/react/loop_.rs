@@ -43,6 +43,89 @@ pub struct ReactResult {
     pub messages: Vec<Message>,
 }
 
+/// ReAct 会话配置（解决问题 1.3：将 12 个参数封装为结构体）
+pub struct ReactSession<'a> {
+    /// Planner（必需）
+    pub planner: &'a Planner,
+    /// 工具执行器（必需）
+    pub executor: &'a ToolExecutor,
+    /// 恢复引擎（必需）
+    pub recovery: &'a RecoveryEngine,
+    /// 取消令牌（必需）
+    pub cancel_token: tokio_util::sync::CancellationToken,
+    /// 可选：工具结果校验
+    pub critic: Option<&'a Critic>,
+    /// 可选：任务调度器
+    pub task_scheduler: Option<&'a TaskScheduler>,
+    /// 可选：流式输出通道
+    pub stream_tx: Option<&'a broadcast::Sender<String>>,
+    /// 可选：事件推送通道
+    pub event_tx: Option<&'a tokio::sync::mpsc::UnboundedSender<ReactEvent>>,
+    /// 可选：覆盖系统提示词（多助手场景）
+    pub system_prompt_override: Option<&'a str>,
+    /// 可选：限制可用工具列表
+    pub allowed_tools: Option<&'a [String]>,
+}
+
+impl<'a> ReactSession<'a> {
+    /// 创建最小配置的 ReactSession
+    pub fn new(
+        planner: &'a Planner,
+        executor: &'a ToolExecutor,
+        recovery: &'a RecoveryEngine,
+        cancel_token: tokio_util::sync::CancellationToken,
+    ) -> Self {
+        Self {
+            planner,
+            executor,
+            recovery,
+            cancel_token,
+            critic: None,
+            task_scheduler: None,
+            stream_tx: None,
+            event_tx: None,
+            system_prompt_override: None,
+            allowed_tools: None,
+        }
+    }
+
+    /// 设置 Critic
+    pub fn with_critic(mut self, critic: &'a Critic) -> Self {
+        self.critic = Some(critic);
+        self
+    }
+
+    /// 设置任务调度器
+    pub fn with_task_scheduler(mut self, scheduler: &'a TaskScheduler) -> Self {
+        self.task_scheduler = Some(scheduler);
+        self
+    }
+
+    /// 设置流式输出通道
+    pub fn with_stream_tx(mut self, tx: &'a broadcast::Sender<String>) -> Self {
+        self.stream_tx = Some(tx);
+        self
+    }
+
+    /// 设置事件推送通道
+    pub fn with_event_tx(mut self, tx: &'a tokio::sync::mpsc::UnboundedSender<ReactEvent>) -> Self {
+        self.event_tx = Some(tx);
+        self
+    }
+
+    /// 设置系统提示词覆盖
+    pub fn with_system_prompt(mut self, prompt: &'a str) -> Self {
+        self.system_prompt_override = Some(prompt);
+        self
+    }
+
+    /// 设置允许的工具列表
+    pub fn with_allowed_tools(mut self, tools: &'a [String]) -> Self {
+        self.allowed_tools = Some(tools);
+        self
+    }
+}
+
 fn send_event(tx: &Option<&tokio::sync::mpsc::UnboundedSender<ReactEvent>>, ev: ReactEvent) {
     if let Some(t) = tx {
         let _ = t.send(ev);
@@ -71,10 +154,63 @@ pub async fn compact_context(
     Ok(())
 }
 
-/// 执行 ReAct 循环：用户输入 -> 拼 system(working+long_term) -> plan -> 解析输出 -> 若 ToolCall 则执行并写回 Observation（可选 Critic 校验）-> 若 Response 则返回并写入长期记忆
+/// 执行 ReAct 循环（新版本，使用 ReactSession 结构体）
+///
+/// 用户输入 -> 拼 system(working+long_term) -> plan -> 解析输出 ->
+/// 若 ToolCall 则执行并写回 Observation（可选 Critic 校验）->
+/// 若 Response 则返回并写入长期记忆
+pub async fn react_loop_v2(
+    session: &ReactSession<'_>,
+    context: &mut ContextManager,
+    user_input: &str,
+) -> Result<ReactResult, AgentError> {
+    let planner = session.planner;
+    let executor = session.executor;
+    let recovery = session.recovery;
+    let cancel_token = session.cancel_token.clone();
+    let critic = session.critic;
+    let task_scheduler = session.task_scheduler;
+    let stream_tx = session.stream_tx;
+    let event_tx = session.event_tx;
+    let system_prompt_override = session.system_prompt_override;
+    let allowed_tools = session.allowed_tools;
+
+    react_loop_impl(
+        planner, executor, recovery, context, user_input,
+        stream_tx, event_tx, cancel_token, critic, task_scheduler,
+        system_prompt_override, allowed_tools,
+    ).await
+}
+
+/// 执行 ReAct 循环（兼容版本，保留原有 12 参数签名）
+///
 /// 若提供 system_prompt_override，则用其替代 planner 的 base_system_prompt（用于多助手场景）。
 /// allowed_tools: 该智能体可用的工具名列表；为 None 或空时使用 executor 全部工具。
+#[allow(clippy::too_many_arguments)]
 pub async fn react_loop(
+    planner: &Planner,
+    executor: &ToolExecutor,
+    recovery: &RecoveryEngine,
+    context: &mut ContextManager,
+    user_input: &str,
+    stream_tx: Option<&broadcast::Sender<String>>,
+    event_tx: Option<&tokio::sync::mpsc::UnboundedSender<ReactEvent>>,
+    cancel_token: tokio_util::sync::CancellationToken,
+    critic: Option<&Critic>,
+    task_scheduler: Option<&TaskScheduler>,
+    system_prompt_override: Option<&str>,
+    allowed_tools: Option<&[String]>,
+) -> Result<ReactResult, AgentError> {
+    react_loop_impl(
+        planner, executor, recovery, context, user_input,
+        stream_tx, event_tx, cancel_token, critic, task_scheduler,
+        system_prompt_override, allowed_tools,
+    ).await
+}
+
+/// ReAct 循环内部实现
+#[allow(clippy::too_many_arguments)]
+async fn react_loop_impl(
     planner: &Planner,
     executor: &ToolExecutor,
     recovery: &RecoveryEngine,
@@ -108,7 +244,7 @@ pub async fn react_loop(
 
         if cancel_token.is_cancelled() {
             send_event(&event_tx, ReactEvent::Error { text: "Cancelled by user".to_string() });
-            return Err(AgentError::LlmError("Cancelled by user".to_string()));
+            return Err(AgentError::Cancelled);
         }
 
         if step >= MAX_REACT_STEPS {

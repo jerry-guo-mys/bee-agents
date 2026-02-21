@@ -137,3 +137,81 @@ impl Planner {
             .map_err(AgentError::LlmError)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_llm_output_tool_call() {
+        let output = r#"{"tool": "cat", "args": {"path": "src/main.rs"}}"#;
+        let result = parse_llm_output(output).unwrap();
+        match result {
+            PlannerOutput::ToolCall(tc) => {
+                assert_eq!(tc.tool, "cat");
+                assert_eq!(tc.args["path"], "src/main.rs");
+            }
+            _ => panic!("Expected ToolCall"),
+        }
+    }
+
+    #[test]
+    fn test_parse_llm_output_json_in_markdown() {
+        let output = r#"
+Let me read that file for you.
+
+```json
+{"tool": "cat", "args": {"path": "Cargo.toml"}}
+```
+"#;
+        let result = parse_llm_output(output).unwrap();
+        match result {
+            PlannerOutput::ToolCall(tc) => {
+                assert_eq!(tc.tool, "cat");
+                assert_eq!(tc.args["path"], "Cargo.toml");
+            }
+            _ => panic!("Expected ToolCall"),
+        }
+    }
+
+    #[test]
+    fn test_parse_llm_output_plain_response() {
+        let output = "Hello! How can I help you today?";
+        let result = parse_llm_output(output).unwrap();
+        match result {
+            PlannerOutput::Response(s) => {
+                assert_eq!(s, output);
+            }
+            _ => panic!("Expected Response"),
+        }
+    }
+
+    #[test]
+    fn test_parse_llm_output_empty_tool() {
+        let output = r#"{"tool": "", "args": {}}"#;
+        let result = parse_llm_output(output).unwrap();
+        match result {
+            PlannerOutput::Response(_) => {}
+            _ => panic!("Expected Response for empty tool"),
+        }
+    }
+
+    #[test]
+    fn test_parse_llm_output_nested_json() {
+        let output = r#"{"tool": "shell", "args": {"command": "echo '{\"key\": \"value\"}'"}}"#;
+        let result = parse_llm_output(output).unwrap();
+        match result {
+            PlannerOutput::ToolCall(tc) => {
+                assert_eq!(tc.tool, "shell");
+            }
+            _ => panic!("Expected ToolCall"),
+        }
+    }
+
+    #[test]
+    fn test_parse_llm_output_invalid_json() {
+        let output = r#"{"tool": "cat", "args": {"path":"#;
+        let result = parse_llm_output(output);
+        assert!(result.is_err());
+    }
+}
