@@ -186,6 +186,54 @@
     .drag-overlay { position: fixed; inset: 0; background: rgba(59, 130, 246, 0.15); backdrop-filter: blur(2px); z-index: 999; display: none; align-items: center; justify-content: center; }
     .drag-overlay.active { display: flex; }
     
+    /* Settings Modal */
+    .settings-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 1001; display: none; align-items: center; justify-content: center; }
+    .settings-modal.active { display: flex; }
+    .settings-panel { background: white; border-radius: 16px; width: 90%; max-width: 480px; max-height: 85vh; overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.25); animation: modalEnter 0.2s ease-out; }
+    .dark .settings-panel { background: #1F2937; }
+    @keyframes modalEnter { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    .settings-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #E5E7EB; }
+    .dark .settings-header { border-color: #374151; }
+    .settings-body { padding: 16px 24px; overflow-y: auto; max-height: calc(85vh - 130px); }
+    .settings-footer { padding: 16px 24px; border-top: 1px solid #E5E7EB; text-align: center; }
+    .dark .settings-footer { border-color: #374151; }
+    .settings-section { margin-bottom: 24px; }
+    .settings-section:last-child { margin-bottom: 0; }
+    .settings-section-title { font-size: 0.75rem; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+    .dark .settings-section-title { color: #9CA3AF; }
+    .settings-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #F3F4F6; }
+    .settings-item:last-child { border-bottom: none; }
+    .dark .settings-item { border-color: #374151; }
+    .settings-item-label { font-size: 0.9rem; color: #374151; }
+    .dark .settings-item-label { color: #E5E7EB; }
+    .settings-item-desc { font-size: 0.75rem; color: #9CA3AF; margin-top: 2px; }
+    .settings-toggle { position: relative; width: 44px; height: 24px; background: #D1D5DB; border-radius: 12px; cursor: pointer; transition: background 0.2s; }
+    .settings-toggle.active { background: #3B82F6; }
+    .settings-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    .settings-toggle.active::after { transform: translateX(20px); }
+    .settings-select { padding: 8px 12px; border: 1px solid #E5E7EB; border-radius: 8px; background: white; font-size: 0.85rem; color: #374151; cursor: pointer; min-width: 140px; }
+    .dark .settings-select { background: #374151; border-color: #4B5563; color: #E5E7EB; }
+    .settings-btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    .settings-btn-primary { background: #3B82F6; color: white; }
+    .settings-btn-primary:hover { background: #2563EB; }
+    .settings-btn-danger { background: #FEE2E2; color: #DC2626; }
+    .settings-btn-danger:hover { background: #FECACA; }
+    .dark .settings-btn-danger { background: rgba(220,38,38,0.2); }
+    .settings-slider { width: 120px; height: 6px; -webkit-appearance: none; background: #E5E7EB; border-radius: 3px; outline: none; }
+    .dark .settings-slider { background: #4B5563; }
+    .settings-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: #3B82F6; border-radius: 50%; cursor: pointer; }
+    .settings-models-list { max-height: 200px; overflow-y: auto; border: 1px solid #E5E7EB; border-radius: 8px; padding: 8px; }
+    .dark .settings-models-list { border-color: #374151; }
+    .settings-model-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+    .settings-model-item:hover { background: #F3F4F6; }
+    .dark .settings-model-item:hover { background: #374151; }
+    .settings-model-checkbox { width: 18px; height: 18px; border: 2px solid #D1D5DB; border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+    .dark .settings-model-checkbox { border-color: #4B5563; }
+    .settings-model-checkbox.checked { background: #3B82F6; border-color: #3B82F6; }
+    .settings-model-checkbox.checked::after { content: '✓'; color: white; font-size: 12px; font-weight: bold; }
+    .settings-model-name { font-size: 0.85rem; color: #374151; }
+    .dark .settings-model-name { color: #E5E7EB; }
+    
     .scroll-bottom { 
       position: fixed; 
       bottom: 120px; 
@@ -397,6 +445,124 @@
   </main>
 
   <div id="toast-container" class="toast-container"></div>
+  
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="settings-modal">
+    <div class="settings-panel">
+      <div class="settings-header">
+        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">设置</h2>
+        <button id="settings-close" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+          <span class="material-icons-outlined">close</span>
+        </button>
+      </div>
+      <div class="settings-body">
+        <!-- Appearance -->
+        <div class="settings-section">
+          <div class="settings-section-title">外观</div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-item-label">主题</div>
+              <div class="settings-item-desc">选择界面颜色主题</div>
+            </div>
+            <select id="settings-theme" class="settings-select">
+              <option value="system">跟随系统</option>
+              <option value="light">浅色</option>
+              <option value="dark">深色</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Chat -->
+        <div class="settings-section">
+          <div class="settings-section-title">对话</div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-item-label">打字机效果</div>
+              <div class="settings-item-desc">消息逐字显示动画</div>
+            </div>
+            <div id="settings-typewriter-toggle" class="settings-toggle active"></div>
+          </div>
+          <div class="settings-item" id="typewriter-speed-row">
+            <div>
+              <div class="settings-item-label">打字速度</div>
+              <div class="settings-item-desc">调整动画速度</div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-400">慢</span>
+              <input type="range" id="settings-typewriter-speed" class="settings-slider" min="0.2" max="2" step="0.1" value="1">
+              <span class="text-xs text-gray-400">快</span>
+            </div>
+          </div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-item-label">自动滚动</div>
+              <div class="settings-item-desc">新消息时自动滚动到底部</div>
+            </div>
+            <div id="settings-autoscroll-toggle" class="settings-toggle active"></div>
+          </div>
+        </div>
+        
+        <!-- Default -->
+        <div class="settings-section">
+          <div class="settings-section-title">默认设置</div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-item-label">默认助手</div>
+              <div class="settings-item-desc">新对话使用的助手</div>
+            </div>
+            <select id="settings-default-assistant" class="settings-select">
+              <option value="auto">自动</option>
+            </select>
+          </div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-item-label">默认模型</div>
+              <div class="settings-item-desc">新对话使用的模型</div>
+            </div>
+            <select id="settings-default-model" class="settings-select">
+              <option value="default">默认</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Model Selection -->
+        <div class="settings-section">
+          <div class="settings-section-title">可用模型</div>
+          <div class="settings-item-desc" style="margin-bottom: 12px;">选择在模型列表中显示的模型</div>
+          <div id="settings-models-list" class="settings-models-list">
+            <!-- Dynamic model checkboxes -->
+          </div>
+          <div class="flex gap-2 mt-3">
+            <button id="settings-models-all" class="settings-btn text-xs px-3 py-1.5" style="background: #E5E7EB; color: #374151;">全选</button>
+            <button id="settings-models-none" class="settings-btn text-xs px-3 py-1.5" style="background: #E5E7EB; color: #374151;">全不选</button>
+          </div>
+        </div>
+        
+        <!-- Data -->
+        <div class="settings-section">
+          <div class="settings-section-title">数据管理</div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-item-label">清除当前对话</div>
+              <div class="settings-item-desc">删除当前会话的所有消息</div>
+            </div>
+            <button id="settings-clear-current" class="settings-btn settings-btn-danger">清除</button>
+          </div>
+          <div class="settings-item">
+            <div>
+              <div class="settings-item-label">清除所有对话</div>
+              <div class="settings-item-desc">删除所有会话记录</div>
+            </div>
+            <button id="settings-clear-all" class="settings-btn settings-btn-danger">全部清除</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-footer">
+        <p class="text-xs text-gray-400 dark:text-gray-500">Bee Personal AI v0.1.0</p>
+      </div>
+    </div>
+  </div>
+  
   <div id="drag-overlay" class="drag-overlay">
     <div class="bg-white dark:bg-gray-800 border-2 border-dashed border-blue-500 rounded-2xl p-12 text-center">
       <span class="material-icons-outlined text-5xl text-blue-500 mb-4">cloud_upload</span>
@@ -999,7 +1165,10 @@
 
     function renderModelDropdown() {
       const dropdown = document.getElementById('model-dropdown');
-      dropdown.innerHTML = models.map(m => `
+      const enabledModels = getEnabledModels();
+      const filteredModels = models.filter(m => enabledModels.includes(m.id));
+      
+      dropdown.innerHTML = filteredModels.map(m => `
         <div class="dropdown-item ${m.id === selectedModel ? 'selected' : ''}" data-id="${m.id}" data-name="${m.name}">
           <span class="material-icons-outlined text-sm text-yellow-500">auto_awesome</span>
           <span>${escapeHtml(m.name)}</span>
@@ -1017,7 +1186,18 @@
         });
       });
       const selModel = document.getElementById('selected-model');
-      if (selModel) selModel.textContent = models.find(m => m.id === selectedModel)?.name || selectedModel;
+      const currentModel = filteredModels.find(m => m.id === selectedModel) || filteredModels[0];
+      if (selModel && currentModel) selModel.textContent = currentModel.name;
+    }
+    
+    function getEnabledModels() {
+      const saved = localStorage.getItem('bee_enabled_models');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+      return models.map(m => m.id);
     }
 
     function initSearch() {
@@ -1174,8 +1354,220 @@
 
     document.getElementById('mode-btn')?.addEventListener('click', toggleTheme);
 
-    document.getElementById('config-btn')?.addEventListener('click', () => {
-      showToast('Configuration panel coming soon', 'info');
+    document.getElementById('config-btn')?.addEventListener('click', openSettings);
+    
+    // Settings Panel
+    function openSettings() {
+      const modal = document.getElementById('settings-modal');
+      modal.classList.add('active');
+      loadSettingsValues();
+    }
+    
+    function closeSettings() {
+      document.getElementById('settings-modal').classList.remove('active');
+    }
+    
+    function loadSettingsValues() {
+      // Theme
+      const themeSelect = document.getElementById('settings-theme');
+      const savedTheme = localStorage.getItem('theme') || 'system';
+      themeSelect.value = savedTheme;
+      
+      // Typewriter
+      const typewriterEnabled = localStorage.getItem('typewriter_enabled') !== 'false';
+      document.getElementById('settings-typewriter-toggle').classList.toggle('active', typewriterEnabled);
+      document.getElementById('typewriter-speed-row').style.opacity = typewriterEnabled ? '1' : '0.5';
+      
+      const speed = parseFloat(localStorage.getItem('typewriter_speed') || '1');
+      document.getElementById('settings-typewriter-speed').value = speed;
+      
+      // Auto scroll
+      const autoScroll = localStorage.getItem('auto_scroll') !== 'false';
+      document.getElementById('settings-autoscroll-toggle').classList.toggle('active', autoScroll);
+      
+      // Default assistant/model
+      const defaultAssistant = localStorage.getItem('bee_assistant') || 'auto';
+      const defaultModel = localStorage.getItem('bee_model') || 'default';
+      
+      const assistantSelect = document.getElementById('settings-default-assistant');
+      assistantSelect.innerHTML = '<option value="auto">自动</option>';
+      assistants.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.id;
+        opt.textContent = a.name;
+        opt.selected = a.id === defaultAssistant;
+        assistantSelect.appendChild(opt);
+      });
+      
+      const modelSelect = document.getElementById('settings-default-model');
+      modelSelect.innerHTML = '<option value="default">默认</option>';
+      models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name;
+        opt.selected = m.id === defaultModel;
+        modelSelect.appendChild(opt);
+      });
+      
+      // Load enabled models
+      renderModelsCheckboxes();
+    }
+    
+    function setEnabledModels(ids) {
+      localStorage.setItem('bee_enabled_models', JSON.stringify(ids));
+      refreshModelDropdown();
+    }
+    
+    function renderModelsCheckboxes() {
+      const container = document.getElementById('settings-models-list');
+      if (!container) return;
+      
+      const enabledModels = getEnabledModels();
+      container.innerHTML = '';
+      
+      models.forEach(m => {
+        const item = document.createElement('div');
+        item.className = 'settings-model-item';
+        item.dataset.id = m.id;
+        
+        const checkbox = document.createElement('div');
+        checkbox.className = 'settings-model-checkbox' + (enabledModels.includes(m.id) ? ' checked' : '');
+        
+        const name = document.createElement('span');
+        name.className = 'settings-model-name';
+        name.textContent = m.name;
+        
+        item.appendChild(checkbox);
+        item.appendChild(name);
+        
+        item.addEventListener('click', () => {
+          checkbox.classList.toggle('checked');
+          saveModelSelection();
+        });
+        
+        container.appendChild(item);
+      });
+    }
+    
+    function saveModelSelection() {
+      const items = document.querySelectorAll('#settings-models-list .settings-model-item');
+      const enabled = [];
+      items.forEach(item => {
+        if (item.querySelector('.settings-model-checkbox.checked')) {
+          enabled.push(item.dataset.id);
+        }
+      });
+      if (enabled.length === 0) {
+        enabled.push('default');
+        const firstItem = document.querySelector('#settings-models-list .settings-model-item[data-id="default"]');
+        if (firstItem) firstItem.querySelector('.settings-model-checkbox').classList.add('checked');
+      }
+      setEnabledModels(enabled);
+    }
+    
+    function refreshModelDropdown() {
+      renderModelDropdown();
+    }
+    
+    document.getElementById('settings-close')?.addEventListener('click', closeSettings);
+    document.getElementById('settings-modal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'settings-modal') closeSettings();
+    });
+    
+    document.getElementById('settings-theme')?.addEventListener('change', (e) => {
+      const value = e.target.value;
+      if (value === 'system') {
+        localStorage.removeItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', prefersDark);
+      } else {
+        localStorage.setItem('theme', value);
+        document.documentElement.classList.toggle('dark', value === 'dark');
+      }
+      updateModeBtnText();
+    });
+    
+    document.getElementById('settings-typewriter-toggle')?.addEventListener('click', function() {
+      this.classList.toggle('active');
+      const enabled = this.classList.contains('active');
+      localStorage.setItem('typewriter_enabled', enabled.toString());
+      document.getElementById('typewriter-speed-row').style.opacity = enabled ? '1' : '0.5';
+    });
+    
+    document.getElementById('settings-typewriter-speed')?.addEventListener('input', (e) => {
+      localStorage.setItem('typewriter_speed', e.target.value);
+    });
+    
+    document.getElementById('settings-autoscroll-toggle')?.addEventListener('click', function() {
+      this.classList.toggle('active');
+      localStorage.setItem('auto_scroll', this.classList.contains('active').toString());
+    });
+    
+    document.getElementById('settings-default-assistant')?.addEventListener('change', (e) => {
+      localStorage.setItem('bee_assistant', e.target.value);
+      selectedAssistant = e.target.value;
+      const opt = e.target.options[e.target.selectedIndex];
+      document.getElementById('selected-assistant').textContent = opt.textContent;
+    });
+    
+    document.getElementById('settings-default-model')?.addEventListener('change', (e) => {
+      localStorage.setItem('bee_model', e.target.value);
+      selectedModel = e.target.value;
+      const opt = e.target.options[e.target.selectedIndex];
+      document.getElementById('selected-model').textContent = opt.textContent;
+    });
+    
+    document.getElementById('settings-models-all')?.addEventListener('click', () => {
+      document.querySelectorAll('#settings-models-list .settings-model-checkbox').forEach(cb => {
+        cb.classList.add('checked');
+      });
+      saveModelSelection();
+    });
+    
+    document.getElementById('settings-models-none')?.addEventListener('click', () => {
+      document.querySelectorAll('#settings-models-list .settings-model-checkbox').forEach(cb => {
+        cb.classList.remove('checked');
+      });
+      const first = document.querySelector('#settings-models-list .settings-model-checkbox');
+      if (first) first.classList.add('checked');
+      saveModelSelection();
+    });
+    
+    document.getElementById('settings-clear-current')?.addEventListener('click', async () => {
+      if (!currentSessionId) {
+        showToast('没有活动的会话', 'info');
+        return;
+      }
+      if (!confirm('确定要清除当前对话吗？此操作不可撤销。')) return;
+      try {
+        await fetch(`/api/sessions/${currentSessionId}`, { method: 'DELETE' });
+        document.getElementById('messages').innerHTML = '';
+        document.getElementById('welcome-screen').classList.remove('hidden');
+        currentSessionId = null;
+        loadSessions();
+        closeSettings();
+        showToast('当前对话已清除', 'success');
+      } catch (e) {
+        showToast('清除失败', 'error');
+      }
+    });
+    
+    document.getElementById('settings-clear-all')?.addEventListener('click', async () => {
+      if (!confirm('确定要清除所有对话吗？此操作不可撤销。')) return;
+      try {
+        const sessions = await fetch('/api/sessions').then(r => r.json());
+        for (const s of sessions) {
+          await fetch(`/api/sessions/${s.id}`, { method: 'DELETE' });
+        }
+        document.getElementById('messages').innerHTML = '';
+        document.getElementById('welcome-screen').classList.remove('hidden');
+        currentSessionId = null;
+        loadSessions();
+        closeSettings();
+        showToast('所有对话已清除', 'success');
+      } catch (e) {
+        showToast('清除失败', 'error');
+      }
     });
 
     document.getElementById('expand-btn')?.addEventListener('click', () => {
@@ -1275,6 +1667,15 @@
       appendText(text) {
         this.text += text;
         this.chunkBuffer += text;
+        
+        // If typewriter disabled, show immediately
+        if (localStorage.getItem('typewriter_enabled') === 'false') {
+          this.displayedText = this.text;
+          this.currentIndex = this.text.length;
+          this.render();
+          return;
+        }
+        
         if (!this.isRunning && this.currentIndex < this.text.length) {
           this.start();
         }
@@ -1282,6 +1683,16 @@
       
       start() {
         if (this.isRunning) return;
+        
+        // Check if typewriter effect is disabled
+        if (localStorage.getItem('typewriter_enabled') === 'false') {
+          this.displayedText = this.text;
+          this.currentIndex = this.text.length;
+          this.render();
+          this.onComplete();
+          return;
+        }
+        
         this.isRunning = true;
         this.isPaused = false;
         this.typeNext();

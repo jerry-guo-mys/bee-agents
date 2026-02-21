@@ -49,8 +49,8 @@ pub fn create_agent_components(
     let llm = crate::core::orchestrator::create_llm_from_config(&cfg);
 
     let critic_prompt = [
-        "config/prompts/critic.txt",
-        "../config/prompts/critic.txt",
+        "config/prompts/critic.md",
+        "../config/prompts/critic.md",
     ]
     .into_iter()
     .find_map(|p| std::fs::read_to_string(p).ok())

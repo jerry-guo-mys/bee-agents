@@ -99,7 +99,7 @@ cargo run
 ### 配置文件
 
 - `config/default.toml` - 主配置（LLM 供应商、工具白名单等）
-- `config/prompts/system.txt` - 系统 Prompt
+- `config/prompts/system.md` - 系统 Prompt
 - `workspace/` - 沙箱工作目录
 
 ### 多 LLM 切换

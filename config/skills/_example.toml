@@ -5,4 +5,4 @@
 id = "example"
 name = "示例助手"
 description = "仅作格式参考，可复制此文件创建新技能"
-prompt = "prompts/system.txt"
+prompt = "prompts/system.md"

@@ -40,8 +40,8 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&workspace).ok();
 
     let system_prompt = [
-        "config/prompts/system.txt",
-        "../config/prompts/system.txt",
+        "config/prompts/system.md",
+        "../config/prompts/system.md",
     ]
     .into_iter()
     .find_map(|p| std::fs::read_to_string(p).ok())

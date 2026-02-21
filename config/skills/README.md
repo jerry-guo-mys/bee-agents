@@ -9,7 +9,7 @@
 id = "唯一ID"
 name = "展示名称"
 description = "简短描述，用于首页卡片"
-prompt = "prompts/assistant-xxx.txt"
+prompt = "prompts/assistant-xxx.md"
 ```
 
 - `prompt` 路径相对 `config/`，对应 `config/prompts/` 下的文件。

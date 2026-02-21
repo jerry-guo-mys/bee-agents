@@ -97,8 +97,8 @@ pub async fn create_agent(
     std::fs::create_dir_all(&workspace).ok();
 
     let system_prompt = [
-        "config/prompts/system.txt",
-        "../config/prompts/system.txt",
+        "config/prompts/system.md",
+        "../config/prompts/system.md",
     ]
     .into_iter()
     .find_map(|p| std::fs::read_to_string(p).ok())
@@ -144,8 +144,8 @@ pub async fn create_agent(
     };
     let planner = Planner::new(llm.clone(), full_system_prompt);
     let critic_prompt = [
-        "config/prompts/critic.txt",
-        "../config/prompts/critic.txt",
+        "config/prompts/critic.md",
+        "../config/prompts/critic.md",
     ]
     .into_iter()
     .find_map(|p| std::fs::read_to_string(p).ok())

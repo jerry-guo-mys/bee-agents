@@ -4,22 +4,22 @@
 id = "default"
 name = "通用助手"
 description = "全能型个人助手，写代码、查资料、执行任务"
-prompt = "prompts/system.txt"
+prompt = "prompts/system.md"
 
 [[assistants]]
 id = "media"
 name = "自媒体内容助手"
 description = "公众号、小红书、抖音文案与脚本，选题与爆款思路"
-prompt = "prompts/assistant-media.txt"
+prompt = "prompts/assistant-media.md"
 
 [[assistants]]
 id = "student"
 name = "高中生提分助手"
 description = "各科知识点、解题思路、复习计划与学习习惯"
-prompt = "prompts/assistant-student.txt"
+prompt = "prompts/assistant-student.md"
 
 [[assistants]]
 id = "money"
 name = "搞钱助手"
 description = "副业思路、兼职方向、理财入门与增收建议"
-prompt = "prompts/assistant-money.txt"
+prompt = "prompts/assistant-money.md"

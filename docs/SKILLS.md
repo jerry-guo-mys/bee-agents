@@ -20,7 +20,7 @@ description = "润色、扩写、纠错，适合作文与邮件"
 prompt = "prompts/assistant-writing.txt"
 ```
 
-然后在 **`config/prompts/`** 下新增 `assistant-writing.txt`，写清该助手的身份与规则（可参考现有 `assistant-media.txt` 等）。  
+然后在 **`config/prompts/`** 下新增 `assistant-writing.md`，写清该助手的身份与规则（可参考现有 `assistant-media.md` 等）。  
 提示：`prompt` 路径相对 `config/`，且会**自动拼接工具调用 schema**，无需在 prompt 里再写一遍。
 
 ### 方式 B：按文件扩展（推荐，易分享）
@@ -38,7 +38,7 @@ description = "润色、扩写、纠错，适合作文与邮件"
 prompt = "prompts/assistant-writing.txt"
 ```
 
-3. 在 **`config/prompts/`** 下新增 **`assistant-writing.txt`**，内容为该助手的 system 说明。
+3. 在 **`config/prompts/`** 下新增 **`assistant-writing.md`**，内容为该助手的 system 说明。
 
 **规则**：
 
@@ -80,15 +80,15 @@ args = ["{{workspace}}/scripts/run.py", "{{query}}"]
 |----------------|------------------------------|------|
 | 助手主列表     | `config/assistants.toml`     | 统一维护所有助手时可只改这里 |
 | 单文件扩展技能 | `config/skills/*.toml`      | 一个 toml = 一个技能，易增删、易分享 |
-| 助手 prompt    | `config/prompts/assistant-*.txt` | 与 assistants/skills 里的 `prompt` 字段对应 |
-| 通用 system    | `config/prompts/system.txt`  | 默认助手的 system prompt |
+| 助手 prompt    | `config/prompts/assistant-*.md` | 与 assistants/skills 里的 `prompt` 字段对应 |
+| 通用 system    | `config/prompts/system.md`  | 默认助手的 system prompt |
 | 工具插件       | `config/default.toml` → `[[tools.plugins]]` | 动态工具，无需改代码 |
 
 ---
 
 ## 四、小结：怎样「更容易」扩展
 
-- **只加新助手/技能**：在 **`config/skills/`** 加一个 **`xxx.toml`**（`[assistant]` 表） + **`config/prompts/assistant-xxx.txt`**，重启 bee-web 即可。
+- **只加新助手/技能**：在 **`config/skills/`** 加一个 **`xxx.toml`**（`[assistant]` 表） + **`config/prompts/assistant-xxx.md`**，重启 bee-web 即可。
 - **只加新工具**：在 **`config/default.toml`** 加一段 **`[[tools.plugins]]`**，写好 `name/description/program/args`，重启即可。
 - 两者可组合：新助手用现有工具；新工具对所有助手生效（由同一 ToolRegistry 注册）。
 

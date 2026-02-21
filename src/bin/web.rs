@@ -307,7 +307,7 @@ fn load_assistants(
                 id: "default".to_string(),
                 name: "通用助手".to_string(),
                 description: "全能型个人助手".to_string(),
-                prompt: "prompts/system.txt".to_string(),
+                prompt: "prompts/system.md".to_string(),
                 skills: None,
             },
         ],
@@ -493,8 +493,8 @@ async fn main() -> anyhow::Result<()> {
 
     let config_base = std::path::Path::new("config");
     let system_prompt = [
-        config_base.join("prompts/system.txt"),
-        std::path::Path::new("../config/prompts/system.txt").to_path_buf(),
+        config_base.join("prompts/system.md"),
+        std::path::Path::new("../config/prompts/system.md").to_path_buf(),
     ]
     .into_iter()
     .find_map(|p| std::fs::read_to_string(&p).ok())
