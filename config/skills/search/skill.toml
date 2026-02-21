@@ -1,0 +1,9 @@
+[skill]
+id = "search"
+name = "智能搜索"
+description = "调用搜索引擎获取实时信息，支持多源整合"
+tags = ["搜索", "信息获取"]
+
+# 关联脚本（相对于此目录）
+script = "search.py"
+script_type = "python"

@@ -7,6 +7,7 @@
 //! - **llm**: LLM 客户端抽象与实现（OpenAI 兼容 / DeepSeek / Mock）
 //! - **memory**: 短期 / 中期 / 长期记忆与持久化
 //! - **react**: Planner、Critic、ReAct 主循环
+//! - **skills**: 技能系统（能力描述、模板、脚本）
 //! - **tools**: 工具箱（cat、ls、shell、search、echo）与执行器
 //! - **ui**: Ratatui TUI 界面
 
@@ -19,6 +20,7 @@ pub mod llm;
 pub mod memory;
 pub mod observability;
 pub mod react;
+pub mod skills;
 pub mod tools;
 pub mod ui;
 

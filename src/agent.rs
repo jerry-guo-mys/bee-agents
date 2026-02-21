@@ -19,6 +19,7 @@ use crate::memory::{
 use crate::core::TaskScheduler;
 use crate::react::{react_loop, ContextManager, Critic, Planner, ReactEvent};
 use tokio::sync::mpsc;
+use crate::skills::{SkillCache, SkillLoader, SkillSelector};
 use crate::tools::{
     tool_call_schema_json, CatTool, EchoTool, LsTool, PluginTool, SearchTool, ShellTool,
     ToolExecutor, ToolRegistry, CodeReadTool, CodeGrepTool, CodeEditTool, CodeWriteTool,
@@ -37,6 +38,10 @@ pub struct AgentComponents {
     pub critic: Option<Critic>,
     /// 工具并发限制（如最多 3 个），接入 ReAct 循环
     pub task_scheduler: TaskScheduler,
+    /// 技能缓存（按需加载技能描述）
+    pub skill_cache: SkillCache,
+    /// LLM 客户端引用（用于技能选择）
+    pub llm: Arc<dyn crate::llm::LlmClient>,
 }
 
 /// 创建 Agent 组件：从配置加载 LLM、工具（cat/ls/shell/search/echo）、超时，与 TUI 侧逻辑一致
@@ -104,12 +109,26 @@ pub fn create_agent_components(
             system_prompt, tool_schema
         )
     };
+
+    let skill_loader = SkillLoader::from_default();
+    let skill_cache = skill_loader.cache();
+
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(async {
+            if let Err(e) = skill_loader.load_all().await {
+                tracing::warn!("Failed to load skills: {}", e);
+            }
+        });
+    });
+
     AgentComponents {
         planner: Planner::new(llm.clone(), full_system_prompt),
         executor: ToolExecutor::new(tools, cfg.tools.tool_timeout_secs),
         recovery: RecoveryEngine::new(),
         critic,
         task_scheduler: TaskScheduler::default(),
+        skill_cache,
+        llm,
     }
 }
 
@@ -306,4 +325,53 @@ pub async fn process_message_stream(
     )
     .await?;
     Ok(result.response)
+}
+
+/// 按需选择技能并处理消息（带技能增强的流式处理）
+///
+/// 工作流程：
+/// 1. 根据用户输入从缓存的技能描述中选择相关技能
+/// 2. 将选中技能的能力描述和模板注入到 system prompt
+/// 3. 执行常规的 process_message_stream
+pub async fn process_message_with_skills(
+    components: &AgentComponents,
+    context: &mut ContextManager,
+    user_input: &str,
+    event_tx: mpsc::UnboundedSender<ReactEvent>,
+    base_system_prompt: Option<&str>,
+    planner_override: Option<&Planner>,
+    allowed_tools: Option<&[String]>,
+) -> Result<String, AgentError> {
+    let selector = SkillSelector::new(
+        Arc::clone(&components.skill_cache),
+        Arc::clone(&components.llm),
+    );
+
+    let skills = selector.select(user_input).await;
+
+    let skills_prompt = if skills.is_empty() {
+        String::new()
+    } else {
+        let ids: Vec<_> = skills.iter().map(|s| s.meta.id.as_str()).collect();
+        tracing::info!("Selected skills for query: {:?}", ids);
+        SkillSelector::build_skills_prompt(&skills)
+    };
+
+    let enhanced_prompt = if skills_prompt.is_empty() {
+        base_system_prompt.map(|s| s.to_string())
+    } else {
+        let base = base_system_prompt.unwrap_or("");
+        Some(format!("{}\n\n{}", base, skills_prompt))
+    };
+
+    process_message_stream(
+        components,
+        context,
+        user_input,
+        event_tx,
+        enhanced_prompt.as_deref(),
+        planner_override,
+        allowed_tools,
+    )
+    .await
 }

@@ -1,8 +1,0 @@
-# 复制为 my_skill.toml 并修改 id/name/description/prompt 即可新增一个技能。
-# 以 _ 开头的文件不会被加载。
-
-[assistant]
-id = "example"
-name = "示例助手"
-description = "仅作格式参考，可复制此文件创建新技能"
-prompt = "prompts/system.md"

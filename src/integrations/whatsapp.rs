@@ -174,7 +174,7 @@ async fn webhook_receive(
 
                 // 处理消息
                 let result: Result<String, crate::core::AgentError> =
-                    process_message(&state.components, &mut context, &body).await;
+                    process_message(&state.components, &mut context, &body, None).await;
 
                 match result {
                     Ok(response) => {

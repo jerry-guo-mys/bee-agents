@@ -1,0 +1,5 @@
+[skill]
+id = "writing"
+name = "英语写作"
+description = "英语润色、扩写、纠错，适合作文与邮件"
+tags = ["写作", "英语", "学习"]

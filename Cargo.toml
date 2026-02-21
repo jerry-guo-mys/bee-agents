@@ -65,9 +65,11 @@ regex = "1.10"
 glob = "0.3"
 walkdir = "2.4"
 
-# Web 流式响应 + 多助手配置
+# TOML 配置解析（skills 模块）
+toml = "0.8"
+
+# Web 流式响应
 bytes = { version = "1.0", optional = true }
-toml = { version = "0.8", optional = true }
 
 # WhatsApp 集成 (bee-whatsapp，需公网 Webhook 域名)
 axum = { version = "0.7", optional = true }
@@ -80,7 +82,7 @@ headless_chrome = { version = "1.0", optional = true }
 default = []
 whatsapp = ["dep:axum", "dep:tower"]
 lark = ["dep:axum", "dep:tower"]
-web = ["dep:axum", "dep:tower", "dep:bytes", "dep:toml"]
+web = ["dep:axum", "dep:tower", "dep:bytes"]
 browser = ["dep:headless_chrome"]
 
 [dev-dependencies]
