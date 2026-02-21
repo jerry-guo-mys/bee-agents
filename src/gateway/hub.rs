@@ -18,7 +18,7 @@ use tokio_tungstenite::tungstenite::Message as WsMessage;
 use super::intent::IntentRecognizer;
 use super::message::{ClientInfo, GatewayMessage, HistoryMessage, MessageType};
 use super::runtime::{AgentRuntime, RuntimeConfig};
-use super::session::SessionManager;
+use super::session_store::{SessionStore, create_session_store};
 use super::spoke::SpokeAdapter;
 
 /// Hub 配置
@@ -62,7 +62,7 @@ struct Connection {
 /// Hub（轮毂/中枢）- 核心运行时
 pub struct Hub {
     config: HubConfig,
-    session_manager: Arc<SessionManager>,
+    session_store: Arc<dyn SessionStore>,
     runtime: Arc<AgentRuntime>,
     #[allow(dead_code)]
     intent_recognizer: Arc<IntentRecognizer>,
@@ -72,14 +72,17 @@ pub struct Hub {
 }
 
 impl Hub {
-    pub fn new(config: HubConfig) -> Self {
-        let session_manager = Arc::new(SessionManager::new(
+    /// 创建新的 Hub（异步，支持持久化会话）
+    pub async fn new(config: HubConfig) -> Self {
+        let session_store = create_session_store(
+            config.runtime.session_db_path.as_deref(),
             config.max_context_turns,
             config.session_timeout,
-        ));
+        ).await;
+        
         let runtime = Arc::new(AgentRuntime::new(
             config.runtime.clone(),
-            Arc::clone(&session_manager),
+            Arc::clone(&session_store),
         ));
         let intent_recognizer = Arc::new(IntentRecognizer::new(
             Arc::clone(&runtime.components().llm),
@@ -88,7 +91,7 @@ impl Hub {
 
         Self {
             config,
-            session_manager,
+            session_store,
             runtime,
             intent_recognizer,
             connections: Arc::new(RwLock::new(HashMap::new())),
@@ -118,7 +121,7 @@ impl Hub {
 
         let mut shutdown_rx = self.shutdown.subscribe();
         let connections = Arc::clone(&self.connections);
-        let session_manager = Arc::clone(&self.session_manager);
+        let session_store = Arc::clone(&self.session_store);
         let runtime = Arc::clone(&self.runtime);
         let heartbeat_interval = self.config.heartbeat_interval;
 
@@ -134,7 +137,7 @@ impl Hub {
                         }
                     }
                     _ = cleanup_timer.tick() => {
-                        let expired = session_manager.cleanup_expired().await;
+                        let expired = session_store.cleanup_expired().await;
                         if expired > 0 {
                             tracing::info!("Cleaned up {} expired sessions", expired);
                         }
@@ -143,7 +146,7 @@ impl Hub {
                         match result {
                             Ok((stream, addr)) => {
                                 let connections = Arc::clone(&connections);
-                                let session_manager = Arc::clone(&session_manager);
+                                let session_store = Arc::clone(&session_store);
                                 let runtime = Arc::clone(&runtime);
 
                                 tokio::spawn(async move {
@@ -151,7 +154,7 @@ impl Hub {
                                         stream,
                                         addr,
                                         connections,
-                                        session_manager,
+                                        session_store,
                                         runtime,
                                         heartbeat_interval,
                                     ).await {
@@ -219,7 +222,7 @@ impl Hub {
 
     /// 获取活跃会话数
     pub async fn session_count(&self) -> usize {
-        self.session_manager.active_count().await
+        self.session_store.active_count().await
     }
 }
 
@@ -227,7 +230,7 @@ async fn handle_connection(
     stream: TcpStream,
     addr: SocketAddr,
     connections: Arc<RwLock<HashMap<String, Connection>>>,
-    session_manager: Arc<SessionManager>,
+    session_store: Arc<dyn SessionStore>,
     runtime: Arc<AgentRuntime>,
     _heartbeat_interval: u64,
 ) -> Result<(), String> {
@@ -274,7 +277,7 @@ async fn handle_connection(
 
                 match gateway_msg.message {
                     MessageType::Auth { token: _, client_info: info } => {
-                        let sid = session_manager
+                        let sid = session_store
                             .get_or_create(&info.client_id, info.clone())
                             .await;
 
@@ -387,7 +390,7 @@ async fn handle_connection(
     connections.write().await.remove(&client_id);
 
     if let (Some(sid), Some(info)) = (&session_id, &client_info) {
-        session_manager.remove_client(sid, info.platform).await;
+        session_store.remove_client(sid, info.platform).await;
     }
 
     tracing::info!("WebSocket connection closed: {}", addr);

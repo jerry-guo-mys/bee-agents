@@ -98,7 +98,7 @@ whatsapp = ["dep:axum", "dep:tower"]
 lark = ["dep:axum", "dep:tower"]
 web = ["dep:axum", "dep:tower", "dep:bytes"]
 browser = ["dep:headless_chrome"]
-gateway = ["dep:axum", "dep:tower", "dep:tokio-tungstenite"]
+gateway = ["dep:axum", "dep:tower", "dep:tokio-tungstenite", "async-sqlite"]
 async-sqlite = ["dep:sqlx"]
 
 [dev-dependencies]

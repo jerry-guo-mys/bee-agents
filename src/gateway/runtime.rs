@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use super::message::{GatewayMessage, MessageType, SessionStatus};
-use super::session::SessionManager;
+use super::session_store::SessionStore;
 use crate::agent::create_agent_components;
 use crate::config::AppConfig;
 use crate::core::{AgentComponents, AgentError};
@@ -28,6 +28,8 @@ pub struct RuntimeConfig {
     pub max_concurrent: usize,
     /// 启用技能选择
     pub enable_skills: bool,
+    /// 会话数据库路径（None 表示使用内存存储）
+    pub session_db_path: Option<PathBuf>,
 }
 
 impl Default for RuntimeConfig {
@@ -38,6 +40,7 @@ impl Default for RuntimeConfig {
             system_prompt: "You are a helpful AI assistant.".to_string(),
             max_concurrent: 10,
             enable_skills: true,
+            session_db_path: None,
         }
     }
 }
@@ -46,22 +49,27 @@ impl Default for RuntimeConfig {
 pub struct AgentRuntime {
     config: RuntimeConfig,
     components: AgentComponents,
-    session_manager: Arc<SessionManager>,
+    session_store: Arc<dyn SessionStore>,
 }
 
 impl AgentRuntime {
-    pub fn new(config: RuntimeConfig, session_manager: Arc<SessionManager>) -> Self {
+    pub fn new(config: RuntimeConfig, session_store: Arc<dyn SessionStore>) -> Self {
         let components = create_agent_components(&config.app_config, &config.workspace);
         Self {
             config,
             components,
-            session_manager,
+            session_store,
         }
     }
 
     /// 获取 Agent 组件（用于共享 LLM 等）
     pub fn components(&self) -> &AgentComponents {
         &self.components
+    }
+
+    /// 获取会话存储
+    pub fn session_store(&self) -> &Arc<dyn SessionStore> {
+        &self.session_store
     }
 
     /// 处理用户消息
@@ -75,11 +83,7 @@ impl AgentRuntime {
     ) -> Result<String, AgentError> {
         let request_id = uuid::Uuid::new_v4().to_string();
 
-        self.session_manager
-            .with_session(session_id, |s| {
-                s.set_status(SessionStatus::Processing);
-            })
-            .await;
+        self.session_store.set_status(session_id, SessionStatus::Processing).await;
 
         response_tx
             .send(GatewayMessage::new(
@@ -161,11 +165,7 @@ impl AgentRuntime {
             .run_react_loop(session_id, user_input, event_tx, assistant_id, model)
             .await;
 
-        self.session_manager
-            .with_session(session_id, |s| {
-                s.set_status(SessionStatus::Idle);
-            })
-            .await;
+        self.session_store.set_status(session_id, SessionStatus::Idle).await;
 
         match &result {
             Ok(response) => {
@@ -205,16 +205,14 @@ impl AgentRuntime {
         _model: Option<&str>,
     ) -> Result<String, AgentError> {
         let cancel_token = self
-            .session_manager
-            .with_session(session_id, |s| s.new_cancel_token())
+            .session_store
+            .new_cancel_token(session_id)
             .await
             .unwrap_or_else(tokio_util::sync::CancellationToken::new);
 
         let mut context = self
-            .session_manager
-            .with_session(session_id, |s| {
-                std::mem::replace(&mut s.context, crate::react::ContextManager::new(20))
-            })
+            .session_store
+            .get_context(session_id)
             .await
             .unwrap_or_else(|| crate::react::ContextManager::new(20));
 
@@ -250,40 +248,24 @@ impl AgentRuntime {
         )
         .await;
 
-        self.session_manager
-            .with_session(session_id, |s| {
-                s.context = context;
-            })
-            .await;
+        self.session_store.set_context(session_id, context).await;
+
+        if let Ok(ref react_result) = result {
+            for msg in &react_result.messages {
+                self.session_store.add_message(session_id, msg.clone()).await;
+            }
+        }
 
         result.map(|r| r.response)
     }
 
     /// 取消正在进行的请求
     pub async fn cancel(&self, session_id: &str) {
-        self.session_manager
-            .with_session(session_id, |s| {
-                s.cancel();
-            })
-            .await;
+        self.session_store.cancel(session_id).await;
     }
 
     /// 获取会话历史
     pub async fn get_history(&self, session_id: &str, limit: Option<usize>) -> Vec<(String, String)> {
-        self.session_manager
-            .with_session(session_id, |s| {
-                let messages = s.context.messages();
-                let limited = if let Some(l) = limit {
-                    &messages[messages.len().saturating_sub(l)..]
-                } else {
-                    messages
-                };
-                limited
-                    .iter()
-                    .map(|m| (format!("{:?}", m.role), m.content.clone()))
-                    .collect()
-            })
-            .await
-            .unwrap_or_default()
+        self.session_store.get_history(session_id, limit).await
     }
 }

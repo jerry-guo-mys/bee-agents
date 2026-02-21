@@ -34,13 +34,21 @@
 mod hub;
 mod intent;
 mod message;
+#[cfg(feature = "async-sqlite")]
+mod persistent_session;
 mod runtime;
 mod session;
+mod session_store;
 mod spoke;
 
 pub use hub::{Hub, HubConfig};
 pub use intent::{Intent, IntentRecognizer};
 pub use message::{GatewayMessage, MessageType, ClientInfo, SpokeType};
+#[cfg(feature = "async-sqlite")]
+pub use persistent_session::PersistentSessionManager;
 pub use runtime::{AgentRuntime, RuntimeConfig};
 pub use session::{Session, SessionManager, SessionId};
+pub use session_store::{SessionStore, MemorySessionStore, create_session_store};
+#[cfg(feature = "async-sqlite")]
+pub use session_store::PersistentSessionStore;
 pub use spoke::{SpokeAdapter, CommunicationSpoke, CapabilitySpoke, WebSocketSpoke, HttpSpoke};

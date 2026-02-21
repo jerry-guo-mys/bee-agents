@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn test_fast_match_search() {
         let recognizer = IntentRecognizer {
-            llm: Arc::new(crate::llm::MockLlmClient::new(vec![])),
+            llm: Arc::new(crate::llm::MockLlmClient),
             enable_fast_match: true,
         };
 
@@ -426,7 +426,7 @@ mod tests {
     #[test]
     fn test_fast_match_browse() {
         let recognizer = IntentRecognizer {
-            llm: Arc::new(crate::llm::MockLlmClient::new(vec![])),
+            llm: Arc::new(crate::llm::MockLlmClient),
             enable_fast_match: true,
         };
 
@@ -437,7 +437,7 @@ mod tests {
     #[test]
     fn test_fast_match_shell() {
         let recognizer = IntentRecognizer {
-            llm: Arc::new(crate::llm::MockLlmClient::new(vec![])),
+            llm: Arc::new(crate::llm::MockLlmClient),
             enable_fast_match: true,
         };
 

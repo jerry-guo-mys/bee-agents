@@ -31,6 +31,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let system_prompt = std::fs::read_to_string("config/prompts/default.md")
         .unwrap_or_else(|_| "You are a helpful AI assistant.".to_string());
 
+    let session_db_path = workspace.join("gateway_sessions.db");
+    
     let hub_config = HubConfig {
         bind_addr: bind_addr.clone(),
         max_connections: 1000,
@@ -43,10 +45,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             system_prompt,
             max_concurrent: 10,
             enable_skills: true,
+            session_db_path: Some(session_db_path),
         },
     };
 
-    let hub = Hub::new(hub_config);
+    let hub = Hub::new(hub_config).await;
 
     tracing::info!("Starting Bee Hub on ws://{}", bind_addr);
     tracing::info!("Press Ctrl+C to stop");
