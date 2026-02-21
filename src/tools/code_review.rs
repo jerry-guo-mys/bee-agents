@@ -147,7 +147,7 @@ impl CodeReviewTool {
             
             if trimmed.starts_with("fn ") && !trimmed.contains("-> ") && !trimmed.contains("{") {
                 let next_line = lines.get(i + 1).map(|l| l.trim());
-                if next_line.map_or(true, |l| !l.starts_with("->")) {
+                if next_line.is_none_or(|l| !l.starts_with("->")) {
                     issues.push(Issue {
                         line: line_num,
                         severity: "info".to_string(),
@@ -187,8 +187,8 @@ impl CodeReviewTool {
                 });
             }
             
-            if line.contains("as ") && (line.contains("as i32") || line.contains("as u32") || line.contains("as i64") || line.contains("as u64")) {
-                if !line.contains("//") {
+            if line.contains("as ") && (line.contains("as i32") || line.contains("as u32") || line.contains("as i64") || line.contains("as u64"))
+                && !line.contains("//") {
                     issues.push(Issue {
                         line: line_num,
                         severity: "info".to_string(),
@@ -196,7 +196,6 @@ impl CodeReviewTool {
                         message: "Consider using try_into() instead of as for safe numeric conversion".to_string(),
                     });
                 }
-            }
         }
         
         let content_str = content.to_string();
@@ -415,7 +414,7 @@ impl Tool for CodeReviewTool {
     }
 
     async fn execute(&self, args: Value) -> Result<String, String> {
-        let path = args["path"].as_str().ok_or_else(|| "Missing 'path'")?;
+        let path = args["path"].as_str().ok_or("Missing 'path'")?;
         let path = self.validate_path(path).map_err(|e| e.to_string())?;
         let _focus = args["focus"].as_str().unwrap_or("all");
         

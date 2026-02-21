@@ -15,7 +15,7 @@ impl RecoveryEngine {
     }
 
     /// 根据错误类型返回建议的恢复动作；history 预留用于未来「剪枝后重试」等逻辑
-    pub fn handle(&self, err: &AgentError, _history: &mut Vec<Message>) -> RecoveryAction {
+    pub fn handle(&self, err: &AgentError, _history: &mut [Message]) -> RecoveryAction {
         match err {
             AgentError::JsonParseError(raw) => RecoveryAction::RetryWithPrompt(format!(
                 "上一轮输出的 JSON 格式错误: {raw}。\

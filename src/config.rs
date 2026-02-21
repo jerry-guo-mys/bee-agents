@@ -9,6 +9,7 @@ use serde::Deserialize;
 /// 应用配置根（对应 config/default.toml 的顶层）
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct AppConfig {
     #[serde(default)]
     pub app: AppSection,
@@ -62,8 +63,10 @@ fn default_max_context_turns() -> usize {
 
 /// 进化调度类型
 #[derive(Debug, Clone, Deserialize)]
+#[derive(Default)]
 pub enum ScheduleType {
     #[serde(rename = "manual")]
+    #[default]
     Manual,
     #[serde(rename = "interval")]
     Interval,
@@ -75,8 +78,10 @@ pub enum ScheduleType {
 
 /// 审批模式
 #[derive(Debug, Clone, Deserialize)]
+#[derive(Default)]
 pub enum ApprovalMode {
     #[serde(rename = "none")]
+    #[default]
     None,
     #[serde(rename = "console")]
     Console,
@@ -88,8 +93,10 @@ pub enum ApprovalMode {
 
 /// 安全级别
 #[derive(Debug, Clone, Deserialize)]
+#[derive(Default)]
 pub enum SafeMode {
     #[serde(rename = "strict")]
+    #[default]
     Strict,
     #[serde(rename = "balanced")]
     Balanced,
@@ -97,23 +104,8 @@ pub enum SafeMode {
     Permissive,
 }
 
-impl Default for ScheduleType {
-    fn default() -> Self {
-        ScheduleType::Manual
-    }
-}
 
-impl Default for ApprovalMode {
-    fn default() -> Self {
-        ApprovalMode::None
-    }
-}
 
-impl Default for SafeMode {
-    fn default() -> Self {
-        SafeMode::Strict
-    }
-}
 
 /// [evolution] 段：自我进化相关（参见 docs/EVOLUTION.md）
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -496,19 +488,6 @@ fn default_allowed_domains() -> Vec<String> {
     ]
 }
 
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            app: AppSection::default(),
-            llm: LlmSection::default(),
-            tools: ToolsSection::default(),
-            memory: MemorySection::default(),
-            evolution: EvolutionSection::default(),
-            heartbeat: HeartbeatSection::default(),
-            web: WebSection::default(),
-        }
-    }
-}
 
 /// 从 config 目录加载配置，环境变量 BEE__* 可覆盖
 ///

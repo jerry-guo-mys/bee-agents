@@ -308,7 +308,7 @@ pub async fn react_loop(
                         r
                     }
                     Err(e) => {
-                        let failure_msg = format!("{}: {}", tc.tool, e.to_string());
+                        let failure_msg = format!("{}: {}", tc.tool, e);
                         context.working.add_failure(failure_msg.clone());
                         context.append_procedural_record(&tc.tool, false, &e.to_string());
                         send_event(&event_tx, ReactEvent::ToolFailure {
@@ -339,8 +339,9 @@ pub async fn react_loop(
                     || obs_upper.contains("TIMEOUT");
                 if !is_tool_failure {
                     if let Some(c) = critic {
-                        if let Ok(critic_result) = c.evaluate(user_input, &tc.tool, &observation).await {
-                        if let CriticResult::Correction(suggestion) = critic_result {
+                        if let Ok(CriticResult::Correction(suggestion)) =
+                            c.evaluate(user_input, &tc.tool, &observation).await
+                        {
                             send_event(&event_tx, ReactEvent::Recovery {
                                 action: "Critic".to_string(),
                                 detail: suggestion.clone(),
@@ -350,7 +351,6 @@ pub async fn react_loop(
                                 "Critic 建议：{}",
                                 suggestion
                             )));
-                        }
                         }
                     }
                 }

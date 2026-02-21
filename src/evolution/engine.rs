@@ -175,7 +175,7 @@ impl EvolutionEngine {
                     // Convert seconds to DateTime<Utc> then to Local
                     chrono::DateTime::from_timestamp(duration.as_secs() as i64, 0)
                         .map(|utc| utc.with_timezone(&chrono::Local))
-                        .unwrap_or_else(|| chrono::Local::now())
+                        .unwrap_or_else(chrono::Local::now)
                 }
                 Err(_) => {
                     // 如果时间在 UNIX_EPOCH 之前，使用当前时间

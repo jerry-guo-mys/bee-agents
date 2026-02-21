@@ -154,7 +154,7 @@ impl ExecutionEngine {
         }
 
         if let Some((file_path, content)) = self.extract_file_and_content(step) {
-            let existing = std::fs::read_to_string(&self.project_root.join(&file_path))
+            let existing = std::fs::read_to_string(self.project_root.join(&file_path))
                 .unwrap_or_default();
             
             if existing.is_empty() {

@@ -5,131 +5,39 @@
 //! create_context_with_long_term 构建带长期记忆的 ContextManager，
 //! process_message 对单条用户输入跑 ReAct 并返回最终回复。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
-use crate::config::{load_config, AppConfig};
-use crate::core::{AgentError, RecoveryEngine};
+use crate::config::AppConfig;
+use crate::core::{AgentBuilder, AgentComponents, AgentError};
 use crate::llm::create_embedder_from_config;
 use crate::memory::{
-    ConsolidateResult, FileLongTerm, InMemoryLongTerm, InMemoryVectorLongTerm, list_daily_logs_for_llm,
-    lessons_path, long_term_path, memory_root, preferences_path, procedural_path,
-    vector_snapshot_path, LongTermMemory, Message,
+    ConsolidateResult, FileLongTerm, InMemoryLongTerm, InMemoryVectorLongTerm,
+    list_daily_logs_for_llm, lessons_path, long_term_path, memory_root, preferences_path,
+    procedural_path, vector_snapshot_path, LongTermMemory, Message,
 };
-use crate::core::TaskScheduler;
-use crate::react::{react_loop, ContextManager, Critic, Planner, ReactEvent};
+use crate::react::{react_loop, ContextManager, Planner, ReactEvent};
+use crate::skills::SkillSelector;
 use tokio::sync::mpsc;
-use crate::skills::{SkillCache, SkillLoader, SkillSelector};
-use crate::tools::{
-    tool_call_schema_json, CatTool, EchoTool, LsTool, PluginTool, SearchTool, ShellTool,
-    ToolExecutor, ToolRegistry, CodeReadTool, CodeGrepTool, CodeEditTool, CodeWriteTool,
-    TestRunTool, TestCheckTool, GitCommitTool, DeepSearchTool, SourceValidatorTool,
-    ReportGeneratorTool, KnowledgeGraphBuilder,
-};
-#[cfg(feature = "browser")]
-use crate::tools::BrowserTool;
 
-/// 预构建的 Agent 组件：Planner、ToolExecutor、Recovery、Critic、TaskScheduler，可多会话共享
-pub struct AgentComponents {
-    pub planner: Planner,
-    pub executor: ToolExecutor,
-    pub recovery: RecoveryEngine,
-    /// 可选：工具结果反思与校验，接入 ReAct 循环
-    pub critic: Option<Critic>,
-    /// 工具并发限制（如最多 3 个），接入 ReAct 循环
-    pub task_scheduler: TaskScheduler,
-    /// 技能缓存（按需加载技能描述）
-    pub skill_cache: SkillCache,
-    /// LLM 客户端引用（用于技能选择）
-    pub llm: Arc<dyn crate::llm::LlmClient>,
+/// 创建 Agent 组件：使用统一的 AgentBuilder（解决问题 1.1）
+/// 
+/// 现在接受配置参数而非内部加载（解决问题 1.2）
+pub fn create_agent_components(cfg: &AppConfig, workspace: &Path) -> AgentComponents {
+    AgentBuilder::new(cfg.clone(), workspace.to_path_buf())
+        .with_system_prompt_from_file()
+        .build_components()
 }
 
-/// 创建 Agent 组件：从配置加载 LLM、工具（cat/ls/shell/search/echo）、超时，与 TUI 侧逻辑一致
-pub fn create_agent_components(
-    workspace: &PathBuf,
+/// 使用自定义 system prompt 创建 Agent 组件
+pub fn create_agent_components_with_prompt(
+    cfg: &AppConfig,
+    workspace: &Path,
     system_prompt: &str,
 ) -> AgentComponents {
-    let cfg = load_config(None).unwrap_or_else(|_| AppConfig::default());
-
-    let llm = crate::core::orchestrator::create_llm_from_config(&cfg);
-
-    let critic_prompt = [
-        "config/prompts/critic.md",
-        "../config/prompts/critic.md",
-    ]
-    .into_iter()
-    .find_map(|p| std::fs::read_to_string(p).ok())
-    .unwrap_or_else(|| {
-        "The user wanted: {goal}\nYou executed tool: {tool} with result: {observation}\nIs this result reasonable? If yes, respond with exactly: OK\nIf not, provide a brief correction (one sentence).".to_string()
-    });
-    let critic = Some(Critic::new(llm.clone(), critic_prompt));
-
-    let mut tools = ToolRegistry::new();
-    tools.register(CatTool::new(workspace));
-    tools.register(LsTool::new(workspace));
-    tools.register(EchoTool);
-    tools.register(ShellTool::new(
-        cfg.tools.shell.allowed_commands.clone(),
-        cfg.tools.tool_timeout_secs,
-    ));
-    tools.register(SearchTool::new(
-        cfg.tools.search.allowed_domains.clone(),
-        cfg.tools.search.timeout_secs,
-        cfg.tools.search.max_result_chars,
-    ));
-
-    #[cfg(feature = "browser")]
-    tools.register(BrowserTool::new(
-        cfg.tools.search.allowed_domains.clone(),
-        cfg.tools.search.max_result_chars,
-    ));
-
-    for entry in &cfg.tools.plugins {
-        tools.register(PluginTool::new(entry, workspace, cfg.tools.tool_timeout_secs));
-    }
-
-    tools.register(CodeReadTool::new(workspace));
-    tools.register(CodeGrepTool::new(workspace));
-    tools.register(CodeEditTool::new(workspace));
-    tools.register(CodeWriteTool::new(workspace));
-    tools.register(TestRunTool::new(workspace));
-    tools.register(TestCheckTool::new(workspace));
-    tools.register(GitCommitTool::new(workspace));
-    tools.register(DeepSearchTool::new(&cfg));
-    tools.register(SourceValidatorTool::new(cfg.tools.search.allowed_domains.clone()));
-    tools.register(ReportGeneratorTool::new(&cfg));
-    tools.register(KnowledgeGraphBuilder::new(&cfg));
-
-    let tool_schema = tool_call_schema_json();
-    let full_system_prompt = if tool_schema.is_empty() {
-        system_prompt.to_string()
-    } else {
-        format!(
-            "{}\n\n## Tool call JSON Schema (you must output valid JSON matching this)\n```json\n{}\n```",
-            system_prompt, tool_schema
-        )
-    };
-
-    let skill_loader = SkillLoader::from_default();
-    let skill_cache = skill_loader.cache();
-
-    tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(async {
-            if let Err(e) = skill_loader.load_all().await {
-                tracing::warn!("Failed to load skills: {}", e);
-            }
-        });
-    });
-
-    AgentComponents {
-        planner: Planner::new(llm.clone(), full_system_prompt),
-        executor: ToolExecutor::new(tools, cfg.tools.tool_timeout_secs),
-        recovery: RecoveryEngine::new(),
-        critic,
-        task_scheduler: TaskScheduler::default(),
-        skill_cache,
-        llm,
-    }
+    AgentBuilder::new(cfg.clone(), workspace.to_path_buf())
+        .with_system_prompt(system_prompt)
+        .build_components()
 }
 
 /// 创建可共享的向量长期记忆（带快照路径，启动时加载、可定期 save_snapshot）；未启用或无法创建 embedder 时返回 None
@@ -162,12 +70,14 @@ pub fn create_shared_vector_long_term(
 /// 创建带长期记忆的 ContextManager。
 /// 若 workspace 提供，则使用 Markdown 文件长期记忆（memory/long-term.md + BM25 检索），
 /// 或当 [memory].vector_enabled 时使用嵌入 API + 内存向量检索（可传入 shared_vector 以共享并持久化）；否则使用 InMemoryLongTerm。
+///
+/// 现在接受配置参数而非内部加载（解决问题 1.2）
 pub fn create_context_with_long_term(
+    cfg: &AppConfig,
     max_turns: usize,
     workspace: Option<&Path>,
     shared_vector_long_term: Option<Arc<InMemoryVectorLongTerm>>,
 ) -> ContextManager {
-    let cfg = load_config(None).unwrap_or_else(|_| AppConfig::default());
     let (long_term, lessons_path_opt, procedural_path_opt, preferences_path_opt): (
         Arc<dyn crate::memory::LongTermMemory>,
         Option<std::path::PathBuf>,
@@ -228,6 +138,16 @@ pub fn create_context_with_long_term(
         ctx = ctx.with_preferences_path(p);
     }
     ctx
+}
+
+/// 使用默认配置创建 ContextManager（便捷函数，用于不需要特定配置的场景）
+pub fn create_context_default(
+    max_turns: usize,
+    workspace: Option<&Path>,
+    shared_vector_long_term: Option<Arc<InMemoryVectorLongTerm>>,
+) -> ContextManager {
+    let cfg = crate::config::AppConfig::default();
+    create_context_with_long_term(&cfg, max_turns, workspace, shared_vector_long_term)
 }
 
 /// 用 LLM 对近期每日日志做摘要后写入长期记忆（EVOLUTION §3.3 整理与摘要的智能化）

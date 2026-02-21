@@ -237,7 +237,7 @@ impl SelfAnalyzer {
             }
         }
 
-        score.min(1.0).max(0.0)
+        score.clamp(0.0, 1.0)
     }
 
     pub async fn generate_improvement_plans(

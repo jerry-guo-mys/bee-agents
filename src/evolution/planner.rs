@@ -98,9 +98,9 @@ Return as a numbered list of steps."#,
                 in_list = true;
             }
 
-            if in_list && (trimmed.starts_with(|c: char| c.is_digit(10)) || trimmed.starts_with("- ")) {
+            if in_list && (trimmed.starts_with(|c: char| c.is_ascii_digit()) || trimmed.starts_with("- ")) {
                 let step = trimmed
-                    .trim_start_matches(|c: char| c.is_digit(10) || c == '.' || c == ')' || c == '-')
+                    .trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ')' || c == '-')
                     .trim()
                     .to_string();
                 if !step.is_empty() {

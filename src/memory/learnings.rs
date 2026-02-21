@@ -113,7 +113,7 @@ pub fn record_learning(workspace: &Path, category: &str, content: &str, see_also
         "\n## {} [{}]\n\n{}\n{}\n\n",
         timestamp(),
         category,
-        content.trim().replace("\n", "\n"),
+        content.trim(),
         see
     );
     let _ = std::fs::OpenOptions::new()

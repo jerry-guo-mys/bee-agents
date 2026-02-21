@@ -19,7 +19,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::agent::{create_context_with_long_term, process_message, AgentComponents};
+use crate::agent::{create_context_default, process_message};
+use crate::core::AgentComponents;
 use crate::react::ContextManager;
 
 /// 会话存储：chat_id -> ContextManager
@@ -239,7 +240,7 @@ async fn process_and_reply(state: Arc<LarkState>, chat_id: &str, body: &str) -> 
         let mut sessions = state.sessions.write().await;
         sessions
             .remove(chat_id)
-            .unwrap_or_else(|| create_context_with_long_term(20, None, None))
+            .unwrap_or_else(|| create_context_default(20, None, None))
     };
 
     let result = process_message(&state.components, &mut context, body, None).await;

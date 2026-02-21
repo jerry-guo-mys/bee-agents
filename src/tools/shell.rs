@@ -46,7 +46,7 @@ impl ShellTool {
 
     /// 解析命令：只取第一个 token 作为命令名
     fn command_name<'a>(&self, raw: &'a str) -> &'a str {
-        raw.trim().split_whitespace().next().unwrap_or("")
+        raw.split_whitespace().next().unwrap_or("")
     }
 
     fn is_allowed(&self, raw: &str) -> Result<(), String> {

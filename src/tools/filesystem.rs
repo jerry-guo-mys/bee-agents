@@ -20,7 +20,7 @@ pub struct SafeFs {
 impl SafeFs {
     pub fn new(root_dir: impl AsRef<Path>) -> Self {
         let root = root_dir.as_ref().to_path_buf();
-        let root_dir = root.canonicalize().unwrap_or_else(|_| root);
+        let root_dir = root.canonicalize().unwrap_or(root);
         Self { root_dir }
     }
 

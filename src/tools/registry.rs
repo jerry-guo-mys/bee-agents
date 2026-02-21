@@ -53,4 +53,19 @@ impl ToolRegistry {
             .map(|(name, tool)| (name.clone(), tool.description().to_string()))
             .collect()
     }
+
+    /// 动态生成工具 schema JSON（解决问题 6.1：Schema 与实际注册工具匹配）
+    pub fn to_schema_json(&self) -> String {
+        let tools: Vec<serde_json::Value> = self
+            .tools
+            .iter()
+            .map(|(name, tool)| {
+                serde_json::json!({
+                    "name": name,
+                    "description": tool.description()
+                })
+            })
+            .collect();
+        serde_json::to_string_pretty(&tools).unwrap_or_else(|_| "[]".to_string())
+    }
 }

@@ -6,20 +6,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use tokio::sync::{broadcast, mpsc, watch};
+use tokio::sync::{broadcast, mpsc, watch, Mutex};
 
-use crate::config::{load_config, AppConfig};
-use crate::core::{AgentPhase, RecoveryEngine, SessionSupervisor, TaskScheduler, UiState};
+use crate::config::AppConfig;
+use crate::core::{create_agent_builder, AgentPhase, SessionSupervisor, UiState};
 use crate::llm::{create_deepseek_client, LlmClient, OpenAiClient};
 use crate::memory::{InMemoryLongTerm, SqlitePersistence};
-use std::sync::Mutex;
-use crate::react::{react_loop, ContextManager, Critic, Planner};
-use crate::tools::{
-    tool_call_schema_json, CatTool, EchoTool, LsTool, PluginTool, SearchTool, ShellTool,
-    ToolExecutor, ToolRegistry,
-};
-#[cfg(feature = "browser")]
-use crate::tools::BrowserTool;
+use crate::react::{react_loop, ContextManager};
 
 /// 从 UI 发往编排器的用户命令
 #[derive(Debug, Clone)]
@@ -80,81 +73,17 @@ pub async fn create_agent(
     watch::Receiver<UiState>,
     broadcast::Receiver<String>,
 )> {
-    let cfg = load_config(config_path.clone()).unwrap_or_else(|e| {
-        tracing::warn!("Config load failed ({}), using defaults", e);
-        AppConfig::default()
-    });
+    // 使用统一的 AgentBuilder 构建所有组件（解决问题 1.1）
+    let builder = create_agent_builder(config_path);
+    let components = builder.build_components();
+    let workspace = builder.workspace().to_path_buf();
+    let cfg = builder.config().clone();
 
-    // 工作目录：配置 > 当前目录下的 workspace
-    let workspace = cfg
-        .app
-        .workspace_root
-        .clone()
-        .unwrap_or_else(|| std::env::current_dir().unwrap().join("workspace"));
-    let workspace = workspace
-        .canonicalize()
-        .unwrap_or_else(|_| workspace.clone());
-    std::fs::create_dir_all(&workspace).ok();
-
-    let system_prompt = [
-        "config/prompts/system.md",
-        "../config/prompts/system.md",
-    ]
-    .into_iter()
-    .find_map(|p| std::fs::read_to_string(p).ok())
-    .unwrap_or_else(|| {
-        "You are Bee, a helpful AI assistant. Use tools: cat, ls, echo, shell, search.".to_string()
-    });
-
-    let llm = create_llm_from_config(&cfg);
-
-    let mut tools = ToolRegistry::new();
-    tools.register(CatTool::new(&workspace));
-    tools.register(LsTool::new(&workspace));
-    tools.register(EchoTool);
-    tools.register(ShellTool::new(
-        cfg.tools.shell.allowed_commands.clone(),
-        cfg.tools.tool_timeout_secs,
-    ));
-    tools.register(SearchTool::new(
-        cfg.tools.search.allowed_domains.clone(),
-        cfg.tools.search.timeout_secs,
-        cfg.tools.search.max_result_chars,
-    ));
-
-    #[cfg(feature = "browser")]
-    tools.register(BrowserTool::new(
-        cfg.tools.search.allowed_domains.clone(),
-        cfg.tools.search.max_result_chars,
-    ));
-
-    for entry in &cfg.tools.plugins {
-        tools.register(PluginTool::new(entry, &workspace, cfg.tools.tool_timeout_secs));
-    }
-
-    let executor = ToolExecutor::new(tools, cfg.tools.tool_timeout_secs);
-    let tool_schema = tool_call_schema_json();
-    let full_system_prompt = if tool_schema.is_empty() {
-        system_prompt.clone()
-    } else {
-        format!(
-            "{}\n\n## Tool call JSON Schema (you must output valid JSON matching this)\n```json\n{}\n```",
-            system_prompt, tool_schema
-        )
-    };
-    let planner = Planner::new(llm.clone(), full_system_prompt);
-    let critic_prompt = [
-        "config/prompts/critic.md",
-        "../config/prompts/critic.md",
-    ]
-    .into_iter()
-    .find_map(|p| std::fs::read_to_string(p).ok())
-    .unwrap_or_else(|| {
-        "The user wanted: {goal}\nYou executed tool: {tool} with result: {observation}\nIs this result reasonable? If yes, respond with exactly: OK\nIf not, provide a brief correction (one sentence).".to_string()
-    });
-    let critic = Critic::new(llm.clone(), critic_prompt);
-    let recovery = RecoveryEngine::new();
-    let task_scheduler = TaskScheduler::default();
+    let planner = components.planner;
+    let executor = components.executor;
+    let recovery = components.recovery;
+    let critic = components.critic;
+    let task_scheduler = components.task_scheduler;
     let supervisor = SessionSupervisor::new();
 
     // 三通道：UI -> Core 命令；Core -> UI 状态快照；Core -> UI Token 流
@@ -174,12 +103,12 @@ pub async fn create_agent(
         SqlitePersistence::new(&sqlite_db_path).ok()
     ));
 
-    // 生成 session_id
+    // 生成 session_id（解决问题 2.1：使用 tokio::sync::Mutex 避免阻塞）
     let session_id = uuid::Uuid::new_v4().to_string();
-    if let Ok(persistence) = sqlite_persistence.lock() {
+    {
+        let persistence = sqlite_persistence.lock().await;
         if let Some(ref p) = *persistence {
             let _ = p.create_session(&session_id, Some("New Conversation"));
-            // 尝试加载之前的消息
             if let Ok(messages) = p.load_messages(&session_id) {
                 for msg in messages {
                     context.conversation.push(msg);
@@ -197,8 +126,12 @@ pub async fn create_agent(
                 Some(cmd) = cmd_rx.recv() => {
                     match cmd {
                         Command::Submit(input) => {
-                            // 保存用户消息到 SQLite
-                            if let Ok(persistence) = sqlite_persistence_clone.lock() {
+                            // 每次 Submit 重建 CancellationToken（解决问题 1.4）
+                            let cancel_token = supervisor.reset_cancel_token();
+
+                            // 保存用户消息到 SQLite（使用 tokio::sync::Mutex）
+                            {
+                                let persistence = sqlite_persistence_clone.lock().await;
                                 if let Some(ref p) = *persistence {
                                     let _ = p.save_message(&session_id_clone, &crate::memory::Message {
                                         role: crate::memory::Role::User,
@@ -224,8 +157,8 @@ pub async fn create_agent(
                                 &input,
                                 Some(&stream_tx),
                                 None,
-                                supervisor.cancel_token(),
-                                Some(&critic),
+                                cancel_token,
+                                critic.as_ref(),
                                 Some(&task_scheduler),
                                 None,
                                 None,
@@ -233,13 +166,12 @@ pub async fn create_agent(
 
                             match result {
                                 Ok(react_result) => {
-                                    // 保存助手消息到 SQLite
+                                    // 保存助手消息到 SQLite（使用 tokio::sync::Mutex）
                                     if let Some(last_msg) = react_result.messages.last() {
                                         if last_msg.role == crate::memory::Role::Assistant {
-                                            if let Ok(persistence) = sqlite_persistence_clone.lock() {
-                                                if let Some(ref p) = *persistence {
-                                                    let _ = p.save_message(&session_id_clone, last_msg);
-                                                }
+                                            let persistence = sqlite_persistence_clone.lock().await;
+                                            if let Some(ref p) = *persistence {
+                                                let _ = p.save_message(&session_id_clone, last_msg);
                                             }
                                         }
                                     }

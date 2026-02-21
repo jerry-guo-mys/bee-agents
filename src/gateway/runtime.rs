@@ -9,14 +9,17 @@ use tokio::sync::mpsc;
 
 use super::message::{GatewayMessage, MessageType, SessionStatus};
 use super::session::SessionManager;
-use crate::agent::{create_agent_components, AgentComponents};
-use crate::core::AgentError;
+use crate::agent::create_agent_components;
+use crate::config::AppConfig;
+use crate::core::{AgentComponents, AgentError};
 use crate::react::{react_loop, ReactEvent};
 use crate::skills::SkillSelector;
 
 /// Runtime 配置
 #[derive(Debug, Clone)]
 pub struct RuntimeConfig {
+    /// 应用配置
+    pub app_config: AppConfig,
     /// 工作目录
     pub workspace: PathBuf,
     /// 系统提示词
@@ -30,6 +33,7 @@ pub struct RuntimeConfig {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
+            app_config: AppConfig::default(),
             workspace: PathBuf::from("."),
             system_prompt: "You are a helpful AI assistant.".to_string(),
             max_concurrent: 10,
@@ -47,7 +51,7 @@ pub struct AgentRuntime {
 
 impl AgentRuntime {
     pub fn new(config: RuntimeConfig, session_manager: Arc<SessionManager>) -> Self {
-        let components = create_agent_components(&config.workspace, &config.system_prompt);
+        let components = create_agent_components(&config.app_config, &config.workspace);
         Self {
             config,
             components,

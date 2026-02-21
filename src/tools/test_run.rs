@@ -94,7 +94,7 @@ impl Tool for TestRunTool {
         if !stdout.is_empty() {
             result.push_str("STDOUT:\n");
             result.push_str(&stdout);
-            result.push_str("\n");
+            result.push('\n');
         }
 
         if !stderr.is_empty() {

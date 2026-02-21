@@ -26,6 +26,12 @@ pub struct TaskId(u64);
 
 static NEXT_TASK_ID: AtomicU64 = AtomicU64::new(0);
 
+impl Default for TaskId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TaskId {
     pub fn new() -> Self {
         Self(NEXT_TASK_ID.fetch_add(1, Ordering::Relaxed))

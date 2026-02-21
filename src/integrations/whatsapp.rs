@@ -14,7 +14,8 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::agent::{create_context_with_long_term, process_message, AgentComponents};
+use crate::agent::{create_context_default, process_message};
+use crate::core::AgentComponents;
 use crate::react::ContextManager;
 
 /// 会话存储：user_id -> ContextManager
@@ -169,7 +170,7 @@ async fn webhook_receive(
                     let mut sessions: tokio::sync::RwLockWriteGuard<
                         HashMap<String, ContextManager>,
                     > = state.sessions.write().await;
-                    sessions.remove(&user_id).unwrap_or_else(|| create_context_with_long_term(20, None, None))
+                    sessions.remove(&user_id).unwrap_or_else(|| create_context_default(20, None, None))
                 };
 
                 // 处理消息

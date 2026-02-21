@@ -26,8 +26,9 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use bee::agent::{
     consolidate_memory_with_llm, create_agent_components, create_context_with_long_term,
-    create_shared_vector_long_term, process_message, process_message_stream, AgentComponents,
+    create_shared_vector_long_term, process_message, process_message_stream,
 };
+use bee::core::AgentComponents;
 use bee::skills::{Skill, SkillLoader};
 use bee::tools::tool_call_schema_json;
 use bee::memory::InMemoryVectorLongTerm;
@@ -52,6 +53,8 @@ const DEFAULT_MAX_TURNS: usize = 20;
 const HEARTBEAT_PROMPT: &str = "Heartbeat: 你正在后台自主运行。请根据长期记忆与当前状态，检查是否有待办或需跟进的事项；若有则输出一条简短建议，若无则仅回复 OK。可使用 cat/ls 查看 workspace 下 memory 或任务文件。";
 
 struct AppState {
+    /// 应用配置（解决问题 1.2）
+    config: AppConfig,
     /// 可运行时替换，以支持「多 LLM 后端切换」与配置热更新（白皮书 Phase 5）
     components: Arc<RwLock<Arc<AgentComponents>>>,
     sessions: Arc<RwLock<HashMap<String, ContextManager>>>,
@@ -59,8 +62,6 @@ struct AppState {
     /// 记忆根目录（workspace/memory），用于短期日志与长期 Markdown
     memory_root: PathBuf,
     workspace: PathBuf,
-    /// 启动时加载的 system prompt，重载组件时复用
-    system_prompt: String,
     /// 向量长期记忆共享实例（启用时带快照路径，定期保存避免重启丢失）
     shared_vector_long_term: Option<Arc<InMemoryVectorLongTerm>>,
     /// 多助手：列表与 id -> 完整 system prompt（含 tool schema）
@@ -514,10 +515,13 @@ async fn main() -> anyhow::Result<()> {
         .with(fmt::layer())
         .init();
 
-    let workspace = std::env::current_dir()?
-        .join("workspace")
-        .canonicalize()
-        .unwrap_or_else(|_| std::env::current_dir().unwrap().join("workspace"));
+    let cfg = load_config(None).unwrap_or_default();
+    let workspace = cfg
+        .app
+        .workspace_root
+        .clone()
+        .unwrap_or_else(|| std::env::current_dir().unwrap().join("workspace"));
+    let workspace = workspace.canonicalize().unwrap_or(workspace);
     std::fs::create_dir_all(&workspace).ok();
 
     let config_base = std::path::Path::new("config");
@@ -532,7 +536,7 @@ async fn main() -> anyhow::Result<()> {
     let (models, model_configs) = load_models(config_base);
 
     let config_base = config_base.to_path_buf();
-    let components_inner = create_agent_components(&workspace, &system_prompt);
+    let components_inner = create_agent_components(&cfg, &workspace);
     let tool_descriptions = components_inner.executor.tool_descriptions();
     let (mut assistants, mut prompts_map, skills_map, assistant_entries) =
         load_assistants(&config_base, &tool_descriptions);
@@ -562,9 +566,7 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&sessions_dir).ok();
     std::fs::create_dir_all(&memory_root).ok();
 
-    let app_config = load_config(None).unwrap_or_else(|_| AppConfig::default());
-    let shared_vector_long_term =
-        create_shared_vector_long_term(&workspace, &app_config);
+    let shared_vector_long_term = create_shared_vector_long_term(&workspace, &cfg);
 
     let skill_loader = Arc::new(SkillLoader::from_default());
     if let Err(e) = skill_loader.load_all().await {
@@ -572,12 +574,12 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let state = Arc::new(AppState {
+        config: cfg.clone(),
         components,
         sessions: Arc::new(RwLock::new(HashMap::new())),
         sessions_dir,
         memory_root: memory_root.clone(),
         workspace: workspace.clone(),
-        system_prompt: system_prompt.clone(),
         shared_vector_long_term,
         assistants,
         assistant_prompts,
@@ -647,9 +649,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // 心跳：若配置启用了 heartbeat，后台定期让 Agent 自主检查待办与反思
-    if app_config.heartbeat.enabled {
+    if cfg.heartbeat.enabled {
         let heartbeat_state = Arc::clone(&state);
-        let interval_secs = app_config.heartbeat.interval_secs;
+        let interval_secs = cfg.heartbeat.interval_secs;
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
             interval.tick().await; // 跳过启动后立即执行
@@ -657,6 +659,7 @@ async fn main() -> anyhow::Result<()> {
                 interval.tick().await;
                 let shared_vec = heartbeat_state.shared_vector_long_term.clone();
                 let mut context = create_context_with_long_term(
+                    &heartbeat_state.config,
                     DEFAULT_MAX_TURNS,
                     Some(&heartbeat_state.workspace),
                     shared_vec,
@@ -683,7 +686,7 @@ async fn main() -> anyhow::Result<()> {
     let port = std::env::var("BEE_WEB_PORT")
         .ok()
         .and_then(|s| s.parse::<u16>().ok())
-        .unwrap_or(app_config.web.port);
+        .unwrap_or(cfg.web.port);
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("Bee Web UI: http://{}", addr);
 
@@ -806,8 +809,9 @@ async fn api_memory_consolidate_llm(
 async fn api_config_reload(
     State(state): State<Arc<AppState>>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    let _ = bee::config::reload_config(); // 使后续 load_config 读到最新配置
-    let new_components = Arc::new(create_agent_components(&state.workspace, &state.system_prompt));
+    let _ = bee::config::reload_config();
+    let cfg = load_config(None).unwrap_or_default();
+    let new_components = Arc::new(create_agent_components(&cfg, &state.workspace));
     let mut guard = state.components.write().await;
     *guard = new_components;
     Ok(StatusCode::OK)
@@ -830,6 +834,7 @@ async fn api_compact(
         .unwrap_or_else(|| {
             load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root).unwrap_or_else(|| {
                 create_context_with_long_term(
+                    &state.config,
                     DEFAULT_MAX_TURNS,
                     Some(&state.workspace),
                     state.shared_vector_long_term.clone(),
@@ -1351,6 +1356,7 @@ async fn api_chat(
         sessions.remove(&session_id).unwrap_or_else(|| {
             load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root).unwrap_or_else(|| {
                 create_context_with_long_term(
+                    &state.config,
                     DEFAULT_MAX_TURNS,
                     Some(&state.workspace),
                     state.shared_vector_long_term.clone(),
@@ -1415,6 +1421,7 @@ async fn api_chat_stream(
         sessions.remove(&session_id).unwrap_or_else(|| {
             load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root).unwrap_or_else(|| {
                 create_context_with_long_term(
+                    &state.config,
                     DEFAULT_MAX_TURNS,
                     Some(&state.workspace),
                     state.shared_vector_long_term.clone(),

@@ -3,6 +3,7 @@
 //! 白皮书 §3.1 命名对应：`MemoryManager` = ContextManager，`ToolBox` = ToolExecutor，
 //! `InternalState` 的投影源 = InternalStateSnapshot（memory/tool_box 由 Orchestrator 分别持有）。
 
+pub mod builder;
 pub mod error;
 pub mod orchestrator;
 pub mod recovery;
@@ -10,6 +11,7 @@ pub mod session_supervisor;
 pub mod state;
 pub mod task_scheduler;
 
+pub use builder::{create_agent_builder, AgentBuilder, AgentComponents};
 pub use error::{AgentError, RecoveryAction};
 pub use orchestrator::{create_agent, Command};
 pub use recovery::RecoveryEngine;

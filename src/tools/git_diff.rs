@@ -7,6 +7,12 @@ use crate::tools::Tool;
 
 pub struct GitDiffTool;
 
+impl Default for GitDiffTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GitDiffTool {
     pub fn new() -> Self {
         Self
@@ -70,7 +76,7 @@ impl Tool for GitDiffTool {
                 git_args.push("--cached");
             }
             "commit" => {
-                let target = args["target"].as_str().ok_or_else(|| {
+                let target = args["target"].as_str().ok_or({
                     "'target' is required for commit mode"
                 })?;
                 let base = args["base"].as_str().unwrap_or("HEAD");
@@ -78,7 +84,7 @@ impl Tool for GitDiffTool {
                 git_args.push(target);
             }
             "branch" => {
-                let target = args["target"].as_str().ok_or_else(|| {
+                let target = args["target"].as_str().ok_or({
                     "'target' is required for branch mode"
                 })?;
                 let base = args["base"].as_str().unwrap_or("HEAD");

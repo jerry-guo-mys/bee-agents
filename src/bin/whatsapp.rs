@@ -19,6 +19,7 @@ async fn main() -> anyhow::Result<()> {
 
     use axum::Router;
     use bee::agent::create_agent_components;
+    use bee::config::load_config;
     use bee::integrations::whatsapp::{create_router, WhatsappState};
     use tokio::sync::RwLock;
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -33,21 +34,16 @@ async fn main() -> anyhow::Result<()> {
     let phone_number_id = std::env::var("WHATSAPP_PHONE_NUMBER_ID")
         .expect("WHATSAPP_PHONE_NUMBER_ID must be set");
 
-    let workspace = std::env::current_dir()?
-        .join("workspace")
-        .canonicalize()
-        .unwrap_or_else(|_| std::env::current_dir().unwrap().join("workspace"));
+    let cfg = load_config(None).unwrap_or_default();
+    let workspace = cfg
+        .app
+        .workspace_root
+        .clone()
+        .unwrap_or_else(|| std::env::current_dir().unwrap().join("workspace"));
+    let workspace = workspace.canonicalize().unwrap_or(workspace);
     std::fs::create_dir_all(&workspace).ok();
 
-    let system_prompt = [
-        "config/prompts/system.md",
-        "../config/prompts/system.md",
-    ]
-    .into_iter()
-    .find_map(|p| std::fs::read_to_string(p).ok())
-    .unwrap_or_else(|| "You are Bee, a helpful AI assistant. Use tools: cat, ls, echo.".to_string());
-
-    let components = create_agent_components(&workspace, &system_prompt);
+    let components = create_agent_components(&cfg, &workspace);
 
     let state = Arc::new(WhatsappState {
         components,

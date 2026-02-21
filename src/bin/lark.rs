@@ -16,6 +16,7 @@ async fn main() -> anyhow::Result<()> {
     use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
     use bee::agent::create_agent_components;
+    use bee::config::load_config;
     use bee::integrations::lark::{create_router, LarkState};
     use tokio::sync::RwLock;
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -30,21 +31,16 @@ async fn main() -> anyhow::Result<()> {
     let base_url = std::env::var("LARK_BASE_URL")
         .unwrap_or_else(|_| "https://open.feishu.cn".to_string());
 
-    let workspace = std::env::current_dir()?
-        .join("workspace")
-        .canonicalize()
-        .unwrap_or_else(|_| std::env::current_dir().unwrap().join("workspace"));
+    let cfg = load_config(None).unwrap_or_default();
+    let workspace = cfg
+        .app
+        .workspace_root
+        .clone()
+        .unwrap_or_else(|| std::env::current_dir().unwrap().join("workspace"));
+    let workspace = workspace.canonicalize().unwrap_or(workspace);
     std::fs::create_dir_all(&workspace).ok();
 
-    let system_prompt = [
-        "config/prompts/system.md",
-        "../config/prompts/system.md",
-    ]
-    .into_iter()
-    .find_map(|p| std::fs::read_to_string(p).ok())
-    .unwrap_or_else(|| "You are Bee, a helpful AI assistant. Use tools: cat, ls, echo.".to_string());
-
-    let components = create_agent_components(&workspace, &system_prompt);
+    let components = create_agent_components(&cfg, &workspace);
 
     let state = Arc::new(LarkState {
         components,

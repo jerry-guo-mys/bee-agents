@@ -210,10 +210,8 @@ impl CodeEditTool {
         }
 
         // 未找到匹配
-        Err(format!(
-            "Could not find the specified text in file. \
-             The old_string must match exactly (excluding leading whitespace differences)."
-        ))
+        Err("Could not find the specified text in file. \
+             The old_string must match exactly (excluding leading whitespace differences).".to_string())
     }
 
     fn perform_multi_edit(

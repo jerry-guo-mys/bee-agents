@@ -166,7 +166,7 @@ pub fn consolidate_memory(memory_root: &Path, since_days: u32) -> std::io::Resul
     let mut entries: Vec<_> = std::fs::read_dir(&logs_dir)?
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path().extension().map_or(false, |ext| ext == "md")
+            e.path().extension().is_some_and(|ext| ext == "md")
                 && e.path().file_stem().and_then(|s| s.to_str()).is_some()
         })
         .collect();
@@ -211,7 +211,7 @@ pub fn list_daily_logs_for_llm(memory_root: &Path, since_days: u32) -> std::io::
     let mut entries: Vec<_> = std::fs::read_dir(&logs_dir)?
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path().extension().map_or(false, |ext| ext == "md")
+            e.path().extension().is_some_and(|ext| ext == "md")
                 && e.path().file_stem().and_then(|s| s.to_str()).is_some()
         })
         .collect();
@@ -321,7 +321,7 @@ fn split_blocks(content: &str) -> Vec<String> {
             continue;
         }
         let text = if block.contains('\n') {
-            block.splitn(2, '\n').nth(1).unwrap_or(block).trim()
+            block.split_once('\n').map(|x| x.1).unwrap_or(block).trim()
         } else {
             block
         };
