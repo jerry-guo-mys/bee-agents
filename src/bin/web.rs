@@ -25,8 +25,8 @@ use tokio::sync::{mpsc, RwLock};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use bee::agent::{
-    consolidate_memory_with_llm, create_agent_components, create_context_with_long_term,
-    create_shared_vector_long_term, process_message, process_message_stream,
+    consolidate_memory_with_llm, create_agent_components, create_context_with_long_term_for_assistant,
+    create_vector_long_term_for_assistant, process_message, process_message_stream,
 };
 use bee::core::AgentComponents;
 use bee::skills::{Skill, SkillLoader};
@@ -34,8 +34,9 @@ use bee::tools::tool_call_schema_json;
 use bee::memory::InMemoryVectorLongTerm;
 use bee::config::{load_config, AppConfig};
 use bee::memory::{
-    append_daily_log, append_heartbeat_log, consolidate_memory, lessons_path, preferences_path,
-    procedural_path, record_error as learnings_record_error, record_learning as learnings_record_learning,
+    append_daily_log, append_heartbeat_log, assistant_memory_root, consolidate_memory,
+    lessons_path, preferences_path, procedural_path,
+    record_error as learnings_record_error, record_learning as learnings_record_learning,
     ConversationMemory, memory_root,
 };
 use bee::react::{compact_context, ContextManager, Planner, ReactEvent};
@@ -62,8 +63,8 @@ struct AppState {
     /// 记忆根目录（workspace/memory），用于短期日志与长期 Markdown
     memory_root: PathBuf,
     workspace: PathBuf,
-    /// 向量长期记忆共享实例（启用时带快照路径，定期保存避免重启丢失）
-    shared_vector_long_term: Option<Arc<InMemoryVectorLongTerm>>,
+    /// 每个助手的向量长期记忆（assistant_id -> Arc），启用时按需创建
+    shared_vector_by_assistant: Arc<RwLock<HashMap<String, Arc<InMemoryVectorLongTerm>>>>,
     /// 多助手：列表与 id -> 完整 system prompt（含 tool schema）
     assistants: Vec<AssistantInfo>,
     assistant_prompts: Arc<RwLock<HashMap<String, String>>>,
@@ -103,6 +104,8 @@ struct ChatResponse {
 #[derive(Debug, Deserialize)]
 struct HistoryQuery {
     session_id: Option<String>,
+    #[serde(default)]
+    assistant_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -133,12 +136,19 @@ struct ConsolidateResponse {
 struct ClearSessionRequest {
     #[serde(default)]
     session_id: Option<String>,
+    #[serde(default)]
+    assistant_id: Option<String>,
 }
 
 /// 会话列表项
 #[derive(Debug, Serialize)]
 struct SessionListItem {
+    /// 复合 key：{session_id}::{assistant_id}，用于 API 调用
     id: String,
+    /// 会话 id
+    session_id: String,
+    /// 助手 id，该会话属于该助手的独立记忆
+    assistant_id: String,
     title: String,
     message_count: usize,
     updated_at: String,
@@ -567,7 +577,7 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&sessions_dir).ok();
     std::fs::create_dir_all(&memory_root).ok();
 
-    let shared_vector_long_term = create_shared_vector_long_term(&workspace, &cfg);
+    let shared_vector_by_assistant = Arc::new(RwLock::new(HashMap::new()));
 
     let state = Arc::new(AppState {
         config: cfg.clone(),
@@ -576,7 +586,7 @@ async fn main() -> anyhow::Result<()> {
         sessions_dir,
         memory_root: memory_root.clone(),
         workspace: workspace.clone(),
-        shared_vector_long_term,
+        shared_vector_by_assistant,
         assistants,
         assistant_prompts,
         assistant_skills,
@@ -633,19 +643,18 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // 向量快照定期保存（每 5 分钟）
-    if state.shared_vector_long_term.is_some() {
-        let vec_ref = state.shared_vector_long_term.clone();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+    let vec_by_assistant_ref = state.shared_vector_by_assistant.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+        interval.tick().await;
+        loop {
             interval.tick().await;
-            loop {
-                interval.tick().await;
-                if let Some(v) = vec_ref.as_ref() {
-                    v.save_snapshot();
-                }
+            let map = vec_by_assistant_ref.read().await;
+            for v in map.values() {
+                v.save_snapshot();
             }
-        });
-    }
+        }
+    });
 
     // 心跳：若配置启用了 heartbeat，后台定期让 Agent 自主检查待办与反思
     if cfg.heartbeat.enabled {
@@ -656,12 +665,16 @@ async fn main() -> anyhow::Result<()> {
             interval.tick().await; // 跳过启动后立即执行
             loop {
                 interval.tick().await;
-                let shared_vec = heartbeat_state.shared_vector_long_term.clone();
-                let mut context = create_context_with_long_term(
+                let shared_vec = {
+                    let map = heartbeat_state.shared_vector_by_assistant.read().await;
+                    map.get("default").cloned()
+                };
+                let mut context = create_context_with_long_term_for_assistant(
                     &heartbeat_state.config,
                     DEFAULT_MAX_TURNS,
                     Some(&heartbeat_state.workspace),
                     shared_vec,
+                    Some("default"),
                 );
                 let guard = heartbeat_state.components.read().await;
                 match process_message(&**guard, &mut context, HEARTBEAT_PROMPT, None).await {
@@ -727,46 +740,98 @@ async fn serve_highlight_css() -> Response {
         .unwrap()
 }
 
-/// 会话在磁盘上的路径：workspace/sessions/{session_id}.json（路径非法字符替换为 _）
-fn session_path(sessions_dir: &std::path::Path, session_id: &str) -> PathBuf {
-    let name = session_id.replace('/', "_").replace('\\', "_");
-    sessions_dir.join(format!("{}.json", name))
+/// 会话的复合 key：{session_id}::{assistant_id}
+fn session_key(session_id: &str, assistant_id: &str) -> String {
+    format!("{}::{}", session_id, assistant_id)
 }
 
-/// 从磁盘加载会话：反序列化 SessionSnapshot，重建 ConversationMemory 与 FileLongTerm
+/// 会话在磁盘上的路径：workspace/sessions/{session_id}---{assistant_id}.json（--- 为分隔符）
+fn session_path(sessions_dir: &std::path::Path, session_id: &str, assistant_id: &str) -> PathBuf {
+    let safe_sid: String = session_id
+        .chars()
+        .map(|c| if c == '/' || c == '\\' || c == '-' { '_' } else { c })
+        .collect();
+    let safe_aid: String = assistant_id
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .collect();
+    let aid = if safe_aid.is_empty() { "default" } else { safe_aid.as_str() };
+    sessions_dir.join(format!("{}---{}.json", safe_sid, aid))
+}
+
+/// 获取或创建指定助手的向量长期记忆
+async fn get_or_create_vector_for_assistant(
+    state: &AppState,
+    assistant_id: &str,
+) -> Option<Arc<InMemoryVectorLongTerm>> {
+    let aid = if assistant_id.is_empty() { "default" } else { assistant_id };
+    {
+        let map = state.shared_vector_by_assistant.read().await;
+        if let Some(v) = map.get(aid) {
+            return Some(Arc::clone(v));
+        }
+    }
+    if let Some(vec) = create_vector_long_term_for_assistant(&state.workspace, &state.config, Some(aid)) {
+        let mut map = state.shared_vector_by_assistant.write().await;
+        map.insert(aid.to_string(), Arc::clone(&vec));
+        Some(vec)
+    } else {
+        None
+    }
+}
+
+/// 从磁盘加载会话：反序列化 SessionSnapshot，重建 ConversationMemory 与 per-assistant 长期记忆
 fn load_session_from_disk(
     sessions_dir: &std::path::Path,
     session_id: &str,
-    memory_root: &std::path::Path,
+    assistant_id: &str,
+    workspace: &std::path::Path,
+    cfg: &AppConfig,
+    vector_for_assistant: Option<Arc<InMemoryVectorLongTerm>>,
 ) -> Option<ContextManager> {
-    let path = session_path(sessions_dir, session_id);
-    let data = std::fs::read_to_string(&path).ok()?;
+    // 尝试新格式 {session_id}_{assistant_id}.json
+    let path = session_path(sessions_dir, session_id, assistant_id);
+    let data = std::fs::read_to_string(&path).ok().or_else(|| {
+        // 兼容旧格式：仅 session_id.json（视为 default 助手）
+        if assistant_id == "default" {
+            let legacy_path = sessions_dir.join(format!("{}.json", session_id.replace('/', "_").replace('\\', "_")));
+            std::fs::read_to_string(&legacy_path).ok()
+        } else {
+            None
+        }
+    })?;
     let snap: SessionSnapshot = serde_json::from_str(&data).ok()?;
     let conversation = ConversationMemory::from_messages(snap.messages, snap.max_turns);
-    let long_term = Arc::new(bee::memory::FileLongTerm::new(
-        bee::memory::long_term_path(memory_root),
-        2000,
-    ));
-    let cfg = load_config(None).unwrap_or_else(|_| AppConfig::default());
+    let assistant_root = assistant_memory_root(workspace, assistant_id);
+    std::fs::create_dir_all(&assistant_root).ok();
+    let long_term: Arc<dyn bee::memory::LongTermMemory> = if let Some(vec) = vector_for_assistant {
+        vec
+    } else {
+        Arc::new(bee::memory::FileLongTerm::new(
+            bee::memory::long_term_path(&assistant_root),
+            2000,
+        ))
+    };
     let mut ctx = ContextManager::new(snap.max_turns)
         .with_long_term(long_term)
-        .with_lessons_path(lessons_path(memory_root))
-        .with_procedural_path(procedural_path(memory_root))
-        .with_preferences_path(preferences_path(memory_root))
+        .with_lessons_path(lessons_path(&assistant_root))
+        .with_procedural_path(procedural_path(&assistant_root))
+        .with_preferences_path(preferences_path(&assistant_root))
         .with_auto_lesson_on_hallucination(cfg.evolution.auto_lesson_on_hallucination)
         .with_record_tool_success(cfg.evolution.record_tool_success);
     ctx.conversation = conversation;
     Some(ctx)
 }
 
-/// 将会话写回磁盘（JSON 快照），并追加本轮对话到当日短期日志 memory/logs/YYYY-MM-DD.md
+/// 将会话写回磁盘（JSON 快照），并追加本轮对话到当日短期日志 memory/{assistant_id}/logs/YYYY-MM-DD.md
 fn save_session_to_disk(
     sessions_dir: &std::path::Path,
-    memory_root: &std::path::Path,
+    workspace: &std::path::Path,
     session_id: &str,
+    assistant_id: &str,
     context: &ContextManager,
 ) {
-    let path = session_path(sessions_dir, session_id);
+    let path = session_path(sessions_dir, session_id, assistant_id);
     let snap = SessionSnapshot {
         messages: context.messages().to_vec(),
         max_turns: context.conversation.max_turns(),
@@ -774,8 +839,10 @@ fn save_session_to_disk(
     if let Ok(json) = serde_json::to_string_pretty(&snap) {
         let _ = std::fs::write(path, json);
     }
+    let assistant_root = assistant_memory_root(workspace, assistant_id);
+    std::fs::create_dir_all(assistant_root.join("logs")).ok();
     let date = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let _ = append_daily_log(memory_root, &date, session_id, context.messages());
+    let _ = append_daily_log(&assistant_root, &date, &format!("{}:{}", session_id, assistant_id), context.messages());
 }
 
 /// POST /api/memory/consolidate?since_days=7：手动触发记忆整理（截断式），将近期短期日志归纳写入长期记忆
@@ -820,7 +887,7 @@ async fn api_config_reload(
     Ok(StatusCode::OK)
 }
 
-/// POST /api/compact：对指定会话执行 Context Compaction（摘要写入长期记忆并替换为摘要消息），请求体 { "session_id": "..." }
+/// POST /api/compact：对指定会话执行 Context Compaction（摘要写入长期记忆并替换为摘要消息），请求体 { "session_id": "...", "assistant_id": "..." }
 async fn api_compact(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ClearSessionRequest>,
@@ -829,26 +896,44 @@ async fn api_compact(
         Some(s) => s,
         None => return Err((StatusCode::BAD_REQUEST, "session_id is required".to_string())),
     };
+    let assistant_id = req.assistant_id.as_deref().unwrap_or("default");
+    let key = session_key(&session_id, assistant_id);
+    let vector = get_or_create_vector_for_assistant(&state, assistant_id).await;
     let mut context = state
         .sessions
         .write()
         .await
-        .remove(&session_id)
+        .remove(&key)
         .unwrap_or_else(|| {
-            load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root).unwrap_or_else(|| {
-                create_context_with_long_term(
+            load_session_from_disk(
+                &state.sessions_dir,
+                &session_id,
+                assistant_id,
+                &state.workspace,
+                &state.config,
+                vector.clone(),
+            )
+            .unwrap_or_else(|| {
+                create_context_with_long_term_for_assistant(
                     &state.config,
                     DEFAULT_MAX_TURNS,
                     Some(&state.workspace),
-                    state.shared_vector_long_term.clone(),
+                    vector,
+                    Some(assistant_id),
                 )
             })
         });
     let components = state.components.read().await;
     match compact_context(&components.planner, &mut context).await {
         Ok(()) => {
-            save_session_to_disk(&state.sessions_dir, &state.memory_root, &session_id, &context);
-            state.sessions.write().await.insert(session_id, context);
+            save_session_to_disk(
+                &state.sessions_dir,
+                &state.workspace,
+                &session_id,
+                assistant_id,
+                &context,
+            );
+            state.sessions.write().await.insert(key, context);
             Ok(StatusCode::OK)
         }
         Err(e) => Err((
@@ -858,7 +943,7 @@ async fn api_compact(
     }
 }
 
-/// POST /api/session/clear：清除指定会话（从内存移除并删除磁盘文件），请求体可选 { "session_id": "..." }
+/// POST /api/session/clear：清除指定会话（从内存移除并删除磁盘文件），请求体可选 { "session_id": "...", "assistant_id": "..." }
 async fn api_session_clear(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ClearSessionRequest>,
@@ -867,37 +952,50 @@ async fn api_session_clear(
         Some(s) => s,
         None => return Ok(StatusCode::OK),
     };
+    let assistant_id = req.assistant_id.as_deref().unwrap_or("default");
+    let key = session_key(&session_id, assistant_id);
     {
         let mut sessions = state.sessions.write().await;
-        sessions.remove(&session_id);
+        sessions.remove(&key);
     }
-    let path = session_path(&state.sessions_dir, &session_id);
+    let path = session_path(&state.sessions_dir, &session_id, assistant_id);
     let _ = std::fs::remove_file(&path);
+    // 兼容旧格式：若存在 session_id.json 也删除
+    if assistant_id == "default" {
+        let legacy = state.sessions_dir.join(format!("{}.json", session_id.replace('/', "_").replace('\\', "_")));
+        let _ = std::fs::remove_file(legacy);
+    }
     Ok(StatusCode::OK)
 }
 
-/// GET /api/sessions：列出所有会话（从磁盘读取），按更新时间倒序
+/// GET /api/sessions：列出所有会话（从磁盘读取），按更新时间倒序。每个 (session_id, assistant_id) 为独立会话
 async fn api_sessions_list(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<SessionListItem>>, (StatusCode, String)> {
     let mut items = Vec::new();
     let entries = std::fs::read_dir(&state.sessions_dir)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    
+
     for entry in entries.flatten() {
         let path = entry.path();
         if path.extension().map_or(true, |e| e != "json") {
             continue;
         }
-        let id = path.file_stem()
+        let stem = path
+            .file_stem()
             .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_string();
-        if id.is_empty() {
+            .unwrap_or("");
+        if stem.is_empty() {
             continue;
         }
-        
-        // 读取会话快照获取消息
+        let (session_id, assistant_id) = if let Some(idx) = stem.find("---") {
+            let (sid, aid) = stem.split_at(idx);
+            (sid.to_string(), aid.trim_start_matches("---").to_string())
+        } else {
+            (stem.to_string(), "default".to_string())
+        };
+        let id = session_key(&session_id, &assistant_id);
+
         let content = match std::fs::read_to_string(&path) {
             Ok(c) => c,
             Err(_) => continue,
@@ -906,10 +1004,14 @@ async fn api_sessions_list(
             Ok(s) => s,
             Err(_) => continue,
         };
-        
-        // 提取标题：第一条用户消息的前 50 字符
-        let title = snap.messages.iter()
-            .find(|m| matches!(m.role, Role::User) && !m.content.trim().starts_with("Observation from "))
+
+        let title = snap
+            .messages
+            .iter()
+            .find(|m| {
+                matches!(m.role, Role::User)
+                    && !m.content.trim().starts_with("Observation from ")
+            })
             .map(|m| {
                 let t = m.content.trim();
                 if t.chars().count() > 50 {
@@ -919,9 +1021,9 @@ async fn api_sessions_list(
                 }
             })
             .unwrap_or_else(|| "新对话".to_string());
-        
-        // 获取文件修改时间
-        let (updated_at, date) = entry.metadata()
+
+        let (updated_at, date) = entry
+            .metadata()
             .and_then(|m| m.modified())
             .map(|t| {
                 let dt: chrono::DateTime<chrono::Local> = t.into();
@@ -931,19 +1033,20 @@ async fn api_sessions_list(
                 )
             })
             .unwrap_or_else(|_| (String::new(), String::new()));
-        
+
         items.push(SessionListItem {
-            id,
+            id: id.clone(),
+            session_id,
+            assistant_id,
             title,
             message_count: snap.messages.len(),
             updated_at,
             date,
         });
     }
-    
-    // 按更新时间倒序（最新在前）
+
     items.sort_by(|a, b| b.date.cmp(&a.date).then(b.updated_at.cmp(&a.updated_at)));
-    
+
     Ok(Json(items))
 }
 
@@ -1286,7 +1389,7 @@ async fn api_skill_import_openclaw(
     Ok(Json(SkillInfo::from(&imported)))
 }
 
-/// GET /api/history?session_id=...：返回该会话的对话列表，过滤掉 Tool call / Observation 等内部消息
+/// GET /api/history?session_id=...&assistant_id=...：返回该会话的对话列表，过滤掉 Tool call / Observation 等内部消息
 async fn api_history(
     State(state): State<Arc<AppState>>,
     Query(q): Query<HistoryQuery>,
@@ -1295,14 +1398,24 @@ async fn api_history(
         Some(s) => s,
         None => return Err((StatusCode::BAD_REQUEST, "session_id is required".to_string())),
     };
+    let assistant_id = q.assistant_id.as_deref().unwrap_or("default");
+    let key = session_key(&session_id, assistant_id);
+    let vector = get_or_create_vector_for_assistant(&state, assistant_id).await;
     let context_opt = {
         let sessions = state.sessions.read().await;
-        sessions.get(&session_id).cloned()
+        sessions.get(&key).cloned()
     };
     let context = match context_opt {
         Some(c) => c,
         None => {
-            if let Some(loaded) = load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root) {
+            if let Some(loaded) = load_session_from_disk(
+                &state.sessions_dir,
+                &session_id,
+                assistant_id,
+                &state.workspace,
+                &state.config,
+                vector,
+            ) {
                 loaded
             } else {
                 return Ok(Json(HistoryResponse {
@@ -1354,23 +1467,33 @@ async fn api_chat(
         .session_id
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-
+    let assistant_id = req.assistant_id.as_deref().unwrap_or("default");
+    let key = session_key(&session_id, assistant_id);
+    let vector = get_or_create_vector_for_assistant(&state, assistant_id).await;
     let mut context = {
         let mut sessions = state.sessions.write().await;
-        sessions.remove(&session_id).unwrap_or_else(|| {
-            load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root).unwrap_or_else(|| {
-                create_context_with_long_term(
+        sessions.remove(&key).unwrap_or_else(|| {
+            load_session_from_disk(
+                &state.sessions_dir,
+                &session_id,
+                assistant_id,
+                &state.workspace,
+                &state.config,
+                vector.clone(),
+            )
+            .unwrap_or_else(|| {
+                create_context_with_long_term_for_assistant(
                     &state.config,
                     DEFAULT_MAX_TURNS,
                     Some(&state.workspace),
-                    state.shared_vector_long_term.clone(),
+                    vector,
+                    Some(assistant_id),
                 )
             })
         })
     };
 
     let components = state.components.read().await.clone();
-    let assistant_id = req.assistant_id.as_deref().unwrap_or("default");
     let allowed = state.assistant_skills.read().await.get(assistant_id).cloned();
     let reply = process_message(components.as_ref(), &mut context, message, allowed.as_deref())
         .await
@@ -1378,8 +1501,14 @@ async fn api_chat(
 
     {
         let mut sessions = state.sessions.write().await;
-        sessions.insert(session_id.clone(), context.clone());
-        save_session_to_disk(&state.sessions_dir, &state.memory_root, &session_id, &context);
+        sessions.insert(key, context.clone());
+        save_session_to_disk(
+            &state.sessions_dir,
+            &state.workspace,
+            &session_id,
+            assistant_id,
+            &context,
+        );
     }
 
     Ok(Json(ChatResponse {
@@ -1420,15 +1549,26 @@ async fn api_chat_stream(
     }
     let system_prompt_override = state.assistant_prompts.read().await.get(&assistant_id).cloned();
 
+    let key = session_key(&session_id, &assistant_id);
+    let vector = get_or_create_vector_for_assistant(&state, &assistant_id).await;
     let context = {
         let mut sessions = state.sessions.write().await;
-        sessions.remove(&session_id).unwrap_or_else(|| {
-            load_session_from_disk(&state.sessions_dir, &session_id, &state.memory_root).unwrap_or_else(|| {
-                create_context_with_long_term(
+        sessions.remove(&key).unwrap_or_else(|| {
+            load_session_from_disk(
+                &state.sessions_dir,
+                &session_id,
+                &assistant_id,
+                &state.workspace,
+                &state.config,
+                vector.clone(),
+            )
+            .unwrap_or_else(|| {
+                create_context_with_long_term_for_assistant(
                     &state.config,
                     DEFAULT_MAX_TURNS,
                     Some(&state.workspace),
-                    state.shared_vector_long_term.clone(),
+                    vector,
+                    Some(&assistant_id),
                 )
             })
         })
@@ -1440,6 +1580,8 @@ async fn api_chat_stream(
     let allowed_for_spawn = state.assistant_skills.read().await.get(&assistant_id).cloned();
     let components = state.components.read().await.clone();
     let session_id_clone = session_id.clone();
+    let assistant_id_clone = assistant_id.clone();
+    let session_key_clone = key.clone();
     let state_spawn = Arc::clone(&state);
     let model_configs = state.model_configs.clone();
     tokio::spawn(async move {
@@ -1471,12 +1613,13 @@ async fn api_chat_stream(
         // 无论流是否被客户端断开（超时/刷新），都持久化当前会话（含用户刚发的提问），刷新后历史不丢
         save_session_to_disk(
             &state_spawn.sessions_dir,
-            &state_spawn.memory_root,
+            &state_spawn.workspace,
             &session_id_clone,
+            &assistant_id_clone,
             &ctx,
         );
         let mut sessions = state_spawn.sessions.write().await;
-        sessions.insert(session_id_clone.clone(), ctx);
+        sessions.insert(session_key_clone.clone(), ctx);
         let _ = context_tx.send(());
     });
 

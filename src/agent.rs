@@ -12,7 +12,7 @@ use crate::config::AppConfig;
 use crate::core::{AgentBuilder, AgentComponents, AgentError};
 use crate::llm::create_embedder_from_config;
 use crate::memory::{
-    ConsolidateResult, FileLongTerm, InMemoryLongTerm, InMemoryVectorLongTerm,
+    assistant_memory_root, ConsolidateResult, FileLongTerm, InMemoryLongTerm, InMemoryVectorLongTerm,
     list_daily_logs_for_llm, lessons_path, long_term_path, memory_root, preferences_path,
     procedural_path, vector_snapshot_path, LongTermMemory, Message,
 };
@@ -45,6 +45,15 @@ pub fn create_shared_vector_long_term(
     workspace: &Path,
     cfg: &AppConfig,
 ) -> Option<Arc<InMemoryVectorLongTerm>> {
+    create_vector_long_term_for_assistant(workspace, cfg, None)
+}
+
+/// 为指定助手创建独立的向量长期记忆（memory/{assistant_id}/vector_snapshot.json）
+pub fn create_vector_long_term_for_assistant(
+    workspace: &Path,
+    cfg: &AppConfig,
+    assistant_id: Option<&str>,
+) -> Option<Arc<InMemoryVectorLongTerm>> {
     if !cfg.memory.vector_enabled {
         return None;
     }
@@ -58,7 +67,11 @@ pub fn create_shared_vector_long_term(
         &cfg.memory.embedding_model,
         api_key.as_deref(),
     )?;
-    let root = memory_root(workspace);
+    let root = match assistant_id.filter(|s| !s.is_empty()) {
+        Some(id) => crate::memory::assistant_memory_root(workspace, id),
+        None => memory_root(workspace),
+    };
+    std::fs::create_dir_all(&root).ok();
     let snapshot_path = vector_snapshot_path(&root);
     Some(Arc::new(InMemoryVectorLongTerm::new_with_persistence(
         embedder,
@@ -70,6 +83,7 @@ pub fn create_shared_vector_long_term(
 /// 创建带长期记忆的 ContextManager。
 /// 若 workspace 提供，则使用 Markdown 文件长期记忆（memory/long-term.md + BM25 检索），
 /// 或当 [memory].vector_enabled 时使用嵌入 API + 内存向量检索（可传入 shared_vector 以共享并持久化）；否则使用 InMemoryLongTerm。
+/// assistant_id：指定助手 id 时使用 memory/{assistant_id}/ 下的独立记忆目录
 ///
 /// 现在接受配置参数而非内部加载（解决问题 1.2）
 pub fn create_context_with_long_term(
@@ -78,6 +92,23 @@ pub fn create_context_with_long_term(
     workspace: Option<&Path>,
     shared_vector_long_term: Option<Arc<InMemoryVectorLongTerm>>,
 ) -> ContextManager {
+    create_context_with_long_term_for_assistant(
+        cfg,
+        max_turns,
+        workspace,
+        shared_vector_long_term,
+        None,
+    )
+}
+
+/// 为指定助手创建带独立长期记忆的 ContextManager（memory/{assistant_id}/）
+pub fn create_context_with_long_term_for_assistant(
+    cfg: &AppConfig,
+    max_turns: usize,
+    workspace: Option<&Path>,
+    shared_vector_long_term: Option<Arc<InMemoryVectorLongTerm>>,
+    assistant_id: Option<&str>,
+) -> ContextManager {
     let (long_term, lessons_path_opt, procedural_path_opt, preferences_path_opt): (
         Arc<dyn crate::memory::LongTermMemory>,
         Option<std::path::PathBuf>,
@@ -85,13 +116,20 @@ pub fn create_context_with_long_term(
         Option<std::path::PathBuf>,
     ) = match workspace {
         Some(w) => {
-            let root = memory_root(w);
+            let root = match assistant_id.filter(|s| !s.is_empty()) {
+                Some(id) => assistant_memory_root(w, id),
+                None => memory_root(w),
+            };
+            std::fs::create_dir_all(&root).ok();
             let lessons = Some(lessons_path(&root));
             let procedural = Some(procedural_path(&root));
             let preferences = Some(preferences_path(&root));
             let lt: Arc<dyn crate::memory::LongTermMemory> = if cfg.memory.vector_enabled {
                 if let Some(shared) = shared_vector_long_term {
-                    tracing::info!("long-term memory: vector (shared with snapshot)");
+                    tracing::info!(
+                        "long-term memory: vector (assistant: {})",
+                        assistant_id.unwrap_or("default")
+                    );
                     shared
                 } else {
                     let api_key = cfg
@@ -104,7 +142,11 @@ pub fn create_context_with_long_term(
                         &cfg.memory.embedding_model,
                         api_key.as_deref(),
                     ) {
-                        tracing::info!("long-term memory: vector (embedding model {})", cfg.memory.embedding_model);
+                        tracing::info!(
+                            "long-term memory: vector (assistant: {}, model {})",
+                            assistant_id.unwrap_or("default"),
+                            cfg.memory.embedding_model
+                        );
                         let snapshot = vector_snapshot_path(&root);
                         Arc::new(InMemoryVectorLongTerm::new_with_persistence(
                             embedder,

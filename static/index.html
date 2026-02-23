@@ -1072,7 +1072,7 @@
             ${items.map(session => {
               const safeId = escapeHtml(session.id);
               const safeTitle = escapeHtml(session.title);
-              const isActive = session.id === currentSessionId;
+              const isActive = currentSessionId && selectedAssistant && session.id === `${currentSessionId}::${selectedAssistant}`;
               return `
               <li class="session-item ${isActive ? 'active' : ''}" data-id="${safeId}">
                 <a href="#" class="flex items-start gap-3 px-4 py-3 rounded-lg hover:bg-white dark:hover:bg-gray-800 transition-colors group" onclick="loadSession('${safeId}'); return false;">
@@ -1114,12 +1114,14 @@
       return groups;
     }
 
-    async function loadSession(sessionId) {
-      currentSessionId = sessionId;
+    async function loadSession(sessionIdOrComposite) {
+      const [sid, aid] = sessionIdOrComposite.includes('::') ? sessionIdOrComposite.split('::') : [sessionIdOrComposite, 'default'];
+      currentSessionId = sid;
+      selectedAssistant = aid || 'default';
       sessionTokensAccum = 0;
       updateTokenStats(0, 0);
       try {
-        const response = await fetch(`/api/history?session_id=${sessionId}`);
+        const response = await fetch(`/api/history?session_id=${encodeURIComponent(sid)}&assistant_id=${encodeURIComponent(selectedAssistant)}`);
         const data = await response.json();
         showChatInterface();
         renderMessages(data.messages);
@@ -1181,8 +1183,9 @@
     }
 
     function highlightCurrentSession() {
+      const activeId = currentSessionId && selectedAssistant ? `${currentSessionId}::${selectedAssistant}` : null;
       document.querySelectorAll('.session-item').forEach(item => {
-        item.classList.toggle('active', item.dataset.id === currentSessionId);
+        item.classList.toggle('active', item.dataset.id === activeId);
       });
     }
 
@@ -1589,17 +1592,17 @@
       });
     }
 
-    async function deleteSession(sessionId) {
+    async function deleteSession(sessionIdOrComposite) {
       if (!confirm('Delete this conversation?')) return;
-      
+      const [sid, aid] = sessionIdOrComposite.includes('::') ? sessionIdOrComposite.split('::') : [sessionIdOrComposite, 'default'];
       try {
         await fetch('/api/session/clear', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId })
+          body: JSON.stringify({ session_id: sid, assistant_id: aid || 'default' })
         });
         
-        if (sessionId === currentSessionId) {
+        if (currentSessionId === sid && selectedAssistant === (aid || 'default')) {
           currentSessionId = null;
           document.getElementById('messages').innerHTML = '';
           document.getElementById('messages').classList.add('hidden');
@@ -1942,7 +1945,7 @@
         await fetch('/api/session/clear', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: currentSessionId })
+          body: JSON.stringify({ session_id: currentSessionId, assistant_id: selectedAssistant || 'default' })
         });
         document.getElementById('messages').innerHTML = '';
         currentSessionId = null;
@@ -1962,7 +1965,7 @@
           await fetch('/api/session/clear', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: s.id })
+            body: JSON.stringify({ session_id: s.session_id || s.id.split('::')[0], assistant_id: s.assistant_id || 'default' })
           });
         }
         document.getElementById('messages').innerHTML = '';

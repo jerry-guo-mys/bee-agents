@@ -15,6 +15,16 @@ pub fn memory_root(workspace: &Path) -> PathBuf {
     workspace.join("memory")
 }
 
+/// 指定助手的记忆根目录：memory/{assistant_id}/，使每个助手拥有独立的长期记忆
+pub fn assistant_memory_root(workspace: &Path, assistant_id: &str) -> PathBuf {
+    let safe_id: String = assistant_id
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    let dir = if safe_id.is_empty() { "default" } else { safe_id.as_str() };
+    memory_root(workspace).join(dir)
+}
+
 /// 当日日志路径：memory/logs/YYYY-MM-DD.md
 pub fn daily_log_path(memory_root: &Path, date: &str) -> PathBuf {
     memory_root.join("logs").join(format!("{}.md", date))
