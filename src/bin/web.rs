@@ -13,7 +13,10 @@ use axum::{
     body::Body,
     extract::{Query, State},
     http::{header, StatusCode},
-    response::{Html, Response},
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        Html, Response,
+    },
     routing::{get, post},
     Json, Router,
 };
@@ -21,7 +24,7 @@ use bee::memory::{Message, Role};
 use bytes::Bytes;
 use futures_util::stream::{self, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use bee::agent::{
@@ -30,7 +33,7 @@ use bee::agent::{
 };
 use bee::core::AgentComponents;
 use bee::skills::{Skill, SkillLoader};
-use bee::tools::tool_call_schema_json;
+use bee::tools::{tool_call_schema_json, DynamicAgent};
 use bee::memory::InMemoryVectorLongTerm;
 use bee::config::{load_config, AppConfig};
 use bee::memory::{
@@ -48,7 +51,75 @@ struct SessionSnapshot {
     max_turns: usize,
 }
 
+/// 群聊消息（含发送者标识）
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct GroupChatMessage {
+    role: String, // "user" | "assistant"
+    content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    assistant_id: Option<String>,
+}
+
+/// 群聊会话快照
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct GroupChatSnapshot {
+    messages: Vec<GroupChatMessage>,
+    max_turns: usize,
+}
+
+/// 群组定义
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct GroupInfo {
+    id: String,
+    name: Option<String>,
+    member_ids: Vec<String>,
+    created_at: String,
+}
+
 const DEFAULT_MAX_TURNS: usize = 20;
+
+/// 拓扑事件（Phase 4）
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum WorkspaceEvent {
+    GroupCreated {
+        id: String,
+        name: Option<String>,
+        member_ids: Vec<String>,
+    },
+    MessageCreated {
+        group_id: String,
+        from: Option<String>,
+        to: Option<String>,
+        content_preview: String,
+    },
+    AgentCreated {
+        id: String,
+        role: String,
+        parent_id: Option<String>,
+    },
+}
+
+struct CreateObservationParsed {
+    id: String,
+    role: String,
+    parent_id: Option<String>,
+}
+
+/// 从 create 工具 Observation preview 解析 id、role
+fn parse_create_observation(preview: &str) -> Option<CreateObservationParsed> {
+    let re = regex::Regex::new(r"id=([a-zA-Z0-9_-]+),\s*role=([^.]+)").ok()?;
+    let cap = re.captures(preview)?;
+    let id = cap.get(1)?.as_str().to_string();
+    let role = cap.get(2)?.as_str().trim().to_string();
+    Some(CreateObservationParsed { id, role, parent_id: None })
+}
+
+fn emit_event(bus: &broadcast::Sender<String>, ev: WorkspaceEvent) {
+    if let Ok(json) = serde_json::to_string(&ev) {
+        let _ = bus.send(json);
+    }
+}
 
 /// 心跳时发给 Agent 的提示：根据长期记忆与当前状态检查待办或需跟进事项
 const HEARTBEAT_PROMPT: &str = "Heartbeat: 你正在后台自主运行。请根据长期记忆与当前状态，检查是否有待办或需跟进的事项；若有则输出一条简短建议，若无则仅回复 OK。可使用 cat/ls 查看 workspace 下 memory 或任务文件。";
@@ -80,6 +151,12 @@ struct AppState {
     model_configs: HashMap<String, ModelEntry>,
     /// 技能加载器
     skill_loader: Arc<SkillLoader>,
+    /// 群组：id -> GroupInfo
+    groups: Arc<RwLock<HashMap<String, GroupInfo>>>,
+    /// 群组持久化路径
+    groups_path: PathBuf,
+    /// 拓扑事件广播（SSE /api/events）
+    event_bus: broadcast::Sender<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -90,6 +167,9 @@ struct ChatRequest {
     /// 多助手：选用的助手 id，缺省为 "default"
     #[serde(default)]
     assistant_id: Option<String>,
+    /// 群聊：group_id 与 assistant_id 互斥，有 group_id 时为群聊模式
+    #[serde(default)]
+    group_id: Option<String>,
     /// 可切换模型：选用的模型 id，缺省为 "default"（使用配置）
     #[serde(default)]
     model_id: Option<String>,
@@ -102,16 +182,32 @@ struct ChatResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct CreateGroupRequest {
+    name: Option<String>,
+    member_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct InboxProcessRequest {
+    assistant_id: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct HistoryQuery {
     session_id: Option<String>,
     #[serde(default)]
     assistant_id: Option<String>,
+    /// 群聊：有 group_id 时按群加载历史，返回消息含 assistant_id
+    #[serde(default)]
+    group_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 struct HistoryMessage {
     role: String,
     content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    assistant_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -461,6 +557,66 @@ fn load_assistants(
     (list, prompts, skills_map, entries_map)
 }
 
+/// 从 workspace/agents.json 加载动态创建的 sub-agent（Phase 3）
+fn load_dynamic_agents(workspace: &std::path::Path) -> Vec<DynamicAgent> {
+    let path = workspace.join("agents.json");
+    let data = match std::fs::read_to_string(&path) {
+        Ok(d) => d,
+        Err(_) => return Vec::new(),
+    };
+    serde_json::from_str(&data).unwrap_or_default()
+}
+
+/// 热更新：将 agents.json 中新 agent 并入 assistant_prompts / assistant_skills
+async fn reload_dynamic_agents_into_state(state: &AppState) {
+    let dynamic = load_dynamic_agents(&state.workspace);
+    if dynamic.is_empty() {
+        return;
+    }
+    let all_tool_list: String = state
+        .tool_descriptions
+        .iter()
+        .map(|(n, d)| format!("- {}: {}", n, d))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let tool_schema = tool_call_schema_json();
+    let mut prompts = state.assistant_prompts.write().await;
+    let mut skills = state.assistant_skills.write().await;
+    for da in &dynamic {
+        if !prompts.contains_key(&da.id) {
+            let prompt = dynamic_agent_prompt(da, &all_tool_list, &tool_schema);
+            prompts.insert(da.id.clone(), prompt);
+        }
+        if !skills.contains_key(&da.id) {
+            skills.insert(
+                da.id.clone(),
+                state.tool_descriptions.iter().map(|(n, _)| n.clone()).collect(),
+            );
+        }
+    }
+}
+
+/// 为动态 agent 生成 system prompt
+fn dynamic_agent_prompt(agent: &DynamicAgent, tool_list: &str, tool_schema: &str) -> String {
+    let guidance = agent
+        .guidance
+        .as_deref()
+        .unwrap_or("Follow your role and assist the user.");
+    format!(
+        "You are a sub-agent with role: {}. Guidance: {}\n\nAvailable tools:\n{}",
+        agent.role,
+        guidance,
+        if tool_list.is_empty() {
+            "".to_string()
+        } else {
+            format!(
+                "{}\n\n## Tool call JSON Schema (you must output valid JSON matching this)\n```json\n{}\n```",
+                tool_list, tool_schema
+            )
+        }
+    )
+}
+
 /// 从 config/models.toml 加载可切换模型
 fn load_models(config_base: &std::path::Path) -> (Vec<ModelInfo>, HashMap<String, ModelEntry>) {
     let toml_path = [
@@ -549,8 +705,37 @@ async fn main() -> anyhow::Result<()> {
     let components_inner = create_agent_components(&cfg, &workspace);
     let tool_descriptions = components_inner.executor.tool_descriptions();
     let skill_loader = components_inner.skill_loader.clone();
-    let (mut assistants, mut prompts_map, skills_map, assistant_entries) =
+    let (mut assistants, mut prompts_map, mut skills_map, assistant_entries) =
         load_assistants(&config_base, &tool_descriptions);
+
+    let dynamic = load_dynamic_agents(&workspace);
+    let all_tool_list: String = tool_descriptions
+        .iter()
+        .map(|(n, d)| format!("- {}: {}", n, d))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let tool_schema = tool_call_schema_json();
+    for da in &dynamic {
+        if !prompts_map.contains_key(&da.id) {
+            let prompt = dynamic_agent_prompt(da, &all_tool_list, &tool_schema);
+            prompts_map.insert(da.id.clone(), prompt);
+        }
+        if assistants.iter().all(|a| a.id != da.id) {
+            assistants.push(AssistantInfo {
+                id: da.id.clone(),
+                name: da.role.clone(),
+                description: da.guidance.clone().unwrap_or_else(|| da.role.clone()),
+                skills: Some(tool_descriptions.iter().map(|(n, _)| n.clone()).collect()),
+            });
+        }
+        if !skills_map.contains_key(&da.id) {
+            skills_map.insert(
+                da.id.clone(),
+                tool_descriptions.iter().map(|(n, _)| n.clone()).collect(),
+            );
+        }
+    }
+
     if !prompts_map.contains_key("default") {
         let fallback = assistants
             .iter()
@@ -579,6 +764,10 @@ async fn main() -> anyhow::Result<()> {
 
     let shared_vector_by_assistant = Arc::new(RwLock::new(HashMap::new()));
 
+    let groups_path = workspace.join("groups.json");
+    let groups = load_groups_from_disk(&groups_path);
+    let (event_bus, _) = broadcast::channel::<String>(64);
+
     let state = Arc::new(AppState {
         config: cfg.clone(),
         components,
@@ -596,6 +785,9 @@ async fn main() -> anyhow::Result<()> {
         models,
         model_configs,
         skill_loader,
+        groups,
+        groups_path,
+        event_bus,
     });
 
     let app = Router::new()
@@ -612,6 +804,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/compact", post(api_compact))
         .route("/api/session/rename", post(api_session_rename))
         .route("/api/assistants", get(api_assistants_list))
+        .route("/api/agents", get(api_agents_list))
+        .route("/api/groups", get(api_groups_list).post(api_groups_create))
+        .route("/api/inbox/process", post(api_inbox_process))
         .route("/api/tools", get(api_tools_list))
         .route("/api/assistant/:id/skills", axum::routing::put(api_assistant_skills_put))
         .route("/api/models", get(api_models_list))
@@ -625,6 +820,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/health", get(|| async { "OK" }))
         .route("/api/metrics", get(api_metrics))
         .route("/api/metrics/prometheus", get(api_metrics_prometheus))
+        .route("/api/events", get(api_events_sse))
+        .route("/swarm", get(serve_swarm_page))
         .with_state(Arc::clone(&state));
 
     // 定期整理记忆：每 24 小时将近期短期日志归纳写入长期记忆
@@ -745,6 +942,15 @@ fn session_key(session_id: &str, assistant_id: &str) -> String {
     format!("{}::{}", session_id, assistant_id)
 }
 
+/// 群聊会话路径：workspace/sessions/group_{group_id}.json
+fn group_session_path(sessions_dir: &std::path::Path, group_id: &str) -> PathBuf {
+    let safe_id: String = group_id
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .collect();
+    sessions_dir.join(format!("group_{}.json", safe_id))
+}
+
 /// 会话在磁盘上的路径：workspace/sessions/{session_id}---{assistant_id}.json（--- 为分隔符）
 fn session_path(sessions_dir: &std::path::Path, session_id: &str, assistant_id: &str) -> PathBuf {
     let safe_sid: String = session_id
@@ -757,6 +963,72 @@ fn session_path(sessions_dir: &std::path::Path, session_id: &str, assistant_id: 
         .collect();
     let aid = if safe_aid.is_empty() { "default" } else { safe_aid.as_str() };
     sessions_dir.join(format!("{}---{}.json", safe_sid, aid))
+}
+
+fn load_groups_from_disk(path: &std::path::Path) -> Arc<RwLock<HashMap<String, GroupInfo>>> {
+    let map: HashMap<String, GroupInfo> = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    Arc::new(RwLock::new(map))
+}
+
+fn save_groups_to_disk(path: &std::path::Path, groups: &HashMap<String, GroupInfo>) {
+    if let Ok(json) = serde_json::to_string_pretty(groups) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+/// 加载群聊会话
+fn load_group_session(
+    sessions_dir: &std::path::Path,
+    group_id: &str,
+) -> Vec<GroupChatMessage> {
+    let path = group_session_path(sessions_dir, group_id);
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<GroupChatSnapshot>(&s).ok())
+        .map(|snap| snap.messages)
+        .unwrap_or_default()
+}
+
+/// 保存群聊会话
+fn save_group_session(
+    sessions_dir: &std::path::Path,
+    group_id: &str,
+    messages: &[GroupChatMessage],
+    max_turns: usize,
+) {
+    let path = group_session_path(sessions_dir, group_id);
+    let snap = GroupChatSnapshot {
+        messages: messages.to_vec(),
+        max_turns,
+    };
+    if let Ok(json) = serde_json::to_string_pretty(&snap) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+/// 将群聊消息转换为 LLM 上下文（带助手名）
+fn group_messages_to_llm_messages(
+    messages: &[GroupChatMessage],
+    assistants: &[AssistantInfo],
+) -> Vec<Message> {
+    messages
+        .iter()
+        .map(|m| match m.role.as_str() {
+            "user" => Message::user(&m.content),
+            "assistant" => {
+                let label = m
+                    .assistant_id
+                    .as_ref()
+                    .and_then(|id| assistants.iter().find(|a| a.id == *id).map(|a| a.name.as_str()))
+                    .unwrap_or("Assistant");
+                Message::assistant(format!("{}: {}", label, m.content))
+            }
+            _ => Message::assistant(&m.content),
+        })
+        .collect()
 }
 
 /// 获取或创建指定助手的向量长期记忆
@@ -1059,12 +1331,21 @@ async fn api_session_rename(
     Ok(StatusCode::OK)
 }
 
-/// GET /api/assistants：返回多助手列表（含 skills），供前端选择与配置
+/// GET /api/agents：返回动态创建的 sub-agent 列表（Phase 3，含 parent_id 用于树状展示）
+async fn api_agents_list(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<DynamicAgent>>, (StatusCode, String)> {
+    let list = load_dynamic_agents(&state.workspace);
+    Ok(Json(list))
+}
+
+/// GET /api/assistants：返回多助手列表（含 skills），供前端选择与配置；动态 agent 从 agents.json 合并
 async fn api_assistants_list(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<AssistantInfo>>, (StatusCode, String)> {
+    reload_dynamic_agents_into_state(&state).await;
     let skills = state.assistant_skills.read().await;
-    let list: Vec<AssistantInfo> = state
+    let mut list: Vec<AssistantInfo> = state
         .assistants
         .iter()
         .map(|a| {
@@ -1077,7 +1358,154 @@ async fn api_assistants_list(
             }
         })
         .collect();
+    let dynamic = load_dynamic_agents(&state.workspace);
+    let existing_ids: std::collections::HashSet<String> = list.iter().map(|a| a.id.clone()).collect();
+    for da in &dynamic {
+        if !existing_ids.contains(&da.id) {
+            list.push(AssistantInfo {
+                id: da.id.clone(),
+                name: da.role.clone(),
+                description: da.guidance.clone().unwrap_or_else(|| da.role.clone()),
+                skills: skills.get(&da.id).cloned(),
+            });
+        }
+    }
     Ok(Json(list))
+}
+
+/// GET /api/groups：列出所有群组
+async fn api_groups_list(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<GroupInfo>>, (StatusCode, String)> {
+    let groups = state.groups.read().await;
+    let list: Vec<GroupInfo> = groups.values().cloned().collect();
+    Ok(Json(list))
+}
+
+/// POST /api/groups：创建群组，body: { name?, member_ids }，返回创建的群组
+async fn api_groups_create(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CreateGroupRequest>,
+) -> Result<(StatusCode, Json<GroupInfo>), (StatusCode, String)> {
+    if req.member_ids.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "member_ids cannot be empty".into()));
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    let name = req.name.unwrap_or_else(|| format!("群聊 {}", &id[..8]));
+    let group = GroupInfo {
+        id: id.clone(),
+        name: Some(name),
+        member_ids: req.member_ids,
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
+    {
+        let mut groups = state.groups.write().await;
+        groups.insert(id.clone(), group.clone());
+        save_groups_to_disk(&state.groups_path, &*groups);
+    }
+    emit_event(&state.event_bus, WorkspaceEvent::GroupCreated {
+        id: group.id.clone(),
+        name: group.name.clone(),
+        member_ids: group.member_ids.clone(),
+    });
+    Ok((StatusCode::CREATED, Json(group)))
+}
+
+/// POST /api/inbox/process：处理指定 assistant 的收件箱（P2P 未读消息触发 ReAct）
+async fn api_inbox_process(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<InboxProcessRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    reload_dynamic_agents_into_state(&state).await;
+    let assistant_id = req.assistant_id.trim();
+    if assistant_id.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "assistant_id is required".to_string()));
+    }
+    let groups = state.groups.read().await;
+    let p2p_groups: Vec<_> = groups
+        .values()
+        .filter(|g| g.id.starts_with("p2p_") && g.member_ids.contains(&assistant_id.to_string()))
+        .cloned()
+        .collect();
+    drop(groups);
+
+    let mut processed = 0;
+    for g in p2p_groups {
+        let msgs = load_group_session(&state.sessions_dir, &g.id);
+        let last = match msgs.last() {
+            Some(m) => m,
+            None => continue,
+        };
+        if last.role != "assistant" {
+            continue;
+        }
+        let from = last.assistant_id.as_deref().unwrap_or("");
+        if from == assistant_id {
+            continue;
+        }
+        let from_name = state
+            .assistants
+            .iter()
+            .find(|a| a.id == from)
+            .map(|a| a.name.as_str())
+            .unwrap_or(from);
+        let user_input = format!("[来自 {}] {}", from_name, last.content);
+
+        let vector = get_or_create_vector_for_assistant(&state, assistant_id).await;
+        let mut context = create_context_with_long_term_for_assistant(
+            &state.config,
+            DEFAULT_MAX_TURNS,
+            Some(&state.workspace),
+            vector,
+            Some(assistant_id),
+        );
+        let llm_history = group_messages_to_llm_messages(&msgs[..msgs.len() - 1], &state.assistants);
+        context.set_messages(llm_history);
+
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let components = state.components.read().await.clone();
+        let prompt = state.assistant_prompts.read().await.get(assistant_id).cloned();
+        let allowed = state.assistant_skills.read().await.get(assistant_id).cloned();
+        let reply = process_message_stream(
+            components.as_ref(),
+            &mut context,
+            &user_input,
+            tx,
+            prompt.as_deref(),
+            None,
+            allowed.as_deref(),
+            Some(assistant_id),
+        )
+        .await
+        .unwrap_or_else(|e| format!("Error: {}", e));
+
+        let mut all_msgs = msgs.clone();
+        all_msgs.push(GroupChatMessage {
+            role: "assistant".to_string(),
+            content: reply.clone(),
+            assistant_id: Some(assistant_id.to_string()),
+        });
+        save_group_session(
+            &state.sessions_dir,
+            &g.id,
+            &all_msgs,
+            DEFAULT_MAX_TURNS,
+        );
+        let preview: String = reply.chars().take(80).collect::<String>()
+            + if reply.len() > 80 { "…" } else { "" };
+        emit_event(&state.event_bus, WorkspaceEvent::MessageCreated {
+            group_id: g.id.clone(),
+            from: Some(assistant_id.to_string()),
+            to: Some(from.to_string()),
+            content_preview: preview,
+        });
+        processed += 1;
+    }
+
+    Ok(Json(serde_json::json!({
+        "processed": processed,
+        "assistant_id": assistant_id
+    })))
 }
 
 /// GET /api/tools：返回可用工具列表，供技能配置使用
@@ -1389,14 +1817,29 @@ async fn api_skill_import_openclaw(
     Ok(Json(SkillInfo::from(&imported)))
 }
 
-/// GET /api/history?session_id=...&assistant_id=...：返回该会话的对话列表，过滤掉 Tool call / Observation 等内部消息
+/// GET /api/history?session_id=...&assistant_id=... 或 ?group_id=...：返回该会话的对话列表，过滤掉 Tool call / Observation 等内部消息
 async fn api_history(
     State(state): State<Arc<AppState>>,
     Query(q): Query<HistoryQuery>,
 ) -> Result<Json<HistoryResponse>, (StatusCode, String)> {
+    if let Some(ref gid) = q.group_id.filter(|s| !s.is_empty()) {
+        let group_msgs = load_group_session(&state.sessions_dir, gid);
+        let messages: Vec<HistoryMessage> = group_msgs
+            .into_iter()
+            .map(|m| HistoryMessage {
+                role: m.role,
+                content: m.content,
+                assistant_id: m.assistant_id,
+            })
+            .collect();
+        return Ok(Json(HistoryResponse {
+            session_id: gid.clone(),
+            messages,
+        }));
+    }
     let session_id = match q.session_id.filter(|s| !s.is_empty()) {
         Some(s) => s,
-        None => return Err((StatusCode::BAD_REQUEST, "session_id is required".to_string())),
+        None => return Err((StatusCode::BAD_REQUEST, "session_id or group_id is required".to_string())),
     };
     let assistant_id = q.assistant_id.as_deref().unwrap_or("default");
     let key = session_key(&session_id, assistant_id);
@@ -1446,6 +1889,7 @@ async fn api_history(
                 Role::Tool => "tool".to_string(),
             },
             content: m.content.clone(),
+            assistant_id: None,
         })
         .collect();
     Ok(Json(HistoryResponse {
@@ -1517,15 +1961,175 @@ async fn api_chat(
     }))
 }
 
-/// 流式聊天：NDJSON 流，首行 session_id，后续为 ReactEvent
+/// 群聊流式：多助手串行回复，共享群历史，各自长期记忆
+async fn api_chat_stream_group(
+    state: Arc<AppState>,
+    group_id: String,
+    message: String,
+) -> Result<Response, (StatusCode, String)> {
+    let group = {
+        let groups = state.groups.read().await;
+        groups
+            .get(&group_id)
+            .cloned()
+            .ok_or_else(|| (StatusCode::NOT_FOUND, "group not found".to_string()))?
+    };
+    let member_ids = group.member_ids.clone();
+    if member_ids.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "group has no members".to_string()));
+    }
+
+    let mut group_msgs = load_group_session(&state.sessions_dir, &group_id);
+    group_msgs.push(GroupChatMessage {
+        role: "user".to_string(),
+        content: message.clone(),
+        assistant_id: None,
+    });
+    let preview: String = message.chars().take(80).collect::<String>()
+        + if message.len() > 80 { "…" } else { "" };
+    emit_event(&state.event_bus, WorkspaceEvent::MessageCreated {
+        group_id: group_id.clone(),
+        from: None,
+        to: None,
+        content_preview: preview,
+    });
+    let mut llm_history = group_messages_to_llm_messages(&group_msgs[..group_msgs.len() - 1], &state.assistants);
+
+    let (line_tx, line_rx) = mpsc::unbounded_channel::<String>();
+    let components = state.components.read().await.clone();
+    let state_spawn = Arc::clone(&state);
+    let group_id_spawn = group_id.clone();
+    tokio::spawn(async move {
+        let _ = line_tx.send(format!(
+            "{}\n",
+            serde_json::to_string(&serde_json::json!({
+                "type": "session_id",
+                "session_id": group_id_spawn
+            }))
+            .unwrap()
+        ));
+
+        for assistant_id in &member_ids {
+            let _ = line_tx.send(format!(
+                "{}\n",
+                serde_json::to_string(&serde_json::json!({
+                    "type": "group_assistant_start",
+                    "assistant_id": assistant_id
+                }))
+                .unwrap()
+            ));
+
+            let vector = get_or_create_vector_for_assistant(&state_spawn, assistant_id).await;
+            let mut context = create_context_with_long_term_for_assistant(
+                &state_spawn.config,
+                DEFAULT_MAX_TURNS,
+                Some(&state_spawn.workspace),
+                vector,
+                Some(assistant_id),
+            );
+            context.set_messages(llm_history.clone());
+
+            let system_prompt_override = state_spawn.assistant_prompts.read().await.get(assistant_id).cloned();
+            let allowed_for_spawn = state_spawn.assistant_skills.read().await.get(assistant_id).cloned();
+            let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ReactEvent>();
+            let line_tx_fwd = line_tx.clone();
+            let event_bus_fwd = state_spawn.event_bus.clone();
+            let forward_handle = tokio::spawn(async move {
+                while let Some(ev) = event_rx.recv().await {
+                    if let ReactEvent::Observation { tool, preview } = &ev {
+                        if tool == "create" {
+                            if let Some(agent) = parse_create_observation(preview) {
+                                emit_event(&event_bus_fwd, WorkspaceEvent::AgentCreated {
+                                    id: agent.id,
+                                    role: agent.role,
+                                    parent_id: agent.parent_id,
+                                });
+                            }
+                        }
+                    }
+                    let _ = line_tx_fwd.send(format!("{}\n", serde_json::to_string(&ev).unwrap()));
+                }
+            });
+
+            let prompt_ref = system_prompt_override.as_deref();
+            let planner_override: Option<Arc<Planner>> = None;
+            let allowed = allowed_for_spawn.as_deref();
+            let reply = process_message_stream(
+                components.as_ref(),
+                &mut context,
+                &message,
+                event_tx,
+                prompt_ref,
+                planner_override.as_deref(),
+                allowed,
+                Some(assistant_id.as_str()),
+            )
+            .await
+            .unwrap_or_else(|e| format!("Error: {}", e));
+
+            let _ = forward_handle.await;
+            let _ = line_tx.send(format!(
+                "{}\n",
+                serde_json::to_string(&serde_json::json!({
+                    "type": "group_assistant_done",
+                    "assistant_id": assistant_id
+                }))
+                .unwrap()
+            ));
+
+            group_msgs.push(GroupChatMessage {
+                role: "assistant".to_string(),
+                content: reply.clone(),
+                assistant_id: Some(assistant_id.clone()),
+            });
+            let preview: String = reply.chars().take(80).collect::<String>()
+                + if reply.len() > 80 { "…" } else { "" };
+            emit_event(&state_spawn.event_bus, WorkspaceEvent::MessageCreated {
+                group_id: group_id_spawn.clone(),
+                from: Some(assistant_id.clone()),
+                to: None,
+                content_preview: preview,
+            });
+            llm_history = group_messages_to_llm_messages(&group_msgs, &state_spawn.assistants);
+        }
+
+        save_group_session(
+            &state_spawn.sessions_dir,
+            &group_id_spawn,
+            &group_msgs,
+            DEFAULT_MAX_TURNS,
+        );
+    });
+
+    type BoxErr = Box<dyn std::error::Error + Send + Sync>;
+    let stream = stream::unfold(line_rx, |mut rx| async move {
+        rx.recv()
+            .await
+            .map(|line| (Ok::<Bytes, BoxErr>(Bytes::from(line)), rx))
+    });
+    let mut res = Response::new(Body::from_stream(stream));
+    res.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        "application/x-ndjson; charset=utf-8".parse().unwrap(),
+    );
+    Ok(res)
+}
+
+/// 流式聊天：NDJSON 流，首行 session_id，后续为 ReactEvent；group_id 时走群聊模式
 async fn api_chat_stream(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ChatRequest>,
-) -> Result<impl axum::response::IntoResponse, (StatusCode, String)> {
+) -> Result<Response, (StatusCode, String)> {
     let message = req.message.trim().to_string();
     if message.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "message is required".to_string()));
     }
+
+    if let Some(ref gid) = req.group_id.filter(|s| !s.is_empty()) {
+        return api_chat_stream_group(Arc::clone(&state), gid.clone(), message).await;
+    }
+
+    reload_dynamic_agents_into_state(&state).await;
 
     let session_id = req
         .session_id
@@ -1608,6 +2212,7 @@ async fn api_chat_stream(
             prompt_ref,
             planner_ref,
             allowed,
+            Some(assistant_id_clone.as_str()),
         )
         .await;
         // 无论流是否被客户端断开（超时/刷新），都持久化当前会话（含用户刚发的提问），刷新后历史不丢
@@ -1677,6 +2282,15 @@ async fn api_chat_stream(
                                 None,
                             );
                         }
+                        ReactEvent::Observation { tool, preview } if tool == "create" => {
+                            if let Some(agent) = parse_create_observation(preview) {
+                                emit_event(&state_reinsert.event_bus, WorkspaceEvent::AgentCreated {
+                                    id: agent.id,
+                                    role: agent.role,
+                                    parent_id: agent.parent_id,
+                                });
+                            }
+                        }
                         _ => {}
                     }
                     let line = format!("{}\n", serde_json::to_string(&ev).unwrap());
@@ -1696,13 +2310,38 @@ async fn api_chat_stream(
     type BoxErr = Box<dyn std::error::Error + Send + Sync>;
     let stream = stream.map_err(|e: tokio::sync::oneshot::error::RecvError| Box::new(e) as BoxErr);
 
-    Ok((
-        [(
-            axum::http::header::CONTENT_TYPE,
-            "application/x-ndjson; charset=utf-8",
-        )],
-        Body::from_stream(stream),
-    ))
+    let mut res = Response::new(Body::from_stream(stream));
+    res.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        "application/x-ndjson; charset=utf-8".parse().unwrap(),
+    );
+    Ok(res)
+}
+
+/// GET /api/events：SSE 流，推送 group.created / message.created
+async fn api_events_sse(
+    State(state): State<Arc<AppState>>,
+) -> Sse<impl futures_util::Stream<Item = Result<Event, std::convert::Infallible>>> {
+    let rx = state.event_bus.subscribe();
+    let event_stream = stream::unfold(rx, |mut rx| async move {
+        loop {
+            match rx.recv().await {
+                Ok(msg) => return Some((Ok(Event::default().data(msg)), rx)),
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => return None,
+            }
+        }
+    });
+    Sse::new(event_stream).keep_alive(
+        KeepAlive::new()
+            .interval(std::time::Duration::from_secs(15))
+            .text("keepalive"),
+    )
+}
+
+/// GET /swarm：蜂群拓扑 Graph 页
+async fn serve_swarm_page() -> Html<&'static str> {
+    Html(include_str!("../../static/swarm.html"))
 }
 
 /// GET /api/metrics：返回 JSON 格式的 metrics

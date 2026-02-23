@@ -260,6 +260,8 @@ pub async fn process_message(
 /// system_prompt_override：多助手时传入该助手的完整 system prompt（含 tool schema），否则用 components 默认。
 /// planner_override：可切换模型时传入该模型的 Planner，否则用 components 默认。
 /// allowed_tools：该智能体可用的工具名列表，None 或空表示全部。
+/// assistant_id：当前助手 id，用于 send 工具等；web 多助手时必传。
+#[allow(unused_variables)]
 pub async fn process_message_stream(
     components: &AgentComponents,
     context: &mut ContextManager,
@@ -268,24 +270,71 @@ pub async fn process_message_stream(
     system_prompt_override: Option<&str>,
     planner_override: Option<&Planner>,
     allowed_tools: Option<&[String]>,
+    assistant_id: Option<&str>,
 ) -> Result<String, AgentError> {
     let cancel_token = tokio_util::sync::CancellationToken::new();
     let planner = planner_override.unwrap_or(&components.planner);
-    let result = react_loop(
-        planner,
-        &components.executor,
-        &components.recovery,
-        context,
-        user_input,
-        None,
-        Some(&event_tx),
-        cancel_token,
-        components.critic.as_ref(),
-        Some(&components.task_scheduler),
-        system_prompt_override,
-        allowed_tools,
-    )
-    .await?;
+
+    let result = {
+        #[cfg(feature = "web")]
+        {
+            if let Some(aid) = assistant_id {
+                crate::tools::CURRENT_ASSISTANT_ID
+                    .scope(Some(aid.to_string()), async {
+                        react_loop(
+                            planner,
+                            &components.executor,
+                            &components.recovery,
+                            context,
+                            user_input,
+                            None,
+                            Some(&event_tx),
+                            cancel_token,
+                            components.critic.as_ref(),
+                            Some(&components.task_scheduler),
+                            system_prompt_override,
+                            allowed_tools,
+                        )
+                        .await
+                    })
+                    .await
+            } else {
+                react_loop(
+                    planner,
+                    &components.executor,
+                    &components.recovery,
+                    context,
+                    user_input,
+                    None,
+                    Some(&event_tx),
+                    cancel_token,
+                    components.critic.as_ref(),
+                    Some(&components.task_scheduler),
+                    system_prompt_override,
+                    allowed_tools,
+                )
+                .await
+            }
+        }
+        #[cfg(not(feature = "web"))]
+        {
+            react_loop(
+                planner,
+                &components.executor,
+                &components.recovery,
+                context,
+                user_input,
+                None,
+                Some(&event_tx),
+                cancel_token,
+                components.critic.as_ref(),
+                Some(&components.task_scheduler),
+                system_prompt_override,
+                allowed_tools,
+            )
+            .await
+        }
+    }?;
     Ok(result.response)
 }
 
@@ -334,6 +383,7 @@ pub async fn process_message_with_skills(
         enhanced_prompt.as_deref(),
         planner_override,
         allowed_tools,
+        None,
     )
     .await
 }

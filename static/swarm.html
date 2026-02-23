@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bee Swarm - 蜂群拓扑</title>
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+    #main { display: flex; flex-direction: column; height: 100vh; }
+    header { padding: 12px 20px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 16px; }
+    header h1 { margin: 0; font-size: 1.25rem; }
+    header a { color: #60a5fa; text-decoration: none; }
+    header a:hover { text-decoration: underline; }
+    #graph { flex: 1; min-height: 0; }
+    #legend { padding: 8px 20px; font-size: 0.8rem; color: #94a3b8; }
+    #legend span { margin-right: 16px; }
+    #legend .node-asst { color: #22c55e; }
+    #legend .node-group { color: #f59e0b; }
+    #legend .node-p2p { color: #8b5cf6; }
+    #legend .node-dynamic { color: #06b6d4; }
+  </style>
+</head>
+<body>
+  <div id="main">
+    <header>
+      <h1>🐝 Bee Swarm</h1>
+      <a href="/">← 返回聊天</a>
+      <span id="status">加载中...</span>
+    </header>
+    <div id="graph"></div>
+    <div id="legend">
+      <span class="node-asst">● 助手</span>
+      <span class="node-group">● 群聊</span>
+      <span class="node-p2p">● P2P</span>
+      <span class="node-dynamic">● 动态 Agent</span>
+    </div>
+  </div>
+  <script>
+    const container = document.getElementById('graph');
+    const statusEl = document.getElementById('status');
+    const options = {
+      nodes: { font: { color: '#e2e8f0', size: 14 }, borderWidth: 2 },
+      edges: { arrows: 'to', width: 1.5 },
+      physics: { enabled: true, stabilization: { iterations: 100 } },
+    };
+
+    let network = null;
+    let nodes = new vis.DataSet([]);
+    let edges = new vis.DataSet([]);
+
+    function addNode(id, label, group, title) {
+      const color = group === 'assistant' ? '#22c55e' : group === 'dynamic' ? '#06b6d4' : group === 'p2p' ? '#8b5cf6' : '#f59e0b';
+      if (!nodes.get(id)) {
+        nodes.add({ id, label, group, title: title || label, color: { background: color, border: color } });
+      }
+    }
+
+    function addEdge(from, to) {
+      const eid = `${from}->${to}`;
+      if (!edges.get(eid)) edges.add({ id: eid, from, to });
+    }
+
+    async function loadGraph() {
+      try {
+        const [assistantsRes, groupsRes, agentsRes] = await Promise.all([
+          fetch('/api/assistants'),
+          fetch('/api/groups'),
+          fetch('/api/agents').catch(() => ({ ok: false }))
+        ]);
+        const assistants = await assistantsRes.json();
+        const groups = await groupsRes.json();
+        const dynAgents = agentsRes.ok ? await agentsRes.json() : [];
+
+        const asstList = assistants.filter(a => a.id !== 'auto');
+        asstList.forEach(a => addNode(a.id, a.name || a.id, 'assistant', a.description));
+
+        dynAgents.forEach(a => {
+          addNode(a.id, a.role, 'dynamic', a.guidance || '');
+          if (a.parent_id) addEdge(a.parent_id, a.id);
+        });
+
+        groups.forEach(g => {
+          const isP2P = g.id.startsWith('p2p_');
+          addNode(g.id, g.name || g.id.slice(0, 12), isP2P ? 'p2p' : 'group', (g.member_ids || []).join(', '));
+          (g.member_ids || []).forEach(mid => {
+            if (asstList.some(a => a.id === mid)) {
+              addEdge(mid, g.id);
+              addEdge(g.id, mid);
+            }
+          });
+        });
+
+        if (!network) {
+          network = new vis.Network(container, { nodes, edges }, options);
+          network.on('click', (params) => {
+            if (params.nodes.length === 0) return;
+            const nodeId = params.nodes[0];
+            const node = nodes.get(nodeId);
+            if (!node) return;
+            const g = node.group || '';
+            if (g === 'assistant' || g === 'dynamic') {
+              window.location.href = '/?assistant_id=' + encodeURIComponent(nodeId);
+            } else if (g === 'p2p' || g === 'group') {
+              window.location.href = '/?group_id=' + encodeURIComponent(nodeId);
+            }
+          });
+        } else {
+          network.setData({ nodes, edges });
+        }
+        statusEl.textContent = `${asstList.length} 助手, ${groups.length} 群组`;
+      } catch (e) {
+        statusEl.textContent = '加载失败: ' + e.message;
+      }
+    }
+
+    function connectEvents() {
+      const es = new EventSource('/api/events');
+      es.onmessage = (e) => {
+        try {
+          const ev = JSON.parse(e.data);
+          if (ev.type === 'group_created') {
+            const isP2P = ev.id.startsWith('p2p_');
+            addNode(ev.id, ev.name || ev.id.slice(0, 12), isP2P ? 'p2p' : 'group', (ev.member_ids || []).join(', '));
+            (ev.member_ids || []).forEach(mid => addEdge(mid, ev.id));
+            (ev.member_ids || []).forEach(mid => addEdge(ev.id, mid));
+            statusEl.textContent = '新群组: ' + (ev.name || ev.id);
+          } else if (ev.type === 'message_created') {
+            statusEl.textContent = '新消息: ' + (ev.content_preview || '').slice(0, 40) + '…';
+          } else if (ev.type === 'agent_created') {
+            addNode(ev.id, ev.role || ev.id, 'dynamic', '');
+            if (ev.parent_id) addEdge(ev.parent_id, ev.id);
+            statusEl.textContent = '新 Agent: ' + (ev.role || ev.id);
+          }
+        } catch (_) {}
+      };
+      es.onerror = () => { es.close(); setTimeout(connectEvents, 5000); };
+    }
+
+    loadGraph().then(connectEvents);
+  </script>
+</body>
+</html>

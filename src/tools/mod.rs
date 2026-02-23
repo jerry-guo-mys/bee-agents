@@ -20,6 +20,11 @@ pub mod source_validator;
 pub mod report_generator;
 pub mod knowledge_graph;
 
+#[cfg(feature = "web")]
+pub mod create;
+#[cfg(feature = "web")]
+pub mod send;
+
 #[cfg(feature = "browser")]
 pub mod browser;
 
@@ -44,6 +49,11 @@ pub use deep_search::DeepSearchTool;
 pub use source_validator::SourceValidatorTool;
 pub use report_generator::ReportGeneratorTool;
 pub use knowledge_graph::KnowledgeGraphBuilder;
+
+#[cfg(feature = "web")]
+pub use create::{CreateTool, DynamicAgent};
+#[cfg(feature = "web")]
+pub use send::{SendTool, CURRENT_ASSISTANT_ID};
 
 #[cfg(feature = "browser")]
 pub use browser::BrowserTool;

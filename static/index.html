@@ -386,13 +386,20 @@
       <div id="search-stats" class="hidden text-xs text-gray-400 mt-2 px-1"></div>
     </div>
     
-    <div class="px-4 py-4">
-      <button id="new-chat-btn" class="w-full flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-800 border border-transparent dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 rounded-xl shadow-sm hover:shadow text-text-main-light dark:text-text-main-dark transition-all duration-200 group">
+    <div class="px-4 py-4 flex gap-2">
+      <button id="new-chat-btn" class="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 border border-transparent dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 rounded-xl shadow-sm hover:shadow text-text-main-light dark:text-text-main-dark transition-all duration-200 group">
         <span class="material-icons-outlined text-blue-500 group-hover:scale-110 transition-transform">edit_note</span>
         <span class="font-medium">New Chat</span>
       </button>
+      <button id="new-group-btn" class="flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 border border-transparent dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 rounded-xl shadow-sm hover:shadow text-text-main-light dark:text-text-main-dark transition-all duration-200 group" title="创建群聊">
+        <span class="material-icons-outlined text-green-500 group-hover:scale-110 transition-transform">group_add</span>
+      </button>
     </div>
     
+    <div id="groups-section" class="px-2 pb-2 hidden">
+      <h3 class="px-4 text-xs font-semibold text-text-sub-light dark:text-text-sub-dark uppercase tracking-wider mb-2">群聊</h3>
+      <ul id="group-list" class="space-y-1"></ul>
+    </div>
     <div id="session-list" class="flex-1 overflow-y-auto px-2 pb-4 space-y-6 no-scrollbar">
       <div id="empty-sessions" class="hidden px-4 py-8 text-center text-gray-400">
         <span class="material-icons-outlined text-4xl mb-2">chat_bubble_outline</span>
@@ -430,6 +437,10 @@
           <button id="export-btn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-xs font-medium">
             <span class="material-icons-outlined text-sm text-blue-500">file_download</span>
             Export
+          </button>
+          <button id="inbox-process-btn" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-800/40 transition-colors text-xs font-medium text-green-800 dark:text-green-200" title="处理收件箱：让助手回复未读消息">
+            <span class="material-icons-outlined text-sm">inbox</span>
+            Process Inbox
           </button>
         </div>
       </div>
@@ -619,6 +630,7 @@
         </div>
         
         <div class="text-center text-sm text-gray-400 dark:text-gray-500 mt-8 pb-8">
+          <a href="/swarm" target="_blank" class="text-blue-500 hover:underline mr-4">蜂群拓扑</a>
           Bee Personal AI v0.1.0
         </div>
       </div>
@@ -685,6 +697,29 @@
   </main>
 
   <div id="toast-container" class="toast-container"></div>
+  
+  <!-- New Group Modal -->
+  <div id="new-group-modal" class="settings-modal">
+    <div class="settings-panel" style="max-width: 400px;">
+      <div class="settings-header">
+        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">创建群聊</h2>
+        <button id="new-group-close" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+          <span class="material-icons-outlined">close</span>
+        </button>
+      </div>
+      <div class="settings-body">
+        <div class="settings-section">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">群名称（可选）</label>
+          <input type="text" id="new-group-name" placeholder="群聊" class="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+        </div>
+        <div class="settings-section">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">选择助手成员</label>
+          <div id="new-group-members" class="space-y-2 max-h-48 overflow-y-auto"></div>
+        </div>
+        <button id="new-group-create" class="w-full py-2 rounded-lg bg-primary hover:bg-primary-hover text-white font-medium">创建</button>
+      </div>
+    </div>
+  </div>
   
   <!-- Settings Modal -->
   <div id="settings-modal" class="settings-modal">
@@ -1035,6 +1070,8 @@
 
     // Session management
     let currentSessionId = null;
+    let currentGroupId = null;  // 群聊模式下的 group_id
+    let groups = [];
     let assistants = [];
     let models = [];
     let skills = [];
@@ -1051,6 +1088,77 @@
       } catch (e) {
         console.error('Failed to load sessions:', e);
       }
+    }
+
+    async function loadGroups() {
+      try {
+        const response = await fetch('/api/groups');
+        groups = await response.json();
+        renderGroups();
+      } catch (e) {
+        console.error('Failed to load groups:', e);
+      }
+    }
+
+    function renderGroups() {
+      const list = document.getElementById('group-list');
+      const section = document.getElementById('groups-section');
+      if (groups.length === 0) {
+        section.classList.add('hidden');
+        return;
+      }
+      section.classList.remove('hidden');
+      list.innerHTML = groups.map(g => {
+        const name = g.name || g.id?.slice(0, 8) || '群聊';
+        const isActive = currentGroupId === g.id;
+        return `<li class="group-item ${isActive ? 'active' : ''}" data-group-id="${escapeHtml(g.id)}">
+          <a href="#" class="flex items-start gap-3 px-4 py-3 rounded-lg hover:bg-white dark:hover:bg-gray-800 transition-colors group" onclick="loadGroup('${escapeHtml(g.id)}'); return false;">
+            <span class="material-icons-outlined text-gray-400 mt-0.5 text-lg ${isActive ? 'text-green-500' : ''}">groups</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-text-main-light dark:text-text-main-dark truncate">${escapeHtml(name)}</p>
+              <span class="text-xs text-text-sub-light dark:text-text-sub-dark">${(g.member_ids || []).length} 成员</span>
+            </div>
+          </a>
+        </li>`;
+      }).join('');
+    }
+
+    function loadGroup(groupId) {
+      currentGroupId = groupId;
+      currentSessionId = null;
+      selectedAssistant = null;
+      sessionTokensAccum = 0;
+      updateTokenStats(0, 0);
+      document.getElementById('assistant-selector').classList.add('hidden');
+      document.getElementById('selected-assistant').textContent = '群聊';
+      const inboxBtn = document.getElementById('inbox-process-btn');
+      if (inboxBtn) {
+        if (groupId.startsWith('p2p_')) {
+          inboxBtn.classList.remove('hidden');
+          inboxBtn.classList.add('flex');
+        } else {
+          inboxBtn.classList.add('hidden');
+          inboxBtn.classList.remove('flex');
+        }
+      }
+      try {
+        fetch(`/api/history?group_id=${encodeURIComponent(groupId)}`)
+          .then(r => r.json())
+          .then(data => {
+            showChatInterface();
+            renderMessages(data.messages);
+            updateSessionTitle(data.messages);
+            highlightCurrentGroup();
+          });
+      } catch (e) {
+        showToast('Failed to load group', 'error');
+      }
+    }
+
+    function highlightCurrentGroup() {
+      document.querySelectorAll('.group-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.groupId === currentGroupId);
+      });
     }
 
     function renderSessions(sessions) {
@@ -1115,6 +1223,9 @@
     }
 
     async function loadSession(sessionIdOrComposite) {
+      currentGroupId = null;
+      document.getElementById('assistant-selector').classList.remove('hidden');
+      document.getElementById('inbox-process-btn')?.classList.add('hidden');
       const [sid, aid] = sessionIdOrComposite.includes('::') ? sessionIdOrComposite.split('::') : [sessionIdOrComposite, 'default'];
       currentSessionId = sid;
       selectedAssistant = aid || 'default';
@@ -1146,6 +1257,7 @@
     function renderMessage(msg, isStreaming = false) {
       const isUser = msg.role === 'user';
       const content = isStreaming ? msg.content : marked.parse(msg.content);
+      const asstName = msg.assistant_id && assistants.find(a => a.id === msg.assistant_id)?.name || (msg.assistant_id || 'Bee');
       
       return `
         <div class="msg-row ${msg.role} ${isStreaming ? 'streaming' : ''}">
@@ -1157,7 +1269,7 @@
               ${!isUser ? `
                 <div class="flex items-center gap-2 mb-2">
                   <span class="material-icons-outlined text-blue-500">smart_toy</span>
-                  <span class="text-sm font-medium text-text-sub-light dark:text-text-sub-dark">Bee</span>
+                  <span class="text-sm font-medium text-text-sub-light dark:text-text-sub-dark">${escapeHtml(asstName)}</span>
                 </div>
               ` : ''}
               <div class="message-content ${isStreaming ? 'streaming' : ''}">
@@ -1225,15 +1337,18 @@
       typewriterControls?.show();
       
       try {
+        const body = { message, model_id: selectedModel };
+        if (currentGroupId) {
+          body.group_id = currentGroupId;
+          body.session_id = currentGroupId;
+        } else {
+          body.session_id = currentSessionId;
+          body.assistant_id = selectedAssistant;
+        }
         const response = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message,
-            session_id: currentSessionId,
-            assistant_id: selectedAssistant,
-            model_id: selectedModel
-          })
+          body: JSON.stringify(body)
         });
         
         const reader = response.body.getReader();
@@ -1243,10 +1358,11 @@
         
         document.getElementById(loadingId).remove();
         
-        const msgId = 'msg-' + Date.now();
         const streamStartTime = Date.now();
         let thinkingStartTime = null;
-        messagesContainer.insertAdjacentHTML('beforeend', `
+        const isGroupMode = !!currentGroupId;
+        const msgId = 'msg-' + Date.now();
+        if (!isGroupMode) messagesContainer.insertAdjacentHTML('beforeend', `
           <div id="${msgId}" class="msg-row assistant">
             <div class="w-full">
               <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-md px-5 py-4 max-w-3xl shadow-sm group">
@@ -1271,19 +1387,20 @@
                   </button>
                 </div>
               </div>
-            </div>
           </div>
+        </div>
         `);
         
-        const msgEl = document.getElementById(msgId);
-        const msgContent = msgEl.querySelector('.message-content');
-        const thinkingSteps = msgEl.querySelector('.thinking-steps');
-        const stepsContent = msgEl.querySelector('.steps-content');
-        const thinkingBar = msgEl.querySelector('.thinking-bar');
-        const durationEl = msgEl.querySelector('.duration');
+        let msgEl = isGroupMode ? null : document.getElementById(msgId);
+        let msgContent = msgEl?.querySelector('.message-content');
+        const thinkingSteps = msgEl?.querySelector('.thinking-steps');
+        let stepsContent = msgEl?.querySelector('.steps-content');
+        const thinkingBar = msgEl?.querySelector('.thinking-bar');
+        const durationEl = msgEl?.querySelector('.duration');
         let responseStarted = false;
-        
-        const typewriter = new Typewriter(msgContent, {
+        let typewriter = null;
+        if (!isGroupMode && msgContent) {
+          typewriter = new Typewriter(msgContent, {
           baseSpeed: 15,
           codeSpeed: 2,
           punctuationDelay: 120,
@@ -1298,6 +1415,7 @@
         });
         typewriter.setSpeed(parseFloat(localStorage.getItem('typewriter_speed_preference') || '0.5'));
         typewriterControls?.setTypewriter(typewriter);
+        }
         // Don't call start() here - appendText() will auto-start when chunks arrive
         
         const updateDuration = () => {
@@ -1307,17 +1425,18 @@
           if (durationEl) durationEl.textContent = sec + 's';
         };
         const updateThinkingLabel = () => {
-          const lb = msgEl.querySelector('.thinking-label');
-          const isHidden = stepsContent.classList.contains('hidden');
+          const lb = msgEl?.querySelector('.thinking-label');
+          const isHidden = stepsContent?.classList?.contains('hidden');
           if (lb) lb.textContent = isHidden ? '展示步骤' : '隐藏步骤';
-          const arrow = msgEl.querySelector('.thinking-bar .arrow');
+          const arrow = msgEl?.querySelector('.thinking-bar .arrow');
           if (arrow) arrow.style.transform = isHidden ? 'rotate(-90deg)' : 'none';
         };
         thinkingBar?.addEventListener('click', () => {
-          stepsContent.classList.toggle('hidden');
+          stepsContent?.classList?.toggle('hidden');
           updateThinkingLabel();
         });
         const addStep = (type, title, detail) => {
+          if (!stepsContent) return;
           const step = document.createElement('div');
           step.className = `step-item ${type}`;
           step.innerHTML = detail ? `<div class="step-title">${escapeHtml(title)}</div><div class="step-detail">${escapeHtml(detail)}</div>` : `<div class="step-title">${escapeHtml(title)}</div>`;
@@ -1326,7 +1445,7 @@
           scrollToBottom();
         };
         const hideStepsOnResponse = () => {
-          if (!responseStarted && stepsContent.children.length > 0) {
+          if (!responseStarted && stepsContent && stepsContent.children.length > 0) {
             responseStarted = true;
             stepsContent.classList.add('hidden');
             updateThinkingLabel();
@@ -1347,19 +1466,42 @@
               const event = JSON.parse(line);
               if (event.type === 'session_id') {
                 currentSessionId = event.session_id;
-                loadSessions();
+                if (currentGroupId) loadGroups(); else loadSessions();
+              } else if (event.type === 'group_assistant_start') {
+                const asstName = assistants.find(a => a.id === event.assistant_id)?.name || event.assistant_id || 'Assistant';
+                const gMsgId = 'msg-' + Date.now() + '-' + (event.assistant_id || '');
+                messagesContainer.insertAdjacentHTML('beforeend', `
+                  <div id="${gMsgId}" class="msg-row assistant">
+                    <div class="w-full">
+                      <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl rounded-bl-md px-5 py-4 max-w-3xl shadow-sm group">
+                        <div class="flex items-center gap-2 mb-2">
+                          <span class="material-icons-outlined text-green-500">smart_toy</span>
+                          <span class="text-sm font-medium text-text-sub-light dark:text-text-sub-dark">${escapeHtml(asstName)}</span>
+                        </div>
+                        <div class="message-content typewriter-active"></div>
+                      </div>
+                    </div>
+                  </div>
+                `);
+                const gContent = document.querySelector(`#${gMsgId} .message-content`);
+                if (typewriter) typewriter.finish();
+                typewriter = new Typewriter(gContent, { baseSpeed: 15, codeSpeed: 2, pasteSpeed: 3 });
+                assistantMessage = '';
+                scrollToBottom();
+              } else if (event.type === 'group_assistant_done') {
+                if (typewriter) typewriter.finish();
               } else if (event.type === 'assistant_dispatched') {
                 selectedAssistant = event.assistant_id;
                 document.getElementById('selected-assistant').textContent = event.assistant_name;
               } else if (event.type === 'message_chunk') {
                 hideStepsOnResponse();
                 assistantMessage += event.text || '';
-                typewriter.appendText(event.text || '');
+                typewriter?.appendText(event.text || '');
               } else if (event.type === 'stream') {
                 hideStepsOnResponse();
                 assistantMessage += event.content || '';
-                typewriter.appendText(event.content || '');
-              } else if (event.type === 'thinking') {
+                typewriter?.appendText(event.content || '');
+              } else if (event.type === 'thinking' && !isGroupMode) {
                 if (thinkingStartTime == null) thinkingStartTime = Date.now();
                 addStep('step-understand', '1. 理解问题', '正在分析用户问题…');
               } else if (event.type === 'thinking_content') {
@@ -1401,10 +1543,12 @@
           }
         }
         
-        typewriter.finish();
+        typewriter?.finish();
         updateDuration();
-        if (stepsContent.children.length === 0) thinkingSteps.style.display = 'none';
-        else updateThinkingLabel();
+        if (thinkingSteps) {
+          if (!stepsContent || stepsContent.children.length === 0) thinkingSteps.style.display = 'none';
+          else updateThinkingLabel();
+        }
         
       } catch (e) {
         showToast('Failed to send message', 'error');
@@ -1576,10 +1720,54 @@
     }
 
     function initNewChat() {
+      const newGroupBtn = document.getElementById('new-group-btn');
+      const newGroupModal = document.getElementById('new-group-modal');
+      const newGroupClose = document.getElementById('new-group-close');
+      const newGroupCreate = document.getElementById('new-group-create');
+      const newGroupMembers = document.getElementById('new-group-members');
+      const newGroupName = document.getElementById('new-group-name');
+      
+      if (newGroupBtn) newGroupBtn.addEventListener('click', () => {
+        newGroupName.value = '';
+        newGroupMembers.innerHTML = (assistants.filter(a => a.id !== 'auto') || []).map(a => `
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" class="rounded border-gray-300 dark:border-gray-600" value="${escapeHtml(a.id)}">
+            <span class="text-sm text-gray-700 dark:text-gray-300">${escapeHtml(a.name || a.id)}</span>
+          </label>
+        `).join('');
+        newGroupModal.classList.add('active');
+      });
+      if (newGroupClose) newGroupClose.addEventListener('click', () => newGroupModal.classList.remove('active'));
+      if (newGroupCreate) newGroupCreate.addEventListener('click', async () => {
+        const memberIds = Array.from(newGroupMembers.querySelectorAll('input:checked')).map(cb => cb.value);
+        if (memberIds.length < 2) {
+          showToast('请至少选择 2 个助手', 'error');
+          return;
+        }
+        try {
+          const res = await fetch('/api/groups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newGroupName.value.trim() || undefined, member_ids: memberIds })
+          });
+          if (!res.ok) throw new Error(await res.text());
+          const group = await res.json();
+          newGroupModal.classList.remove('active');
+          await loadGroups();
+          if (group && group.id) loadGroup(group.id);
+          showToast('群聊已创建', 'success');
+        } catch (e) {
+          showToast('创建失败: ' + (e.message || 'unknown'), 'error');
+        }
+      });
+      
       const newChatBtns = document.querySelectorAll('#new-chat-btn, #welcome-new-chat');
       newChatBtns.forEach(btn => {
         btn.addEventListener('click', () => {
           currentSessionId = null;
+          currentGroupId = null;
+          document.getElementById('assistant-selector').classList.remove('hidden');
+          document.getElementById('inbox-process-btn')?.classList.add('hidden');
           sessionTokensAccum = 0;
           updateTokenStats(0, 0);
           document.getElementById('messages').innerHTML = '';
@@ -1587,6 +1775,7 @@
           document.getElementById('welcome-screen').classList.remove('hidden');
           document.getElementById('current-session-title').textContent = 'New Chat';
           highlightCurrentSession();
+          highlightCurrentGroup();
           document.getElementById('message-input').focus();
         });
       });
@@ -2373,6 +2562,33 @@
       showToast('Import functionality coming soon', 'info');
     });
 
+    document.getElementById('inbox-process-btn')?.addEventListener('click', async () => {
+      if (!currentGroupId || !currentGroupId.startsWith('p2p_')) return;
+      const g = groups.find(x => x.id === currentGroupId);
+      const members = g?.member_ids || [];
+      if (members.length === 0) return;
+      const btn = document.getElementById('inbox-process-btn');
+      if (btn) btn.disabled = true;
+      try {
+        let total = 0;
+        for (const aid of members) {
+          const res = await fetch('/api/inbox/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assistant_id: aid })
+          });
+          const data = await res.json().catch(() => ({}));
+          total += data.processed || 0;
+        }
+        showToast(total > 0 ? `处理了 ${total} 条未读` : '收件箱已空', total > 0 ? 'success' : 'info');
+        if (currentGroupId) loadGroup(currentGroupId);
+      } catch (e) {
+        showToast('处理失败: ' + (e.message || 'unknown'), 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
     // Sidebar toggle
     function initSidebarToggle() {
       const toggle = document.getElementById('sidebar-toggle');
@@ -2856,9 +3072,24 @@
       // Test API endpoints
       console.log('Loading sessions, assistants, models, skills...');
       loadSessions();
-      loadAssistants();
       loadModels();
       loadSkills();
+      Promise.all([loadAssistants(), loadGroups()]).then(() => {
+        const params = new URLSearchParams(window.location.search);
+        const aid = params.get('assistant_id');
+        const gid = params.get('group_id');
+        if (gid && groups.some(g => g.id === gid)) {
+          loadGroup(gid);
+        } else if (aid) {
+          selectedAssistant = assistants.some(a => a.id === aid) ? aid : selectedAssistant;
+          if (assistants.some(a => a.id === aid)) {
+            currentGroupId = null;
+            document.getElementById('assistant-selector').classList.remove('hidden');
+            document.getElementById('inbox-process-btn')?.classList.add('hidden');
+            document.getElementById('selected-assistant').textContent = assistants.find(a => a.id === aid)?.name || aid;
+          }
+        }
+      });
       
       document.getElementById('send-btn').addEventListener('click', sendMessage);
       
