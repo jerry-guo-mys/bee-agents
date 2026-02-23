@@ -19,7 +19,7 @@ use crate::tools::{
 #[cfg(feature = "browser")]
 use crate::tools::BrowserTool;
 #[cfg(feature = "web")]
-use crate::tools::{CreateTool, SendTool};
+use crate::tools::{CreateGroupTool, CreateTool, ListAgentsTool, SendTool};
 
 /// Agent 构建器：统一配置和初始化 Agent 的各个组件
 pub struct AgentBuilder {
@@ -125,6 +125,10 @@ impl AgentBuilder {
 
         #[cfg(feature = "web")]
         tools.register(CreateTool::new(&self.workspace));
+        #[cfg(feature = "web")]
+        tools.register(CreateGroupTool::new(&self.workspace));
+        #[cfg(feature = "web")]
+        tools.register(ListAgentsTool::new(&self.workspace));
         #[cfg(feature = "web")]
         tools.register(SendTool::new(&self.workspace));
 

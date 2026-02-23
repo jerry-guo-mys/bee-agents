@@ -23,6 +23,10 @@ pub mod knowledge_graph;
 #[cfg(feature = "web")]
 pub mod create;
 #[cfg(feature = "web")]
+pub mod create_group;
+#[cfg(feature = "web")]
+pub mod list_agents;
+#[cfg(feature = "web")]
 pub mod send;
 
 #[cfg(feature = "browser")]
@@ -52,6 +56,10 @@ pub use knowledge_graph::KnowledgeGraphBuilder;
 
 #[cfg(feature = "web")]
 pub use create::{CreateTool, DynamicAgent};
+#[cfg(feature = "web")]
+pub use create_group::CreateGroupTool;
+#[cfg(feature = "web")]
+pub use list_agents::ListAgentsTool;
 #[cfg(feature = "web")]
 pub use send::{SendTool, CURRENT_ASSISTANT_ID};
 

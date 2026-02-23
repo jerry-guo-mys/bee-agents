@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use axum::{
     body::Body,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::{header, StatusCode},
     response::{
         sse::{Event, KeepAlive, Sse},
@@ -33,7 +33,7 @@ use bee::agent::{
 };
 use bee::core::AgentComponents;
 use bee::skills::{Skill, SkillLoader};
-use bee::tools::{tool_call_schema_json, DynamicAgent};
+use bee::tools::{tool_call_schema_json, CreateTool, DynamicAgent};
 use bee::memory::InMemoryVectorLongTerm;
 use bee::config::{load_config, AppConfig};
 use bee::memory::{
@@ -98,6 +98,8 @@ enum WorkspaceEvent {
         role: String,
         parent_id: Option<String>,
     },
+    TaskCreated { id: String, title: String },
+    TaskUpdated { id: String, status: String },
 }
 
 struct CreateObservationParsed {
@@ -185,6 +187,66 @@ struct ChatResponse {
 struct CreateGroupRequest {
     name: Option<String>,
     member_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateAgentRequest {
+    role: String,
+    #[serde(default)]
+    guidance: Option<String>,
+}
+
+/// 任务状态：看板列
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TaskStatus {
+    Todo,
+    InProgress,
+    Done,
+}
+
+/// 任务
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Task {
+    id: String,
+    title: String,
+    #[serde(default)]
+    description: Option<String>,
+    status: TaskStatus,
+    #[serde(default)]
+    assignee_ids: Vec<String>,
+    #[serde(default)]
+    group_id: Option<String>,
+    /// 统筹负责人 agent id，负责拆分任务、创建子 agent、组队、分配职责
+    #[serde(default)]
+    coordinator_id: Option<String>,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateTaskRequest {
+    title: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    assignee_ids: Vec<String>,
+    #[serde(default)]
+    coordinator_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateTaskRequest {
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    status: Option<TaskStatus>,
+    #[serde(default)]
+    assignee_ids: Option<Vec<String>>,
+    #[serde(default)]
+    coordinator_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -567,6 +629,25 @@ fn load_dynamic_agents(workspace: &std::path::Path) -> Vec<DynamicAgent> {
     serde_json::from_str(&data).unwrap_or_default()
 }
 
+const TASKS_FILE: &str = "tasks.json";
+
+fn load_tasks(workspace: &std::path::Path) -> Vec<Task> {
+    let path = workspace.join(TASKS_FILE);
+    let data = match std::fs::read_to_string(&path) {
+        Ok(d) => d,
+        Err(_) => return Vec::new(),
+    };
+    serde_json::from_str(&data).unwrap_or_default()
+}
+
+fn save_tasks(workspace: &std::path::Path, tasks: &[Task]) {
+    std::fs::create_dir_all(workspace).ok();
+    let path = workspace.join(TASKS_FILE);
+    if let Ok(json) = serde_json::to_string_pretty(tasks) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
 /// 热更新：将 agents.json 中新 agent 并入 assistant_prompts / assistant_skills
 async fn reload_dynamic_agents_into_state(state: &AppState) {
     let dynamic = load_dynamic_agents(&state.workspace);
@@ -804,8 +885,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/compact", post(api_compact))
         .route("/api/session/rename", post(api_session_rename))
         .route("/api/assistants", get(api_assistants_list))
-        .route("/api/agents", get(api_agents_list))
+        .route("/api/agents", get(api_agents_list).post(api_agents_create))
         .route("/api/groups", get(api_groups_list).post(api_groups_create))
+        .route("/api/tasks", get(api_tasks_list).post(api_tasks_create))
+        .route("/api/tasks/:id", axum::routing::patch(api_tasks_update))
+        .route("/api/tasks/:id/start", post(api_tasks_start))
         .route("/api/inbox/process", post(api_inbox_process))
         .route("/api/tools", get(api_tools_list))
         .route("/api/assistant/:id/skills", axum::routing::put(api_assistant_skills_put))
@@ -822,6 +906,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/metrics/prometheus", get(api_metrics_prometheus))
         .route("/api/events", get(api_events_sse))
         .route("/swarm", get(serve_swarm_page))
+        .route("/tasks", get(serve_tasks_page))
         .with_state(Arc::clone(&state));
 
     // 定期整理记忆：每 24 小时将近期短期日志归纳写入长期记忆
@@ -1339,6 +1424,32 @@ async fn api_agents_list(
     Ok(Json(list))
 }
 
+/// POST /api/agents：前端创建 agent，body: { role, guidance? }，parent_id 为 human
+async fn api_agents_create(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CreateAgentRequest>,
+) -> Result<(StatusCode, Json<DynamicAgent>), (StatusCode, String)> {
+    let role = req.role.trim().to_string();
+    if role.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "role is required".to_string()));
+    }
+    let create_tool = CreateTool::new(&state.workspace);
+    let guidance = req.guidance.as_deref().and_then(|s| {
+        let t = s.trim();
+        if t.is_empty() { None } else { Some(t.to_string()) }
+    });
+    let agent = create_tool
+        .create_agent_direct(&role, guidance.as_deref(), "human")
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    reload_dynamic_agents_into_state(&state).await;
+    emit_event(&state.event_bus, WorkspaceEvent::AgentCreated {
+        id: agent.id.clone(),
+        role: agent.role.clone(),
+        parent_id: agent.parent_id.clone(),
+    });
+    Ok((StatusCode::CREATED, Json(agent)))
+}
+
 /// GET /api/assistants：返回多助手列表（含 skills），供前端选择与配置；动态 agent 从 agents.json 合并
 async fn api_assistants_list(
     State(state): State<Arc<AppState>>,
@@ -1409,6 +1520,266 @@ async fn api_groups_create(
         member_ids: group.member_ids.clone(),
     });
     Ok((StatusCode::CREATED, Json(group)))
+}
+
+/// GET /api/tasks：列出所有任务（可选 status 过滤）
+async fn api_tasks_list(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<Vec<Task>>, (StatusCode, String)> {
+    let tasks = load_tasks(&state.workspace);
+    let status_filter = query.get("status").and_then(|s| {
+        match s.as_str() {
+            "todo" => Some(TaskStatus::Todo),
+            "in_progress" => Some(TaskStatus::InProgress),
+            "done" => Some(TaskStatus::Done),
+            _ => None,
+        }
+    });
+    let list: Vec<Task> = if let Some(st) = status_filter {
+        tasks.into_iter().filter(|t| t.status == st).collect()
+    } else {
+        tasks
+    };
+    Ok(Json(list))
+}
+
+/// POST /api/tasks：创建任务，可选 assignee_ids 自动建群
+async fn api_tasks_create(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CreateTaskRequest>,
+) -> Result<(StatusCode, Json<Task>), (StatusCode, String)> {
+    let title = req.title.trim().to_string();
+    if title.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "title is required".to_string()));
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+    let assignee_ids: Vec<String> = req.assignee_ids.iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    let group_id = if assignee_ids.len() >= 2 {
+        let gid = uuid::Uuid::new_v4().to_string();
+        let group = GroupInfo {
+            id: gid.clone(),
+            name: Some(format!("任务: {}", title.chars().take(20).collect::<String>())),
+            member_ids: assignee_ids.clone(),
+            created_at: now.clone(),
+        };
+        {
+            let mut groups = state.groups.write().await;
+            groups.insert(gid.clone(), group);
+            save_groups_to_disk(&state.groups_path, &*groups);
+        }
+        emit_event(&state.event_bus, WorkspaceEvent::GroupCreated {
+            id: gid.clone(),
+            name: Some(format!("任务: {}", title.chars().take(20).collect::<String>())),
+            member_ids: assignee_ids.clone(),
+        });
+        Some(gid)
+    } else {
+        None
+    };
+    let task = Task {
+        id: id.clone(),
+        title: title.clone(),
+        description: req.description.as_ref().and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() { None } else { Some(t.to_string()) }
+        }),
+        status: TaskStatus::Todo,
+        assignee_ids,
+        group_id,
+        coordinator_id: req.coordinator_id.as_ref().and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() { None } else { Some(t.to_string()) }
+        }),
+        created_at: now.clone(),
+        updated_at: now.clone(),
+    };
+    let mut tasks = load_tasks(&state.workspace);
+    tasks.push(task.clone());
+    save_tasks(&state.workspace, &tasks);
+    emit_event(&state.event_bus, WorkspaceEvent::TaskCreated {
+        id: task.id.clone(),
+        title: task.title.clone(),
+    });
+    Ok((StatusCode::CREATED, Json(task)))
+}
+
+/// PATCH /api/tasks/:id：更新任务
+async fn api_tasks_update(
+    State(state): State<Arc<AppState>>,
+    Path(task_id): Path<String>,
+    Json(req): Json<UpdateTaskRequest>,
+) -> Result<Json<Task>, (StatusCode, String)> {
+    let mut tasks = load_tasks(&state.workspace);
+    let pos = tasks.iter().position(|t| t.id == task_id);
+    let task = match pos {
+        Some(i) => &mut tasks[i],
+        None => return Err((StatusCode::NOT_FOUND, "task not found".to_string())),
+    };
+    if let Some(t) = req.title {
+        let t = t.trim();
+        if !t.is_empty() {
+            task.title = t.to_string();
+        }
+    }
+    if let Some(d) = req.description {
+        task.description = if d.trim().is_empty() { None } else { Some(d.trim().to_string()) };
+    }
+    if let Some(s) = req.status {
+        task.status = s;
+    }
+    if let Some(a) = req.assignee_ids {
+        task.assignee_ids = a.into_iter().filter(|s| !s.trim().is_empty()).map(|s| s.trim().to_string()).collect();
+    }
+    if let Some(c) = req.coordinator_id {
+        task.coordinator_id = if c.trim().is_empty() { None } else { Some(c.trim().to_string()) };
+    }
+    task.updated_at = chrono::Utc::now().to_rfc3339();
+    let task = task.clone();
+    save_tasks(&state.workspace, &tasks);
+    let status_str = match task.status {
+        TaskStatus::Todo => "todo",
+        TaskStatus::InProgress => "in_progress",
+        TaskStatus::Done => "done",
+    };
+    emit_event(&state.event_bus, WorkspaceEvent::TaskUpdated {
+        id: task.id.clone(),
+        status: status_str.to_string(),
+    });
+    Ok(Json(task))
+}
+
+/// 统筹 agent 收到的系统级提示（追加到其 system prompt）
+const COORDINATOR_INSTRUCTION: &str = "\n\n你是指定任务的统筹负责人。请使用 list_agents 查看可用 agent，使用 create 创建 specialized 子 agent，使用 create_group 组建团队，使用 send 分配职责和发起协作。完成后简要总结。";
+
+/// POST /api/tasks/:id/start：启动任务统筹，由 coordinator agent 执行规划与组队
+async fn api_tasks_start(
+    State(state): State<Arc<AppState>>,
+    Path(task_id): Path<String>,
+) -> Result<Response, (StatusCode, String)> {
+    reload_dynamic_agents_into_state(&state).await;
+    let tasks = load_tasks(&state.workspace);
+    let task = tasks
+        .iter()
+        .find(|t| t.id == task_id)
+        .cloned()
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "task not found".to_string()))?;
+    let coordinator_id = task
+        .coordinator_id
+        .as_ref()
+        .filter(|s| !s.is_empty())
+        .cloned()
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "task has no coordinator_id, please assign one first".to_string()))?;
+    let prompt = state.assistant_prompts.read().await.get(&coordinator_id).cloned();
+    let base_prompt = prompt.as_deref().unwrap_or("");
+    let system_prompt = format!("{}{}", base_prompt, COORDINATOR_INSTRUCTION);
+    let desc = task.description.as_deref().unwrap_or("无");
+    let user_message = format!(
+        "请统筹以下任务：\n\n【任务标题】{}\n【任务描述】{}\n\n请分析任务、创建或调用 agent、组队、分配职责、建立协作流程。",
+        task.title,
+        desc
+    );
+    let key = format!("task_coord_{}", task_id);
+    let vector = get_or_create_vector_for_assistant(&state, &coordinator_id).await;
+    let mut context = {
+        let mut sessions = state.sessions.write().await;
+        sessions.remove(&key).unwrap_or_else(|| {
+            create_context_with_long_term_for_assistant(
+                &state.config,
+                DEFAULT_MAX_TURNS,
+                Some(&state.workspace),
+                vector,
+                Some(&coordinator_id),
+            )
+        })
+    };
+    let system_prompt_override = Some(system_prompt);
+    let allowed = state.assistant_skills.read().await.get(&coordinator_id).cloned();
+    let components = state.components.read().await.clone();
+    let (event_tx, event_rx) = mpsc::unbounded_channel::<ReactEvent>();
+    let state_spawn = Arc::clone(&state);
+    let task_id_clone = task_id.clone();
+    let coordinator_id_clone = coordinator_id.clone();
+    tokio::spawn(async move {
+        let _ = process_message_stream(
+            components.as_ref(),
+            &mut context,
+            &user_message,
+            event_tx,
+            system_prompt_override.as_deref(),
+            None,
+            allowed.as_deref(),
+            Some(&coordinator_id_clone),
+        )
+        .await;
+        save_session_to_disk(
+            &state_spawn.sessions_dir,
+            &state_spawn.workspace,
+            &format!("task_coord_{}", task_id_clone),
+            &coordinator_id_clone,
+            &context,
+        );
+        let mut tasks = load_tasks(&state_spawn.workspace);
+        let task_updated = tasks.iter_mut().find(|x| x.id == task_id_clone).map(|t| {
+            t.status = TaskStatus::InProgress;
+            t.updated_at = chrono::Utc::now().to_rfc3339();
+            t.id.clone()
+        });
+        if let Some(id) = task_updated {
+            save_tasks(&state_spawn.workspace, &tasks);
+            emit_event(&state_spawn.event_bus, WorkspaceEvent::TaskUpdated {
+                id,
+                status: "in_progress".to_string(),
+            });
+        }
+    });
+    let first_line = format!(
+        "{}\n",
+        serde_json::to_string(&serde_json::json!({
+            "type": "session_id",
+            "session_id": format!("task_{}", task_id)
+        }))
+        .unwrap()
+    );
+    let first_line2 = format!(
+        "{}\n",
+        serde_json::to_string(&serde_json::json!({
+            "type": "coordinator_start",
+            "task_id": task_id,
+            "coordinator_id": coordinator_id
+        }))
+        .unwrap()
+    );
+    let pending = vec![first_line, first_line2];
+    let stream = stream::unfold(
+        (state, event_rx, pending),
+        move |(state, mut event_rx, mut pending)| async move {
+            if !pending.is_empty() {
+                let line = pending.remove(0);
+                return Some((
+                    Ok::<_, std::convert::Infallible>(Bytes::from(line)),
+                    (state, event_rx, pending),
+                ));
+            }
+            match event_rx.recv().await {
+                Some(ev) => {
+                    let line = format!("{}\n", serde_json::to_string(&ev).unwrap());
+                    Some((Ok::<_, std::convert::Infallible>(Bytes::from(line)), (state, event_rx, vec![])))
+                }
+                None => None,
+            }
+        },
+    );
+    let mut res = Response::new(Body::from_stream(stream));
+    res.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        "application/x-ndjson; charset=utf-8".parse().unwrap(),
+    );
+    Ok(res)
 }
 
 /// POST /api/inbox/process：处理指定 assistant 的收件箱（P2P 未读消息触发 ReAct）
@@ -2342,6 +2713,11 @@ async fn api_events_sse(
 /// GET /swarm：蜂群拓扑 Graph 页
 async fn serve_swarm_page() -> Html<&'static str> {
     Html(include_str!("../../static/swarm.html"))
+}
+
+/// GET /tasks：任务看板页
+async fn serve_tasks_page() -> Html<&'static str> {
+    Html(include_str!("../../static/tasks.html"))
 }
 
 /// GET /api/metrics：返回 JSON 格式的 metrics

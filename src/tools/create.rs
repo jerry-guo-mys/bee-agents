@@ -80,6 +80,50 @@ impl CreateTool {
             let _ = std::fs::write(self.groups_path(), json);
         }
     }
+
+    /// 直接创建 agent（供 API 等非 Tool 场景使用，显式指定 parent_id）
+    pub fn create_agent_direct(
+        &self,
+        role: &str,
+        guidance: Option<&str>,
+        parent_id: &str,
+    ) -> Result<DynamicAgent, String> {
+        let role = role.trim();
+        if role.is_empty() {
+            return Err("role is required".to_string());
+        }
+        let guidance = guidance.and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() { None } else { Some(t.to_string()) }
+        });
+        let id = uuid::Uuid::new_v4().to_string();
+        let created_at = chrono::Utc::now().to_rfc3339();
+        let agent = DynamicAgent {
+            id: id.clone(),
+            role: role.to_string(),
+            parent_id: Some(parent_id.to_string()),
+            guidance: guidance.clone(),
+            created_at: created_at.clone(),
+        };
+        let mut agents = self.load_agents();
+        agents.push(agent.clone());
+        self.save_agents(&agents);
+        let group_id = p2p_group_id(parent_id, &id);
+        let mut groups = self.load_groups();
+        if !groups.contains_key(&group_id) {
+            groups.insert(
+                group_id.clone(),
+                GroupInfo {
+                    id: group_id.clone(),
+                    name: Some(format!("P2P {} ↔ {}", parent_id, id)),
+                    member_ids: vec![parent_id.to_string(), id.clone()],
+                    created_at: chrono::Utc::now().to_rfc3339(),
+                },
+            );
+            self.save_groups(&groups);
+        }
+        Ok(agent)
+    }
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]

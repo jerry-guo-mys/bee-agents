@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bee 任务看板</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+    .kanban-col { min-width: 280px; max-width: 340px; background: #1e293b; border-radius: 12px; border: 1px solid #334155; }
+    .task-card { background: #334155; border-radius: 8px; padding: 12px; margin-bottom: 10px; cursor: grab; transition: all 0.15s; }
+    .task-card:hover { background: #475569; }
+    .task-card:active { cursor: grabbing; }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+    .modal.show { display: flex; }
+    .modal-content { background: #1e293b; border-radius: 12px; padding: 24px; max-width: 480px; width: 90%; border: 1px solid #334155; }
+    .btn { padding: 8px 16px; border-radius: 8px; font-weight: 500; cursor: pointer; border: none; }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-ghost { background: transparent; color: #94a3b8; }
+    .btn-ghost:hover { background: #334155; color: #e2e8f0; }
+    input, textarea, select { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; border-radius: 6px; padding: 8px 12px; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <header class="flex items-center justify-between px-5 py-3 bg-slate-800 border-b border-slate-600">
+    <div class="flex items-center gap-4">
+      <h1 class="text-xl font-semibold">🐝 Bee 任务看板</h1>
+      <a href="/" class="text-sky-400 hover:underline">聊天</a>
+      <a href="/swarm" class="text-sky-400 hover:underline">蜂群拓扑</a>
+    </div>
+    <div class="flex gap-2">
+      <button id="btn-new-agent" class="btn btn-ghost">+ 新建 Agent</button>
+      <button id="btn-new-task" class="btn btn-primary">+ 新建任务</button>
+    </div>
+  </header>
+
+  <main class="p-5 overflow-x-auto">
+    <div id="kanban" class="flex gap-5 min-h-[70vh]">
+      <div class="kanban-col">
+        <div class="p-4 border-b border-slate-600 flex justify-between items-center">
+          <h2 class="font-semibold text-amber-400">待办</h2>
+          <span id="count-todo" class="text-sm text-slate-400">0</span>
+        </div>
+        <div id="col-todo" class="p-3 min-h-[200px]"></div>
+      </div>
+      <div class="kanban-col">
+        <div class="p-4 border-b border-slate-600 flex justify-between items-center">
+          <h2 class="font-semibold text-blue-400">进行中</h2>
+          <span id="count-progress" class="text-sm text-slate-400">0</span>
+        </div>
+        <div id="col-progress" class="p-3 min-h-[200px]"></div>
+      </div>
+      <div class="kanban-col">
+        <div class="p-4 border-b border-slate-600 flex justify-between items-center">
+          <h2 class="font-semibold text-green-400">已完成</h2>
+          <span id="count-done" class="text-sm text-slate-400">0</span>
+        </div>
+        <div id="col-done" class="p-3 min-h-[200px]"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 新建 Agent 弹窗 -->
+  <div id="modal-agent" class="modal">
+    <div class="modal-content">
+      <h3 class="text-lg font-semibold mb-4">新建 Agent</h3>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">角色 (role)</label>
+          <input id="agent-role" type="text" placeholder="例如: 代码审查员" class="w-full" />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">指导说明 (guidance, 可选)</label>
+          <textarea id="agent-guidance" rows="3" placeholder="该 Agent 的行为说明..." class="w-full"></textarea>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button id="agent-cancel" class="btn btn-ghost">取消</button>
+          <button id="agent-submit" class="btn btn-primary">创建</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新建任务弹窗 -->
+  <div id="modal-task" class="modal">
+    <div class="modal-content">
+      <h3 class="text-lg font-semibold mb-4">新建任务</h3>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">标题</label>
+          <input id="task-title" type="text" placeholder="任务标题" class="w-full" />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">描述 (可选)</label>
+          <textarea id="task-desc" rows="2" placeholder="任务描述" class="w-full"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">统筹负责人 (必选)</label>
+          <p class="text-xs text-slate-500 mb-1">负责分析任务、拆分、创建子 agent、组队、分配职责</p>
+          <select id="task-coordinator" class="w-full">
+            <option value="">-- 请选择统筹 Agent --</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">分配 Agent（选 2+ 个自动建群协作，可选）</label>
+          <div id="task-assignees" class="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-slate-900 rounded"></div>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button id="task-cancel" class="btn btn-ghost">取消</button>
+          <button id="task-submit" class="btn btn-primary">创建</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 统筹进行中弹窗 -->
+  <div id="modal-orchestrate" class="modal">
+    <div class="modal-content max-h-[80vh] flex flex-col">
+      <h3 class="text-lg font-semibold mb-2">统筹进行中</h3>
+      <pre id="orchestrate-log" class="flex-1 overflow-auto text-sm p-3 bg-slate-900 rounded max-h-96 font-mono whitespace-pre-wrap"></pre>
+      <div class="mt-2 flex justify-end">
+        <button id="orchestrate-close" class="btn btn-ghost">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let tasks = [];
+    let assistants = [];
+    let agents = [];
+
+    const statusToCol = { todo: 'col-todo', in_progress: 'col-progress', done: 'col-done' };
+    const statusLabels = { todo: '待办', in_progress: '进行中', done: '已完成' };
+
+    async function loadAssistants() {
+      const [a, b] = await Promise.all([fetch('/api/assistants').then(r => r.json()), fetch('/api/agents').then(r => r.json())]);
+      assistants = (a || []).filter(x => x.id !== 'auto');
+      agents = b || [];
+    }
+
+    async function loadTasks() {
+      const res = await fetch('/api/tasks');
+      tasks = await res.json();
+      renderKanban();
+    }
+
+    function renderKanban() {
+      ['todo', 'in_progress', 'done'].forEach(status => {
+        const col = document.getElementById(statusToCol[status]);
+        const list = tasks.filter(t => t.status === status);
+        document.getElementById('count-' + status.replace('_', '-')).textContent = list.length;
+        col.innerHTML = list.map(t => renderTaskCard(t)).join('');
+      });
+    }
+
+    function renderTaskCard(t) {
+      const assignees = (t.assignee_ids || []).join(', ') || '未分配';
+      const coord = t.coordinator_id ? escapeHtml(t.coordinator_id) : '未指定';
+      const groupLink = t.group_id ? `<a href="/?group_id=${encodeURIComponent(t.group_id)}" class="text-sky-400 text-xs hover:underline">进群聊</a>` : '';
+      const startBtn = t.coordinator_id && t.status === 'todo' ? `<button class="btn-start text-xs btn btn-primary py-1" data-id="${t.id}">开始统筹</button>` : '';
+      return `<div class="task-card" data-id="${t.id}">
+        <div class="font-medium">${escapeHtml(t.title)}</div>
+        ${t.description ? `<div class="text-sm text-slate-400 mt-1">${escapeHtml(t.description)}</div>` : ''}
+        <div class="text-xs text-slate-500 mt-2">统筹: ${coord} | ${escapeHtml(assignees)} ${groupLink}</div>
+        <div class="flex gap-1 mt-2 flex-wrap">
+          ${startBtn}
+          ${t.status !== 'in_progress' ? `<button class="btn-progress text-xs btn btn-ghost py-1" data-id="${t.id}">→ 进行中</button>` : ''}
+          ${t.status !== 'done' ? `<button class="btn-done text-xs btn btn-ghost py-1" data-id="${t.id}">✓ 完成</button>` : ''}
+        </div>
+      </div>`;
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    document.getElementById('kanban').addEventListener('click', e => {
+      const btn = e.target.closest('.btn-progress, .btn-done, .btn-start');
+      if (!btn) return;
+      const id = btn.dataset.id;
+      if (btn.classList.contains('btn-start')) startOrchestrate(id);
+      else if (btn.classList.contains('btn-progress')) updateTaskStatus(id, 'in_progress');
+      else if (btn.classList.contains('btn-done')) updateTaskStatus(id, 'done');
+    });
+
+    document.getElementById('orchestrate-close').onclick = () => hideModal('modal-orchestrate');
+
+    async function startOrchestrate(taskId) {
+      showModal('modal-orchestrate');
+      const logEl = document.getElementById('orchestrate-log');
+      logEl.textContent = '正在启动统筹...\n';
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/start`, { method: 'POST' });
+        if (!res.ok) throw new Error(await res.text());
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const ev = JSON.parse(line);
+              if (ev.type === 'coordinator_start') logEl.textContent += `\n[统筹] 由 ${ev.coordinator_id} 开始规划\n`;
+              else if (ev.type === 'thinking_content') logEl.textContent += ev.text || '';
+              else if (ev.type === 'tool_call') logEl.textContent += `\n[工具] ${ev.tool}\n`;
+              else if (ev.type === 'observation') logEl.textContent += `  → ${(ev.preview || '').slice(0, 120)}...\n`;
+              else if (ev.type === 'message_chunk') logEl.textContent += ev.text || '';
+              else if (ev.type === 'message_done') logEl.textContent += '\n[完成]\n';
+            } catch (_) {}
+          }
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+        logEl.textContent += '\n统筹流程已启动。请到蜂群拓扑或群聊查看协作进度。';
+        loadTasks();
+      } catch (e) {
+        logEl.textContent += '\n错误: ' + e.message;
+      }
+    }
+
+    async function updateTaskStatus(id, status) {
+      await fetch(`/api/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      loadTasks();
+    }
+
+    function showModal(id) {
+      document.getElementById(id).classList.add('show');
+    }
+    function hideModal(id) {
+      document.getElementById(id).classList.remove('show');
+    }
+
+    document.getElementById('btn-new-agent').onclick = () => {
+      document.getElementById('agent-role').value = '';
+      document.getElementById('agent-guidance').value = '';
+      showModal('modal-agent');
+    };
+    document.getElementById('agent-cancel').onclick = () => hideModal('modal-agent');
+    document.getElementById('agent-submit').onclick = async () => {
+      const role = document.getElementById('agent-role').value.trim();
+      if (!role) { alert('请输入角色'); return; }
+      const guidance = document.getElementById('agent-guidance').value.trim() || undefined;
+      try {
+        const res = await fetch('/api/agents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role, guidance })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        hideModal('modal-agent');
+        loadAssistants();
+      } catch (e) {
+        alert('创建失败: ' + e.message);
+      }
+    };
+
+    document.getElementById('btn-new-task').onclick = async () => {
+      await loadAssistants();
+      const allAgents = [...assistants.map(a => ({ id: a.id, name: a.name || a.id })), ...agents.map(a => ({ id: a.id, name: a.role }))];
+      const seen = new Set();
+      const unique = allAgents.filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; });
+      const coordSel = document.getElementById('task-coordinator');
+      coordSel.innerHTML = '<option value="">-- 请选择统筹 Agent --</option>' + unique.map(a => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}</option>`).join('');
+      const box = document.getElementById('task-assignees');
+      box.innerHTML = unique.map(a => `<label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" value="${escapeHtml(a.id)}" /> ${escapeHtml(a.name)}</label>`).join('');
+      document.getElementById('task-title').value = '';
+      document.getElementById('task-desc').value = '';
+      showModal('modal-task');
+    };
+    document.getElementById('task-cancel').onclick = () => hideModal('modal-task');
+    document.getElementById('task-submit').onclick = async () => {
+      const title = document.getElementById('task-title').value.trim();
+      if (!title) { alert('请输入标题'); return; }
+      const coordinatorId = document.getElementById('task-coordinator').value.trim();
+      if (!coordinatorId) { alert('请选择统筹负责人'); return; }
+      const desc = document.getElementById('task-desc').value.trim() || undefined;
+      const assigneeIds = [...document.querySelectorAll('#task-assignees input:checked')].map(cb => cb.value);
+      try {
+        const res = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description: desc, assignee_ids: assigneeIds, coordinator_id: coordinatorId })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        hideModal('modal-task');
+        loadTasks();
+      } catch (e) {
+        alert('创建失败: ' + e.message);
+      }
+    };
+
+    function connectEvents() {
+      const es = new EventSource('/api/events');
+      es.onmessage = e => {
+        try {
+          const ev = JSON.parse(e.data);
+          if (ev.type === 'task_created' || ev.type === 'task_updated') loadTasks();
+        } catch (_) {}
+      };
+      es.onerror = () => { es.close(); setTimeout(connectEvents, 5000); };
+    }
+
+    loadTasks();
+    loadAssistants();
+    connectEvents();
+  </script>
+</body>
+</html>
