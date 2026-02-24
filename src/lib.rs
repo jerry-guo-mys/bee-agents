@@ -26,6 +26,7 @@ pub mod plugins;
 pub mod react;
 pub mod skills;
 pub mod tools;
+pub mod workflow;
 pub mod ui;
 
 pub use evolution::{EvolutionLoop, EvolutionConfig};
