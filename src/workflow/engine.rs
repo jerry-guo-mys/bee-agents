@@ -156,7 +156,36 @@ impl WorkflowEngine {
             }
         }
         
-        drop(workflows);
+        let task_state = {
+            let workflows = self.workflows.read().await;
+            let workflow = workflows.get(workflow_id)
+                .ok_or(WorkflowError::WorkflowNotFound)?;
+            let task = workflow.tasks.get(task_id)
+                .ok_or(WorkflowError::TaskNotFound)?;
+            task.state
+        };
+        
+        {
+            let mut workflows = self.workflows.write().await;
+            let workflow = workflows.get_mut(workflow_id).unwrap();
+            let mut graph = WorkflowGraph::new(&workflow.tasks);
+            let ready_tasks = graph.mark_completed(task_id, &workflow.tasks, task_state);
+            
+            drop(workflows);
+            
+            for (ready_task_id, condition_met) in ready_tasks {
+                if condition_met {
+                    self.submit_task(workflow_id, &ready_task_id).await?;
+                } else {
+                    let mut workflows = self.workflows.write().await;
+                    if let Some(workflow) = workflows.get_mut(workflow_id) {
+                        if let Some(task) = workflow.tasks.get_mut(&ready_task_id) {
+                            task.state = TaskState::Skipped;
+                        }
+                    }
+                }
+            }
+        }
         
         self.check_completion(workflow_id).await;
         

@@ -1,15 +1,15 @@
 //! 工作流依赖图
 //!
-//! 使用邻接表和入度表实现DAG拓扑排序
+//! 使用邻接表和入度表实现 DAG 拓扑排序
 
 use std::collections::HashMap;
 use crate::workflow::types::*;
 
 /// 工作流依赖图
 pub struct WorkflowGraph {
-    /// 邻接表：任务ID -> 依赖该任务的任务列表
+    /// 邻接表：任务 ID -> 依赖该任务的任务列表
     pub adjacency: HashMap<TaskId, Vec<TaskId>>,
-    /// 入度表：任务ID -> 未完成的依赖数
+    /// 入度表：任务 ID -> 未完成的依赖数
     pub in_degree: HashMap<TaskId, usize>,
 }
 
@@ -53,7 +53,7 @@ impl WorkflowGraph {
         Self { adjacency, in_degree }
     }
 
-    /// 获取可执行的任务（入度为0且未执行）
+    /// 获取可执行的任务（入度为 0 且未执行）
     pub fn get_ready_tasks(&self, states: &HashMap<TaskId, TaskState>) -> Vec<TaskId> {
         self.in_degree
             .iter()
@@ -68,23 +68,37 @@ impl WorkflowGraph {
     pub fn mark_completed(
         &mut self,
         completed_task_id: &TaskId,
-        tasks: &HashMap<TaskId, WorkflowTask>,
-    ) -> Vec<TaskId> {
+        _tasks: &HashMap<TaskId, WorkflowTask>,
+        completed_task_state: TaskState,
+    ) -> Vec<(TaskId, bool)> {
         let mut newly_ready = Vec::new();
 
         if let Some(dependents) = self.adjacency.get(completed_task_id) {
             for dependent_id in dependents {
                 if let Some(degree) = self.in_degree.get_mut(dependent_id) {
-                    if let Some(task) = tasks.get(dependent_id) {
-                        if matches!(task.dependencies, TaskDependencies::Any(_)) {
-                            *degree = 0;
-                        } else {
-                            *degree -= 1;
+                    if let Some(task) = _tasks.get(dependent_id) {
+                        match &task.dependencies {
+                            TaskDependencies::Any(_) => {
+                                if completed_task_state == TaskState::Completed {
+                                    *degree = 0;
+                                }
+                            }
+                            TaskDependencies::Condition { .. } => {
+                                let condition_met = completed_task_state == TaskState::Completed;
+                                *degree -= 1;
+                                if *degree == 0 {
+                                    newly_ready.push((dependent_id.clone(), condition_met));
+                                    continue;
+                                }
+                            }
+                            _ => {
+                                *degree -= 1;
+                            }
                         }
                     }
 
                     if *degree == 0 {
-                        newly_ready.push(dependent_id.clone());
+                        newly_ready.push((dependent_id.clone(), true));
                     }
                 }
             }
