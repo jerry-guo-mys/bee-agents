@@ -118,10 +118,10 @@ mod tests {
     fn create_test_task(id: &str, deps: TaskDependencies) -> WorkflowTask {
         WorkflowTask {
             id: id.to_string(),
-            definition: TaskDefinition::Simple(BackgroundTask::new(
+            definition: TaskDefinition::Simple(Box::new(BackgroundTask::new(
                 "user1".to_string(),
                 format!("Task {}", id),
-            )),
+            ))),
             dependencies: deps,
             fallback: None,
             state: TaskState::Waiting,

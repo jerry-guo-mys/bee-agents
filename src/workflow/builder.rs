@@ -54,7 +54,7 @@ impl WorkflowBuilder {
         let id = id.into();
         self.tasks.insert(id.clone(), WorkflowTask {
             id,
-            definition: TaskDefinition::Simple(task),
+            definition: TaskDefinition::Simple(Box::new(task)),
             dependencies: TaskDependencies::None,
             fallback: None,
             state: TaskState::Waiting,

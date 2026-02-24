@@ -90,11 +90,11 @@ pub struct WorkflowTask {
 #[cfg(feature = "gateway")]
 pub enum TaskDefinition {
     /// 简单任务：复用现有的BackgroundTask
-    Simple(BackgroundTask),
+    Simple(Box<BackgroundTask>),
     /// 子工作流：嵌套另一个工作流
     SubWorkflow(Box<Workflow>),
     /// 并行任务组：Map模式
-    Parallel(Vec<BackgroundTask>),
+    Parallel(Vec<Box<BackgroundTask>>),
 }
 
 #[cfg(not(feature = "gateway"))]
