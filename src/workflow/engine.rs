@@ -126,6 +126,64 @@ impl WorkflowEngine {
             .get(workflow_id)
             .map(|w| w.status)
     }
+
+    /// 处理任务完成回调
+    pub async fn on_task_completed(
+        &self,
+        workflow_id: &WorkflowId,
+        task_id: &TaskId,
+        result: Result<String, String>,
+    ) -> Result<(), WorkflowError> {
+        let mut workflows = self.workflows.write().await;
+        let workflow = workflows.get_mut(workflow_id)
+            .ok_or(WorkflowError::WorkflowNotFound)?;
+        
+        let task = workflow.tasks.get_mut(task_id)
+            .ok_or(WorkflowError::TaskNotFound)?;
+        
+        match result {
+            Ok(_) => {
+                task.state = TaskState::Completed;
+            }
+            Err(_) => {
+                task.state = TaskState::Failed;
+                
+                if let Some(fallback_id) = task.fallback.clone() {
+                    drop(workflows);
+                    self.submit_task(workflow_id, &fallback_id).await?;
+                    return Ok(());
+                }
+            }
+        }
+        
+        drop(workflows);
+        
+        self.check_completion(workflow_id).await;
+        
+        Ok(())
+    }
+
+    async fn check_completion(&self, workflow_id: &WorkflowId) {
+        let mut workflows = self.workflows.write().await;
+        if let Some(workflow) = workflows.get_mut(workflow_id) {
+            let all_finished = workflow.tasks.values().all(|task| {
+                matches!(task.state, TaskState::Completed | TaskState::Failed | TaskState::Skipped)
+            });
+            
+            if all_finished {
+                let all_success = workflow.tasks.values().all(|task| {
+                    matches!(task.state, TaskState::Completed)
+                });
+                
+                workflow.status = if all_success {
+                    WorkflowStatus::Completed
+                } else {
+                    WorkflowStatus::Failed
+                };
+                workflow.completed_at = Some(chrono::Utc::now().timestamp_millis());
+            }
+        }
+    }
 }
 
 #[cfg(test)]
